@@ -16,11 +16,33 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasColumnType("decimal(18,2)")
             .IsRequired();
 
+        builder.Property(p => p.Stock)
+            .IsRequired()
+            .HasDefaultValue(0);
+
+        builder.HasMany<StockAdjustmentAudit>()
+            .WithOne(a => a.Product)
+            .HasForeignKey(a => a.ProductId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.Property(p => p.Name)
             .HasMaxLength(50)
             .IsRequired();
 
         builder.Property(p => p.Sku)
+            .HasMaxLength(50)
             .IsRequired();
+
+        builder.Property(p => p.Barcode)
+            .HasMaxLength(100);
+
+        builder.Property(p => p.Description)
+            .HasMaxLength(200);
+
+        builder.HasMany(p => p.Categories)
+            .WithMany(c => c.Products)
+            .UsingEntity(j => j.ToTable("ProductCategories"));
+
+        builder.HasQueryFilter(d => d.IsActive);
     }
 }

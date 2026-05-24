@@ -12,6 +12,9 @@ public class Product : BaseEntity
     public string Name { get; private set; }
     public string? Description { get; private set; }
     public decimal Price { get; private set; }
+    public int Stock { get; private set; }
+
+    public ICollection<Category> Categories { get; private set; } = new List<Category>();
 
     public Product(string sku, string name, decimal price, string? barcode = null, string? description = null)
     {
@@ -22,15 +25,31 @@ public class Product : BaseEntity
         Name = name;
         Description = description;
         Price = price;
+        Stock = 0;
     }
 
-    public void UpdateData(string name, string description, decimal price)
+    public void Update(string newName, decimal newPrice, string? newDescription)
     {
-        ValidateData(name, price);
+        ValidateData(newName, newPrice);
 
-        Name = name;
-        Description = description;
-        Price = price;
+        Name = newName;
+        Price = newPrice;
+        Description = string.IsNullOrWhiteSpace(newDescription) ? null : newDescription;
+    }
+
+    public int AdjustStock(int delta)
+    {
+        if (delta == 0)
+            throw new ArgumentException("El ajuste de stock no puede ser cero", nameof(delta));
+
+        var resultingStock = (long)Stock + delta;
+        if (resultingStock < 0)
+            throw new ArgumentException("El stock resultante no puede ser negativo", nameof(delta));
+        if (resultingStock > int.MaxValue)
+            throw new ArgumentException("El stock resultante excede el límite permitido", nameof(delta));
+
+        Stock = (int)resultingStock;
+        return Stock;
     }
 
     private void ValidateDataAndSku(string sku, string name, decimal price)

@@ -1,7 +1,6 @@
 ﻿using AutoMapper;
 using MetraTC.Domain.Entities;
 using MetraTC.Domain.Interfaces; // Asumiendo que tienes IRepository<T> igual que el sistema médico
-using System.Threading.Tasks;
 using static MetraTC.Application.DTOs.ProductDtos;
 
 namespace MetraTC.Application.Services;
@@ -9,11 +8,13 @@ namespace MetraTC.Application.Services;
 public class ProductService : IProductService
 {
     private readonly IRepository<Product> _repository;
+    private readonly IInventoryRepository _inventoryRepository;
     private readonly IMapper _mapper;
 
-    public ProductService(IRepository<Product> repository, IMapper mapper)
+    public ProductService(IRepository<Product> repository, IInventoryRepository inventoryRepository, IMapper mapper)
     {
         _repository = repository;
+        _inventoryRepository = inventoryRepository;
         _mapper = mapper;
     }
 
@@ -23,5 +24,59 @@ public class ProductService : IProductService
         await _repository.AddAsync(product);
 
         return _mapper.Map<ProductDto>(product);
+    }
+
+    public async Task<IEnumerable<ProductDto>> GetAllAsync()
+    {
+        var products = await _repository.GetAllAsync();
+
+        return _mapper.Map<IEnumerable<ProductDto>>(products);
+    }
+
+    public async Task<ProductDto> GetByIdAsync(Guid id)
+    {
+        var product = await GetProductOrThrowAsync(id);
+
+        return _mapper.Map<ProductDto>(product);
+    }
+
+    public async Task UpdateAsync(Guid id, UpdateProductDto updateProductDto)
+    {
+        var product = await GetProductOrThrowAsync(id);
+
+        product.Update(updateProductDto.Name, updateProductDto.Price, updateProductDto.Description);
+
+        await _repository.UpdateAsync(product);
+    }
+
+    public async Task<StockAdjustmentResponseDto> AdjustStockAsync(Guid id, StockAdjustmentDto stockAdjustmentDto)
+    {
+        var result = await _inventoryRepository.AdjustStockAsync(id, stockAdjustmentDto.Delta, stockAdjustmentDto.Reason);
+
+        return new StockAdjustmentResponseDto(
+            _mapper.Map<ProductDto>(result.Product),
+            result.Audit.Delta,
+            result.Audit.ResultingStock,
+            result.Audit.Reason,
+            result.Audit.AdjustedAt);
+    }
+
+    public async Task DeleteAsync(Guid id)
+    {
+        var product = await GetProductOrThrowAsync(id);
+
+        product.Deactivate();
+
+        await _repository.UpdateAsync(product);
+    }
+
+    private async Task<Product> GetProductOrThrowAsync(Guid id)
+    {
+        var product = await _repository.GetByIdAsync(id);
+
+        if (product == null)
+            throw new KeyNotFoundException($"No se encontró ningún producto con el ID: {id}");
+
+        return product;
     }
 }
