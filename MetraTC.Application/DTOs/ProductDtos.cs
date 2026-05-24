@@ -22,5 +22,11 @@ namespace MetraTC.Application.DTOs
             string? Barcode,
             string? Description
         );
+
+        public record UpdateProductDto(
+            string Name,
+            decimal Price,
+            string? Description
+        );
     };
 }

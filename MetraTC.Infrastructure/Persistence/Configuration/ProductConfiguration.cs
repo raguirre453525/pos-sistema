@@ -21,6 +21,19 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .IsRequired();
 
         builder.Property(p => p.Sku)
+            .HasMaxLength(50)
             .IsRequired();
+
+        builder.Property(p => p.Barcode)
+            .HasMaxLength(100);
+
+        builder.Property(p => p.Description)
+            .HasMaxLength(200);
+
+        builder.HasMany(p => p.Categories)
+            .WithMany(c => c.Products)
+            .UsingEntity(j => j.ToTable("ProductCategories"));
+
+        builder.HasQueryFilter(d => d.IsActive);
     }
 }

@@ -13,6 +13,8 @@ public class Product : BaseEntity
     public string? Description { get; private set; }
     public decimal Price { get; private set; }
 
+    public ICollection<Category> Categories { get; private set; } = new List<Category>();
+
     public Product(string sku, string name, decimal price, string? barcode = null, string? description = null)
     {
         ValidateDataAndSku(sku, name, price);
@@ -24,13 +26,13 @@ public class Product : BaseEntity
         Price = price;
     }
 
-    public void UpdateData(string name, string description, decimal price)
+    public void Update(string newName, decimal newPrice, string? newDescription)
     {
-        ValidateData(name, price);
+        ValidateData(newName, newPrice);
 
-        Name = name;
-        Description = description;
-        Price = price;
+        Name = newName;
+        Price = newPrice;
+        Description = string.IsNullOrWhiteSpace(newDescription) ? null : newDescription;
     }
 
     private void ValidateDataAndSku(string sku, string name, decimal price)
