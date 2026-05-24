@@ -1,0 +1,26 @@
+﻿using System;
+using System.Collections.Generic;
+using System.Text;
+
+namespace MetraTC.Application.DTOs
+{
+    public static class ProductDtos
+    {
+        public record ProductDto(
+            Guid Id,
+            string Sku,
+            string? Barcode,
+            string Name,
+            string? Description,
+            decimal Price
+        );
+
+        public record CreateProductDto(
+            string Sku,
+            string Name,
+            decimal Price,
+            string? Barcode,
+            string? Description
+        );
+    };
+}
