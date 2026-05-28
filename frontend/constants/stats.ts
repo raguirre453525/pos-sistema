@@ -7,6 +7,13 @@ export interface StatItem {
     color: string; 
 }
 
+export interface StatInv {
+    title: string;
+    value: string;
+    icon: LucideIcon;
+    color: string; 
+}
+
 export const STATS_DATA: StatItem[] = [
     {
         title: "Ventas de hoy",
@@ -34,4 +41,12 @@ export const STATS_DATA: StatItem[] = [
     },
 ];
 
-export default STATS_DATA;
+export const INV_DATA: StatInv[] = [
+    {
+        title: "Valor Total de Activos",
+        value: "$125,400,000.00",
+        icon: Package,
+        color: "bg-white-100 text-black-600 border border-gray-200",
+    },
+    
+];
