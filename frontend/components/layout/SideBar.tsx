@@ -8,7 +8,8 @@ import NavItem from "./NavItem";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { ChevronLeft, ChevronRight } from "lucide-react";
-
+import SideBarLogo from "./SideBarLogo"
+import ModeToggle from "../ModeToggle";
 
 
 
@@ -24,22 +25,10 @@ const SideBar = () => {
 
     
 
-    <ul className={`relative h-full bg-white border-r border-gray-200 flex flex-col p-4 gap-4 transition-all duration-300 ease-in-out ${ isExpanded ? 'w-64' : 'w-20' }` }>
-
-
-
-            <Link href="/Dashboard">
-        <div className="flex items-center p-3 rounded-full cursor-pointer transition-all duration-300 overflow-hidden">
-          {isExpanded ? (
-            <Image src="/logo.png" alt="Logo" width={170} height={40} />
-          ) : (
-            <div className="w-full flex justify-center">
-               <Image src="/logo.png" alt="Logo" width={80} height={40} className="rounded-full" />
-            </div>
-          )}
-        </div>
-      </Link>
-
+    <ul className={`relative h-full bg-card border-r border-border flex flex-col p-4 gap-4 transition-all duration-300 ease-in-out ${ isExpanded ? 'w-64' : 'w-20' }` }>
+    
+            <SideBarLogo isExpanded={isExpanded} />
+      
             {NAV_ITEMS.map((navigation) => (
                 <NavItem key={navigation.path}
                  {...navigation} 
@@ -48,17 +37,15 @@ const SideBar = () => {
                  />
             ))}
       <div className="absolute bottom-8 -right-3 z-50">
-        <button onClick={() => setIsExpanded(!isExpanded)} className="bg-white border border-gray-200 p-1 rounded-full shadow-md hover:bg-gray-50 transition-colors text-gray-600"
+        <button onClick={() => setIsExpanded(!isExpanded)} className="bg-card border border-border p-1 rounded-full shadow-md hover:bg-muted transition-colors text-foreground"
           title={isExpanded ? 'Minimizar' : 'Expandir'}
           >
             {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
           </button>
       </div>
-      <div className="mt-auto p-2 rounded-full hover:bg-gray-100 transition-colors">
-
-
+      <div className="mt-auto">
+        <ModeToggle />
       </div>
-
     </ul>
     
 

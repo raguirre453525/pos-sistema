@@ -48,5 +48,6 @@ export const INV_DATA: StatInv[] = [
         icon: Package,
         color: "bg-white-100 text-black-600 border border-gray-200",
     },
-    
 ];
+
+

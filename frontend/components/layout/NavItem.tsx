@@ -16,7 +16,7 @@ const NavItem = ({ name, icon: Icon, path, isActive, isExpanded = true }: NavIte
         <div className={`flex items-center gap-3 p-3 rounded-full cursor-pointer transition-all duration-300 ease-in-out px-4 py-3 ${
         isActive 
         ? 'bg-red-500 text-white shadow-sm translate-x-5' 
-        : 'text-gray-600 hover:bg-gray-100 translate-x-0'
+        : 'text-foreground hover:bg-muted translate-x-0'
       }${!isExpanded ? 'justify-center px-0' : ''}
       `}>
         <Icon size={20} strokeWidth={2} /> 

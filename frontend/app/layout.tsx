@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import Navbar from "@/components/layout/NavBar";
-import SideBar from "@/components/layout/SideBar"; 
+import { ThemeProvider } from "@/components/Providers/ThemeProvider";
 
 
 
@@ -29,21 +28,29 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      suppressHydrationWarning
+      className={`${geistSans.variable} ${geistMono.variable} h-full overflow-hidden antialiased`}
     >
 
-      <body className="flex h-screen overflow-hidden">
+      <body className="h-full">
 
-        <SideBar ></SideBar>
+       
         
-        <div className="flex-1 flex flex-col">
-        <Navbar></Navbar>
-        <main className="flex-1 overflow-y-auto p-6 py-0 bg-gray-50">
+        
+        
+        <ThemeProvider 
+          attribute="class" 
+          defaultTheme="system" 
+          enableSystem 
+          disableTransitionOnChange
+        >
           {children}
 
-        </main>
+        </ThemeProvider>
 
-        </div>
+       
+
+        
         
 
 
