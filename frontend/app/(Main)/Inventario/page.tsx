@@ -31,7 +31,7 @@ const Page = () => {
       <div className="grid grid-cols-1 gap-6">
               <div className="bg-card h-full rounded-2xl border border-border shadow-sm p-6">
                   <h3 className="text-lg font-semibold mb-4 text-foreground">PRODUCTOS</h3>
-                   <DataTable columns={columns} data={MOCK_INVENTORY}/>
+                   <DataTable columns={columns} data={MOCK_INVENTORY} label="Producto"/>
               </div>
         </div>
       
