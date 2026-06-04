@@ -24,7 +24,7 @@ export function NewProductForm() {
     <FieldGroup>
       <Field>
         <FieldLabel htmlFor="name">Nombre</FieldLabel>
-        <Input id="name" placeholder="Leche" />
+        <Input id="name" placeholder="Aceite" />
       </Field>
 
       <Field>

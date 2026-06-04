@@ -1,0 +1,29 @@
+import { DollarSign, TrendingUp, Package } from "lucide-react"
+import StatCard from "@/components/Dashboard/StatCard"
+import DataTable from "@/components/Reusables/DataTable"
+import { columns } from '@/components/Config/Datatable/columns';
+import { USERS } from "@/constants/UserInfo";
+import { Button } from "@/components/ui/button";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
+
+const Page = () => {
+  return (
+    <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
+        <Link href={"/Configuracion"}><Button variant="outline" size="icon" className="rounded-full">
+        <ArrowLeft />
+      </Button></Link>
+      <h1 className="text-foreground text-2xl">USUARIOS</h1>
+      
+
+      <div className="grid grid-cols-1 gap-6">
+        <div className="bg-card h-full rounded-2xl border border-border shadow-sm p-6">
+          <h3 className="text-lg font-semibold mb-4 text-foreground">DETALLES DE USUARIOS</h3>
+          <DataTable columns={columns} data={USERS} placeholder="Buscar por cliente, ID de venta o fecha..." label="Usuario"/>
+        </div>
+      </div>
+    </main>
+  )
+}
+
+export default Page

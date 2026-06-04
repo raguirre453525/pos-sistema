@@ -1,6 +1,6 @@
 import { DollarSign, TrendingUp, Package } from "lucide-react"
 import StatCard from "@/components/Dashboard/StatCard"
-import DataTable from "@/components/Inventario/DataTable/DataTable"
+import DataTable from "@/components/Reusables/DataTable"
 import { columns } from '@/components/Reportes/DataTable/columns';
 import { MOCK_REPORTS, REPORTS_STATS } from "@/constants/reports";
 

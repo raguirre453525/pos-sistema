@@ -27,7 +27,9 @@ const SideBar = () => {
 
     <ul className={`relative h-full bg-card border-r border-border flex flex-col p-4 gap-4 transition-all duration-300 ease-in-out ${ isExpanded ? 'w-64' : 'w-20' }` }>
     
-            <SideBarLogo isExpanded={isExpanded} />
+      <li className="flex flex-col gap-4 flex-1">
+        
+        <SideBarLogo isExpanded={isExpanded} />
       
             {NAV_ITEMS.map((navigation) => (
                 <NavItem key={navigation.path}
@@ -43,9 +45,14 @@ const SideBar = () => {
             {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
           </button>
       </div>
-      <div className="mt-auto">
-        <ModeToggle />
-      </div>
+      
+        <div className="mt-auto">
+            <ModeToggle />
+        </div>
+      
+      
+      </li>
+            
     </ul>
     
 

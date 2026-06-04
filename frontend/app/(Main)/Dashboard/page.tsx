@@ -3,7 +3,7 @@ import StatCard from '@/components/Dashboard/StatCard';
 import { STATS_DATA } from '@/constants/stats';
 import SimpleSalesChart from '@/components/Dashboard/SalesChart';
 import CategoryPieChart from '@/components/Dashboard/PieChart';
-import DataTable from '@/components/Dashboard/DataTable/DataTable';
+import DataTable from '@/components/Reusables/DataTable';
 import { MOCK_PRODUCTS } from '@/constants/products';
 import { columns } from '@/components/Dashboard/DataTable/columns';
 
@@ -36,7 +36,7 @@ const Page = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-card h-full rounded-2xl border border-border shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4 text-foreground">RANKING DE PRODUCTOS</h3>
-            <DataTable columns={columns} data={MOCK_PRODUCTS}/>
+            <DataTable columns={columns} data={MOCK_PRODUCTS} label='Producto'/>
         </div>
       </div>
     </main>

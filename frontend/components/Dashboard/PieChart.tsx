@@ -6,7 +6,7 @@ import { useTheme } from 'next-themes';
 
 const CategoryPieChart = () => {
   const { theme } = useTheme();
-  const isDark = theme === 'dark';
+
 
   const totalSales = React.useMemo(() => {
     return CATEGORY_SALES.reduce((acc, curr) => acc + curr.value, 0);
@@ -18,7 +18,7 @@ const CategoryPieChart = () => {
         <ResponsiveContainer width="100%" height={300}>
           <PieChart>
             <Tooltip 
-              itemStyle={{ color: isDark ? '#cbd5e1' : '#6b7280', fontSize: '14px', fontWeight: 'bold' }} 
+              itemStyle={{ color: 'var(--foreground)', fontSize: '14px', fontWeight: 'bold' }} 
               labelStyle={{ color: '#ef4444', fontSize: '12px' }}
               contentStyle={{
                 borderRadius: '8px', 
@@ -36,7 +36,7 @@ const CategoryPieChart = () => {
               cy="50%"
               innerRadius={80}
               outerRadius={120}
-              stroke="var(-background)"
+              stroke="var(--background)"
               strokeWidth={5}
               paddingAngle={5}
             >
@@ -53,19 +53,21 @@ const CategoryPieChart = () => {
                         textAnchor="middle"
                         dominantBaseline="middle"
                       >
-                        <tspan
-                          x={viewBox.cx}
-                          y={viewBox.cy}
-                          className={`${isDark ? 'fill-white' : 'fill-gray-900'} text-2xl font-bold`}
-                        >
-                          ${totalSales.toLocaleString()}
-                        </tspan>
+                        
                         <tspan
                           x={viewBox.cx}
                           y={(viewBox.cy || 0) + 24}
-                          className={`${isDark ? 'fill-gray-400' : 'fill-gray-500'} text-xs`}
+                          className={`fill-foreground text-sm font-bold`}
                         >
                           Total
+                        </tspan>
+
+                        <tspan
+                          x={viewBox.cx}
+                          y={viewBox.cy}
+                          className={`fill-foreground text-xl font-bold`}
+                        >
+                          ${totalSales.toLocaleString()}
                         </tspan>
                       </text>
                     )

@@ -1,6 +1,6 @@
 import { STATS_DATA, INV_DATA } from "@/constants/stats"
 import StatCard from "@/components/Dashboard/StatCard"
-import DataTable from "@/components/Inventario/DataTable/DataTable"
+import DataTable from "@/components/Reusables/DataTable"
 import { columns } from '@/components/Inventario/DataTable/columns';
  import { MOCK_INVENTORY } from "@/constants/inventory";
 import { Button } from "@/components/ui/button";

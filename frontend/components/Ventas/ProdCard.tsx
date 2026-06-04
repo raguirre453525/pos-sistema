@@ -1,5 +1,6 @@
 
 import { Heart, ShoppingCart, Star, Sun, Moon } from 'lucide-react';
+import Image from 'next/image';
 export interface InventoryItemProps {
   name: string;
   image: string;
@@ -14,9 +15,11 @@ const ProdCard = ({ name, image, category, stock, price }: InventoryItemProps) =
       transition-all duration-300 overflow-hidden group transform hover:scale-[1.02]`}>
       
       <div className="relative aspect-square overflow-hidden">
-        <img 
+        <Image 
           src={image} 
           alt={name}
+          width={300}
+          height={300}
           className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500"
         />             
       </div>
