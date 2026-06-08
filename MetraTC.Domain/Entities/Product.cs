@@ -39,6 +39,17 @@ public class Product : BaseEntity
         Description = string.IsNullOrWhiteSpace(newDescription) ? null : newDescription;
     }
 
+    public void ReduceStock(int quantity)
+    {
+        if (quantity <= 0)
+            throw new ArgumentException("La cantidad a descontar debe ser mayor a cero.", nameof(quantity));
+
+        if (Stock < quantity)
+            throw new InvalidOperationException($"Stock insuficiente para '{Name}'. Stock actual: {Stock}, a descontar: {quantity}");
+
+        Stock -= quantity; 
+    }
+
     private void ValidateDataAndSku(string sku, string name, decimal price, int stock)
     {
         if (string.IsNullOrWhiteSpace(sku))

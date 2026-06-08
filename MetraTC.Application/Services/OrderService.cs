@@ -69,7 +69,20 @@ public class OrderService : IOrderService
     {
         var order = await GetOrderOrThrowAsync(id);
 
+        foreach (var item in order.Items)
+        {
+            var product = await _productRepository.GetByIdAsync(item.ProductId);
+
+            if (product != null)
+            {
+                product.ReduceStock(item.Quantity);
+
+                await _productRepository.UpdateAsync(product);
+            }
+        }
+
         order.Complete();
+
         await _orderRepository.UpdateAsync(order);
     }
 
