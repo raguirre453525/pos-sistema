@@ -5,7 +5,7 @@ namespace MetraTC.Application.Services;
 
 public interface IProductService
 {
-    Task<ProductDto> CreateAsync(CreateProductDto createProductDto);
+    Task<IEnumerable<ProductDto>> CreateAsync(IEnumerable<CreateProductDto> createProductDtos);
 
     Task<IEnumerable<ProductDto>> GetAllAsync();
 

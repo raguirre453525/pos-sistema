@@ -17,11 +17,11 @@ public class ProductsController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create([FromBody] CreateProductDto createProductDto)
+    public async Task<IActionResult> Create([FromBody] IEnumerable<CreateProductDto> createProductDtos)
     {
-        var productDto = await _productService.CreateAsync(createProductDto);
+        var products = await _productService.CreateAsync(createProductDtos);
 
-        return Ok(productDto);
+        return Ok(products);
     }
 
     [HttpGet]

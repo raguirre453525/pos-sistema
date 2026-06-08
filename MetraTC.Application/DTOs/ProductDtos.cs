@@ -12,13 +12,15 @@ namespace MetraTC.Application.DTOs
             string? Barcode,
             string Name,
             string? Description,
-            decimal Price
+            decimal Price,
+            int Stock
         );
 
         public record CreateProductDto(
             string Sku,
             string Name,
             decimal Price,
+            int Stock,
             string? Barcode,
             string? Description
         );
@@ -26,6 +28,7 @@ namespace MetraTC.Application.DTOs
         public record UpdateProductDto(
             string Name,
             decimal Price,
+            int Stock,
             string? Description
         );
     };

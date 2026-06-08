@@ -9,26 +9,34 @@ namespace MetraTC.Application.Services;
 
 public class ProductService : IProductService
 {
-    private readonly IRepository<Product> _repository;
+    private readonly IRepository<Product> _productRepository;
     private readonly IMapper _mapper;
 
-    public ProductService(IRepository<Product> repository, IMapper mapper)
+    public ProductService(IRepository<Product> productRepository, IMapper mapper)
     {
-        _repository = repository;
+        _productRepository = productRepository;
         _mapper = mapper;
     }
 
-    public async Task<ProductDto> CreateAsync(CreateProductDto createProductDto)
+    public async Task<IEnumerable<ProductDto>> CreateAsync(IEnumerable<CreateProductDto> createProductDtos)
     {
-        var product = _mapper.Map<Product>(createProductDto);
-        await _repository.AddAsync(product);
+        var createdProducts = new List<Product>();
 
-        return _mapper.Map<ProductDto>(product);
+        foreach (var dto in createProductDtos)
+        {
+            // La entidad valida sus propios datos en el constructor
+            var product = new Product(dto.Sku, dto.Name, dto.Price, dto.Stock, dto.Barcode, dto.Description);
+
+            await _productRepository.AddAsync(product);
+            createdProducts.Add(product);
+        }
+
+        return _mapper.Map<IEnumerable<ProductDto>>(createdProducts);
     }
 
     public async Task<IEnumerable<ProductDto>> GetAllAsync()
     {
-        var products = await _repository.GetAllAsync();
+        var products = await _productRepository.GetAllAsync();
 
         return _mapper.Map<IEnumerable<ProductDto>>(products);
     }
@@ -44,9 +52,9 @@ public class ProductService : IProductService
     {
         var product = await GetProductOrThrowAsync(id);
 
-        product.Update(updateProductDto.Name, updateProductDto.Price, updateProductDto.Description);
+        product.Update(updateProductDto.Name, updateProductDto.Price, updateProductDto.Stock, updateProductDto.Description);
 
-        await _repository.UpdateAsync(product);
+        await _productRepository.UpdateAsync(product);
     }
 
     public async Task DeleteAsync(Guid id)
@@ -55,12 +63,12 @@ public class ProductService : IProductService
 
         product.Deactivate();
 
-        await _repository.UpdateAsync(product);
+        await _productRepository.UpdateAsync(product);
     }
 
     private async Task<Product> GetProductOrThrowAsync(Guid id)
     {
-        var product = await _repository.GetByIdAsync(id);
+        var product = await _productRepository.GetByIdAsync(id);
 
         if (product == null)
             throw new KeyNotFoundException($"No se encontró ningún producto con el ID: {id}");

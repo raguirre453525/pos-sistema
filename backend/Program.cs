@@ -30,6 +30,7 @@ builder.Services.AddAutoMapper(cfg =>
 
 builder.Services.AddScoped(typeof(IRepository<>), typeof(BaseRepository<>));
 builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IOrderService, OrderService>(); 
 
 var app = builder.Build();
 
