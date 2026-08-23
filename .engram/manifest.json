@@ -16,6 +16,14 @@
       "sessions": 0,
       "memories": 1,
       "prompts": 0
+    },
+    {
+      "id": "ba9904d4",
+      "created_by": "Administrator",
+      "created_at": "2026-08-23T04:05:40Z",
+      "sessions": 0,
+      "memories": 1,
+      "prompts": 0
     }
   ]
 }
