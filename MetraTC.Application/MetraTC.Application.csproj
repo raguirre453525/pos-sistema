@@ -9,10 +9,12 @@
   <ItemGroup>
     <PackageReference Include="AutoMapper" Version="16.1.1" />
     <PackageReference Include="FluentValidation" Version="12.1.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore" Version="10.0.8" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\MetraTC.Domain\MetraTC.Domain.csproj" />
+    <ProjectReference Include="..\MetraTC.Infrastructure\MetraTC.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

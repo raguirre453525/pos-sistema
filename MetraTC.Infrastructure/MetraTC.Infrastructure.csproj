@@ -7,7 +7,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\MetraTC.Application\MetraTC.Application.csproj" />
     <ProjectReference Include="..\MetraTC.Domain\MetraTC.Domain.csproj" />
   </ItemGroup>
 
