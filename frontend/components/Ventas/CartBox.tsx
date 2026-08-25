@@ -6,9 +6,13 @@ interface CartBoxProps {
   image: string;
   name: string;
   price: number;
+  quantity?: number;
+  onInc?: () => void;
+  onDec?: () => void;
+  onRemove?: () => void;
 }
 
-export default function CartBox({ image, name, price }: CartBoxProps) {
+export default function CartBox({ image, name, price, quantity = 1, onInc, onDec, onRemove }: CartBoxProps) {
   return (
     <div className="flex items-center justify-between gap-3 p-3 mb-3 rounded-xl border border-border bg-muted">
       <div className="flex items-center gap-3">
@@ -31,13 +35,18 @@ export default function CartBox({ image, name, price }: CartBoxProps) {
       </div>
 
       <div className="flex items-center gap-2">
-        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full">
+        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={onDec}>
           <Minus className="h-3 w-3" />
         </Button>
-        <span className="text-sm font-semibold w-4 text-center">1</span>
-        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full">
+        <span className="text-sm font-semibold w-4 text-center">{quantity}</span>
+        <Button variant="outline" size="icon" className="h-7 w-7 rounded-full" onClick={onInc}>
           <Plus className="h-3 w-3" />
         </Button>
+        {onRemove && (
+          <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={onRemove}>
+            ×
+          </Button>
+        )}
       </div>
     </div>
   )
