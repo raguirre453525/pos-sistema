@@ -132,6 +132,24 @@ export type StockAuditDto = {
   adjustedAt: string;
 };
 
+export type CategoryDto = {
+  id: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  productCount: number;
+};
+
+export type CreateCategoryDto = {
+  name: string;
+  description?: string | null;
+};
+
+export type UpdateCategoryDto = {
+  name: string;
+  description?: string | null;
+};
+
 // ---------- Products ----------
 export function getProducts() {
   return apiFetch<ProductDto[]>("/api/Products");
@@ -204,4 +222,47 @@ export function getStockAudits(params: {
   qs.set("page", String(params.page ?? 1));
   qs.set("pageSize", String(params.pageSize ?? 20));
   return apiFetch<PagedResult<StockAuditDto>>(`/api/reports/stock-audits?${qs.toString()}`);
+}
+
+// ---------- Categories ----------
+export function getCategories() {
+  return apiFetch<CategoryDto[]>("/api/Categories");
+}
+
+export function getCategory(id: string) {
+  return apiFetch<CategoryDto>(`/api/Categories/${id}`);
+}
+
+export function createCategory(dto: CreateCategoryDto) {
+  return apiFetch<CategoryDto>("/api/Categories", {
+    method: "POST",
+    body: JSON.stringify(dto),
+  });
+}
+
+export function updateCategory(id: string, dto: UpdateCategoryDto) {
+  return apiFetch<CategoryDto>(`/api/Categories/${id}`, {
+    method: "PUT",
+    body: JSON.stringify(dto),
+  });
+}
+
+export function deleteCategory(id: string) {
+  return apiFetch<void>(`/api/Categories/${id}`, { method: "DELETE" });
+}
+
+export function getCategoryProducts(categoryId: string) {
+  return apiFetch<ProductDto[]>(`/api/Categories/${categoryId}/products`);
+}
+
+export function assignCategory(productId: string, categoryId: string) {
+  return apiFetch<void>(`/api/Products/${productId}/categories/${categoryId}`, {
+    method: "POST",
+  });
+}
+
+export function removeCategory(productId: string, categoryId: string) {
+  return apiFetch<void>(`/api/Products/${productId}/categories/${categoryId}`, {
+    method: "DELETE",
+  });
 }
