@@ -16,10 +16,16 @@ public class CategoryConfiguration : IEntityTypeConfiguration<Category>
         builder.HasKey(c => c.Id);
 
         builder.Property(c => c.Name)
-            .HasMaxLength(50)
+            .HasMaxLength(100)
             .IsRequired();
 
         builder.Property(c => c.Description)
-            .HasMaxLength(200);
+            .HasMaxLength(500);
+
+        builder.HasIndex(c => c.Name)
+            .IsUnique()
+            .HasFilter("[IsActive] = 1");
+
+        builder.HasQueryFilter(c => c.IsActive);
     }
 }

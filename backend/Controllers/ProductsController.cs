@@ -10,10 +10,12 @@ namespace MetraTC.API.Controllers;
 public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
+    private readonly ICategoryService _categoryService;
 
-    public ProductsController(IProductService productService)
+    public ProductsController(IProductService productService, ICategoryService categoryService)
     {
         _productService = productService;
+        _categoryService = categoryService;
     }
 
     [HttpPost]
@@ -61,6 +63,20 @@ public class ProductsController : ControllerBase
     {
         await _productService.DeleteAsync(id);
 
+        return NoContent();
+    }
+
+    [HttpPost("{productId:guid}/categories/{categoryId:guid}")]
+    public async Task<IActionResult> AssignCategory(Guid productId, Guid categoryId)
+    {
+        await _categoryService.AssignProductAsync(categoryId, productId);
+        return NoContent();
+    }
+
+    [HttpDelete("{productId:guid}/categories/{categoryId:guid}")]
+    public async Task<IActionResult> UnassignCategory(Guid productId, Guid categoryId)
+    {
+        await _categoryService.UnassignProductAsync(categoryId, productId);
         return NoContent();
     }
 }

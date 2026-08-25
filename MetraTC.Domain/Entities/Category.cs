@@ -14,25 +14,27 @@ public class Category : BaseEntity
 
     public Category(string name, string? description = null)
     {
-        ValidateData(name);
+        ValidateData(name, description);
 
         Name = name;
-        Description = description;
+        Description = string.IsNullOrWhiteSpace(description) ? null : description;
     }
 
     public void Update(string name, string? description = null)
     {
-        ValidateData(name);
+        ValidateData(name, description);
 
         Name = name;
-        Description = description;
+        Description = string.IsNullOrWhiteSpace(description) ? null : description;
     }
 
-    private void ValidateData(string name)
+    private static void ValidateData(string name, string? description)
     {
         if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("El SKU es obligatorio", nameof(name));
-        if (name.Length > 50)
-            throw new ArgumentException("El nombre no puede exceder los 50 caracteres");
+            throw new ArgumentException("El nombre es requerido", nameof(name));
+        if (name.Length > 100)
+            throw new ArgumentException("El nombre no puede exceder los 100 caracteres");
+        if (!string.IsNullOrWhiteSpace(description) && description!.Length > 500)
+            throw new ArgumentException("La descripción no puede exceder los 500 caracteres");
     }
 }

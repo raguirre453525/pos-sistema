@@ -1,4 +1,5 @@
 ﻿using System.Net;
+using MetraTC.Domain.Common;
 
 namespace MetraTC.Middlewares;
 
@@ -33,6 +34,8 @@ public class ExceptionMiddleware
         context.Response.StatusCode = exception switch
         {
             KeyNotFoundException => (int)HttpStatusCode.NotFound,
+            ConflictException => (int)HttpStatusCode.Conflict,
+            InvalidOperationException => (int)HttpStatusCode.Conflict,
             ArgumentNullException => (int)HttpStatusCode.BadRequest,
             ArgumentException => (int)HttpStatusCode.BadRequest,
             _ => (int)HttpStatusCode.InternalServerError
