@@ -1,5 +1,6 @@
 using FluentValidation;
 using MetraTC.Application.Services;
+using MetraTC.Application.Services.Assistant;
 using MetraTC.Application.Validators.Product;
 using MetraTC.Domain.Interfaces;
 using MetraTC.Infrastructure.Persistence;
@@ -45,6 +46,11 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ISalesService, SalesService>();
 builder.Services.AddScoped<IReportsService, ReportsService>();
+
+// Assistant - hybrid provider (mock | openai)
+builder.Services.AddScoped<MockAssistantProvider>();
+builder.Services.AddHttpClient<OpenAiAssistantProvider>();
+builder.Services.AddScoped<IAssistantService, AssistantService>();
 
 var app = builder.Build();
 

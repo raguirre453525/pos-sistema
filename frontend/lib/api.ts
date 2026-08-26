@@ -224,6 +224,23 @@ export function getStockAudits(params: {
   return apiFetch<PagedResult<StockAuditDto>>(`/api/reports/stock-audits?${qs.toString()}`);
 }
 
+// ---------- Assistant ----------
+export type ChatMessageDto = { role: "user" | "assistant"; content: string };
+export type ChatRequestDto = { message: string; history?: ChatMessageDto[] };
+export type ChatResponseDto = { reply: string; provider: string };
+export type ProvidersResponseDto = { current: string; available: string[] };
+
+export function askAssistant(message: string, history?: ChatMessageDto[]) {
+  return apiFetch<ChatResponseDto>("/api/assistant/chat", {
+    method: "POST",
+    body: JSON.stringify({ message, history: history ?? [] }),
+  });
+}
+
+export function getAssistantProviders() {
+  return apiFetch<ProvidersResponseDto>("/api/assistant/providers");
+}
+
 // ---------- Categories ----------
 export function getCategories() {
   return apiFetch<CategoryDto[]>("/api/Categories");
