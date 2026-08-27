@@ -40,21 +40,76 @@ public class AssistantProposalService
 
         foreach (var raw in rawList)
         {
-            // Search existence: first by Sku exact case-insensitive if Sku present, else by Name exact case-insensitive
+            // Tolerant existence search: exact Sku, then tolerant Name LIKE %name% / viceversa, singular/plural, tokens
             Product? existing = null;
             if (!string.IsNullOrWhiteSpace(raw.Sku))
             {
-                var skuNorm = raw.Sku.Trim().ToLower();
+                var skuNorm = raw.Sku.Trim().ToLowerInvariant();
                 existing = await _db.Products
+                    .IgnoreQueryFilters()
                     .Include(p => p.Categories)
                     .FirstOrDefaultAsync(p => p.Sku.ToLower() == skuNorm, ct);
             }
             if (existing == null && !string.IsNullOrWhiteSpace(raw.Name))
             {
-                var nameNorm = raw.Name.Trim().ToLower();
-                existing = await _db.Products
+                var nameNorm = raw.Name.Trim().ToLowerInvariant();
+                var nameNormSingular = nameNorm.EndsWith("s") && nameNorm.Length > 1 ? nameNorm[..^1] : nameNorm;
+
+                // Prepare tokens for ranking (singularized)
+                var tokens = nameNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(t => t.EndsWith("s") && t.Length > 1 ? t[..^1] : t)
+                    .Where(t => t.Length >= 2)
+                    .ToList();
+
+                // Query candidates with tolerant LIKE both directions + singular variant
+                var candidates = await _db.Products
+                    .IgnoreQueryFilters()
                     .Include(p => p.Categories)
-                    .FirstOrDefaultAsync(p => p.Name.ToLower() == nameNorm, ct);
+                    .Where(p =>
+                        EF.Functions.Like(p.Name.ToLower(), $"%{nameNorm}%") ||
+                        EF.Functions.Like(p.Name.ToLower(), $"%{nameNormSingular}%") ||
+                        EF.Functions.Like(nameNorm, "%" + p.Name.ToLower() + "%") ||
+                        EF.Functions.Like(nameNormSingular, "%" + p.Name.ToLower() + "%"))
+                    .ToListAsync(ct);
+
+                // Fallback: if LIKE yielded nothing, broaden to token-based search client-side
+                if (candidates.Count == 0 && tokens.Count > 0)
+                {
+                    var all = await _db.Products.IgnoreQueryFilters().Include(p => p.Categories).ToListAsync(ct);
+                    candidates = all.Where(p =>
+                    {
+                        var pn = p.Name.ToLowerInvariant();
+                        return tokens.Any(t => pn.Contains(t));
+                    }).ToList();
+                }
+
+                if (candidates.Count > 0)
+                {
+                    // Rank by best coincidence: contains all tokens wins
+                    Product? best = null;
+                    int bestScore = -1;
+                    foreach (var c in candidates)
+                    {
+                        var pn = c.Name.ToLowerInvariant();
+                        var pnSing = pn.EndsWith("s") && pn.Length > 1 ? pn[..^1] : pn;
+                        int score = 0;
+                        bool containsAll = tokens.Count > 0 && tokens.All(t => pn.Contains(t) || pnSing.Contains(t));
+                        if (containsAll) score += 100;
+                        foreach (var t in tokens)
+                        {
+                            if (pn.Contains(t)) score += 10;
+                        }
+                        // shorter distance to input preferred
+                        score -= Math.Abs(pn.Length - nameNorm.Length) / 5;
+                        if (c.IsActive) score += 2;
+                        if (score > bestScore)
+                        {
+                            bestScore = score;
+                            best = c;
+                        }
+                    }
+                    existing = best ?? candidates.FirstOrDefault();
+                }
             }
 
             bool exists = existing != null;
@@ -78,13 +133,13 @@ public class AssistantProposalService
             }
             else
             {
-                // Exists: optional price change detection
+                // Exists: optional price change detection — never ask Sku/Price
                 if (raw.Price != null && raw.Price != currentPrice)
                     action = "restock+price_update";
                 else
                     action = "restock";
-                // StockDelta may be null -> still restock with no delta? But spec says if no price only stock. If both missing? Still proposal with no delta?
-                // We treat missing stock as not requiring, but will not execute stock adjust if null/0.
+                // MissingFields must stay empty for existing products (no pedir SKU/Price)
+                // StockDelta is optional; execution will simply not adjust if null/0
             }
 
             var nameVal = raw.Name?.Trim() ?? (exists ? existing!.Name : "");
@@ -121,35 +176,60 @@ public class AssistantProposalService
     private string BuildNaturalReply(List<ProductProposal> proposals)
     {
         var sb = new StringBuilder();
+        var hasMissing = proposals.Any(p => p.MissingFields.Count > 0);
+
+        // Single proposal -> conversational single line
+        if (proposals.Count == 1)
+        {
+            var p = proposals[0];
+            var stockPart = p.StockDelta != null ? $"+{p.StockDelta} unidades" : "sin delta";
+            var currentPart = p.CurrentStock != null ? $" (stock actual: {p.CurrentStock})" : "";
+            if (p.Exists && p.MissingFields.Count == 0)
+            {
+                sb.AppendLine($"Detecté **{p.Name}**: {stockPart}{currentPart}. ¿Confirmás la reposición? Decime \"sí, dale\" para ejecutar o decime qué corregir.");
+            }
+            else if (!p.Exists && p.MissingFields.Count > 0)
+            {
+                var deltaStr = p.StockDelta != null ? $" (+{p.StockDelta})" : "";
+                sb.AppendLine($"Detecté **{p.Name}**{deltaStr}. No lo encontré en tu inventario — para crearlo necesito: {string.Join(", ", p.MissingFields)}. ¿Me los pasás? Ej: \"SKU CEP200 a $1200\"");
+            }
+            else if (!p.Exists && p.MissingFields.Count == 0)
+            {
+                var priceStr = p.Price != null ? $" a ${p.Price}" : "";
+                sb.AppendLine($"Detecté **{p.Name}**{priceStr} {stockPart}. No existe en inventario, se creará nuevo. ¿Te parece bien? Decime \"sí, dale\" para confirmar o decime qué corregir.");
+            }
+            else
+            {
+                // fallback single
+                sb.AppendLine($"Detecté **{p.Name}**: {stockPart}{currentPart}.");
+                if (!hasMissing)
+                    sb.AppendLine("¿Te parece bien? Decime \"sí, dale\" para confirmar o decime qué corregir (ej: \"no, la coca es 1500 no 1600\" o \"el sku está mal\").");
+                else
+                    sb.AppendLine($"Faltan: {string.Join(", ", p.MissingFields)}.");
+            }
+            return sb.ToString().Trim();
+        }
+
+        // Multiple or mixed -> bullet list, never pipes
         sb.AppendLine("Entendí lo siguiente:");
-        sb.AppendLine();
-        sb.AppendLine("| Producto | Existe? | Acción | Stock | Precio | Categoría | Faltantes |");
-        sb.AppendLine("|---|---|---|---|---|---|---|");
         foreach (var p in proposals)
         {
-            var existe = p.Exists ? "Sí" : "No";
-            var accion = p.Action;
-            var stock = p.StockDelta != null ? $"+{p.StockDelta} (actual: {p.CurrentStock?.ToString() ?? "-"})" : (p.Exists ? $"actual: {p.CurrentStock}" : "-");
-            var precio = p.Price != null
-                ? (p.Exists ? $"{p.CurrentPrice} → {p.Price}" : $"{p.Price}")
-                : (p.CurrentPrice?.ToString() ?? "-");
-            var cat = p.CategoryNames != null && p.CategoryNames.Count > 0 ? string.Join(", ", p.CategoryNames) : "-";
-            var falt = p.MissingFields.Count > 0 ? string.Join(", ", p.MissingFields) : "-";
-            // Escape pipes in name
-            var nameEsc = p.Name.Replace("|", "/");
-            sb.AppendLine($"| {nameEsc} | {existe} | {accion} | {stock} | {precio} | {cat} | {falt} |");
+            var estado = p.Exists ? "existe, reponer" : "nuevo, crear";
+            var stock = p.StockDelta != null ? $"+{p.StockDelta}" : "sin delta";
+            var falt = p.MissingFields.Count > 0 ? $" — faltan: {string.Join(", ", p.MissingFields)}" : "";
+            var cur = p.Exists && p.CurrentStock != null ? $" (actual: {p.CurrentStock})" : "";
+            sb.AppendLine($"• {p.Name} — {stock}{cur} ({estado}){falt}");
         }
         sb.AppendLine();
-        var hasMissing = proposals.Any(p => p.MissingFields.Count > 0);
         if (hasMissing)
         {
-            sb.AppendLine("⚠️ Faltan datos obligatorios para crear: `Sku`, `Name`, `Price`, `Stock` inicial. Decime los que faltan y vuelvo a proponer.");
+            sb.AppendLine("⚠️ Faltan datos obligatorios para crear los marcados arriba. Decime los que faltan y vuelvo a proponer.");
         }
         else
         {
-            sb.AppendLine("¿Te parece bien? Decime **\"sí, dale\"** para confirmar o decime qué corregir (ej: \"no, la coca es 1500 no 1600\" o \"el sku está mal\").");
+            sb.AppendLine("¿Te parece bien? Decime \"sí, dale\" para confirmar o decime qué corregir (ej: \"no, la coca es 1500 no 1600\" o \"el sku está mal\").");
         }
-        return sb.ToString();
+        return sb.ToString().Trim();
     }
 
     public async Task<string> ExecuteAsync(ProposalResponse proposal, CancellationToken ct)

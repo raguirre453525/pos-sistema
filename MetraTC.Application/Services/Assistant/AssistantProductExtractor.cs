@@ -25,10 +25,11 @@ public class AssistantProductExtractor
 
     private const string ExtractionPrompt =
         "Sos extractor de productos para MetraTC. Del mensaje del empleado y del historial, extrae TODOS los productos mencionados con: name, sku, price, stockDelta (cantidad a sumar), barcode, description, categoryNames[].\n" +
-        "- stockDelta: si dicen \"10 unidades\", \"me llegaron 5\", \"reponer 20\" \u2192 n\u00FAmero positivo int.\n" +
+        "- stockDelta: si dicen \"10 unidades\", \"me llegaron 5\", \"reponer 20\" \u2192 numero positivo int. Convierte palabras \"uno/dos/tres/cuatro/cinco/seis/siete/ocho/nueve/diez\" a int (ej \"dos jugos\" -> stockDelta 2, \"un jugo\" -> 1).\n" +
         "- price: si mencionan \"$1500\" o \"a 1500\" \u2192 decimal.\n" +
-        "- Si no hay dato, null. No inventes.\n" +
-        "Respond\u00E9 SOLO JSON: { \"products\": [ { \"name\":..., \"sku\":..., \"price\":..., \"stockDelta\":..., \"barcode\":..., \"description\":..., \"categoryNames\":[...] } ] }";
+        "- name: normaliza a singular y capitaliza (ej \"jugos cepita\" -> \"Jugo Cepita\"), sin plural extra ni sufijos de cantidad. Si dicen \"dos jugos cepita\" -> name \"Jugo Cepita\".\n" +
+        "- Si no hay dato, null. No inventes sku/price si no estan explicitos.\n" +
+        "Responde SOLO JSON: { \"products\": [ { \"name\":..., \"sku\":..., \"price\":..., \"stockDelta\":..., \"barcode\":..., \"description\":..., \"categoryNames\":[...] } ] }";
 
     public AssistantProductExtractor(IConfiguration configuration, HttpClient httpClient, ILogger<AssistantProductExtractor> logger)
     {
@@ -55,10 +56,45 @@ public class AssistantProductExtractor
         }
     }
 
+    private static string NormalizeNumberWords(string input)
+    {
+        if (string.IsNullOrWhiteSpace(input)) return input;
+        var map = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["uno"] = "1", ["un"] = "1", ["una"] = "1",
+            ["dos"] = "2", ["tres"] = "3", ["cuatro"] = "4", ["cinco"] = "5",
+            ["seis"] = "6", ["siete"] = "7", ["ocho"] = "8", ["nueve"] = "9", ["diez"] = "10"
+        };
+        var result = input;
+        foreach (var kv in map)
+        {
+            result = Regex.Replace(result, $@"\b{Regex.Escape(kv.Key)}\b", kv.Value, RegexOptions.IgnoreCase);
+        }
+        return result;
+    }
+
+    private static string NormalizeProductName(string? name)
+    {
+        if (string.IsNullOrWhiteSpace(name)) return name ?? string.Empty;
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var normalized = words.Select(w =>
+        {
+            // singular simple: quita 's' final if length > 3 and ends with s
+            var lower = w.ToLowerInvariant();
+            if (lower.EndsWith("s") && w.Length > 3)
+                w = w[..^1];
+            // Capitalize first letter
+            if (w.Length == 0) return w;
+            return char.ToUpperInvariant(w[0]) + w[1..].ToLowerInvariant();
+        });
+        return string.Join(" ", normalized);
+    }
+
     private List<RawProductExtract> MockExtract(string message, IReadOnlyList<ChatMessage> history)
     {
         // Build combined text: current message + last user messages for correction context
         var combined = message ?? "";
+        combined = NormalizeNumberWords(combined);
         // If history contains recent corrections, the current message alone is enough; but we also check history for sku context
         // Simple: try to parse combined
 
@@ -185,10 +221,14 @@ public class AssistantProductExtractor
 
         // Name extraction: remove known tokens and remaining is name
         var name = ExtractName(segment, sku, price, stockDelta, categories);
+        if (!string.IsNullOrWhiteSpace(name))
+            name = NormalizeProductName(name);
 
         if (string.IsNullOrWhiteSpace(name) && sku == null) return null;
         // If name is generic like "producto" without sku, still need something; but skip if nothing
         if (string.IsNullOrWhiteSpace(name)) name = sku; // fallback to sku as name if no name
+        if (!string.IsNullOrWhiteSpace(name))
+            name = NormalizeProductName(name);
 
         // If we still have no price, no sku, no stockDelta and name is very short generic, skip
         if (stockDelta == null && price == null && sku == null && (name == null || name.Length < 2)) return null;
