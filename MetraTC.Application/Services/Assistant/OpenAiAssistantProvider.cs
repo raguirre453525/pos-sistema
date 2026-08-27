@@ -25,7 +25,7 @@ public class OpenAiAssistantProvider : IAssistantProvider
         _configuration = configuration;
     }
 
-    public async Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, CancellationToken ct)
+    public async Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
     {
         var apiKey = _configuration["Assistant:OpenAI:ApiKey"];
         if (string.IsNullOrWhiteSpace(apiKey))
@@ -35,9 +35,13 @@ public class OpenAiAssistantProvider : IAssistantProvider
         if (string.IsNullOrWhiteSpace(model))
             model = "gpt-4o-mini";
 
+        var systemContent = string.IsNullOrWhiteSpace(inventoryContext)
+            ? SystemPrompt
+            : SystemPrompt + "\n\nContexto de inventario (datos reales de la DB, no inventes):\n" + inventoryContext;
+
         var messages = new List<object>
         {
-            new { role = "system", content = SystemPrompt }
+            new { role = "system", content = systemContent }
         };
 
         // History: keep last 20 to avoid token overflow
@@ -108,4 +112,8 @@ public class OpenAiAssistantProvider : IAssistantProvider
             throw new InvalidOperationException($"Respuesta inesperada de OpenAI: {ex.Message}");
         }
     }
+
+    // Compat overload
+    public Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, CancellationToken ct)
+        => GetResponseAsync(message, history, string.Empty, ct);
 }

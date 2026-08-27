@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace MetraTC.Application.Services.Assistant;
 
@@ -8,17 +9,23 @@ public class AssistantService : IAssistantService
     private readonly MockAssistantProvider _mockProvider;
     private readonly OpenAiAssistantProvider _openAiProvider;
     private readonly DeepSeekAssistantProvider _deepSeekProvider;
+    private readonly AssistantInventoryContext _inventoryContext;
+    private readonly ILogger<AssistantService> _logger;
 
     public AssistantService(
         IConfiguration configuration,
         MockAssistantProvider mockProvider,
         OpenAiAssistantProvider openAiProvider,
-        DeepSeekAssistantProvider deepSeekProvider)
+        DeepSeekAssistantProvider deepSeekProvider,
+        AssistantInventoryContext inventoryContext,
+        ILogger<AssistantService> logger)
     {
         _configuration = configuration;
         _mockProvider = mockProvider;
         _openAiProvider = openAiProvider;
         _deepSeekProvider = deepSeekProvider;
+        _inventoryContext = inventoryContext;
+        _logger = logger;
     }
 
     public string CurrentProvider =>
@@ -50,7 +57,18 @@ public class AssistantService : IAssistantService
             throw new InvalidOperationException("Configura Assistant:DeepSeek:ApiKey");
         }
 
-        var reply = await provider.GetResponseAsync(message, history, ct);
+        string inventoryContext;
+        try
+        {
+            inventoryContext = await _inventoryContext.GetInventoryContextAsync(ct);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "No se pudo obtener contexto de inventario");
+            inventoryContext = "Inventario no disponible momentáneamente.";
+        }
+
+        var reply = await provider.GetResponseAsync(message, history, inventoryContext, ct);
         return (reply, provider.Name);
     }
 }

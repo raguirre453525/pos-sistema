@@ -48,6 +48,7 @@ builder.Services.AddScoped<ISalesService, SalesService>();
 builder.Services.AddScoped<IReportsService, ReportsService>();
 
 // Assistant - hybrid provider (mock | openai | deepseek)
+builder.Services.AddScoped<AssistantInventoryContext>();
 builder.Services.AddScoped<MockAssistantProvider>();
 builder.Services.AddHttpClient<OpenAiAssistantProvider>();
 builder.Services.AddScoped<DeepSeekAssistantProvider>();
