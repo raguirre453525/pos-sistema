@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using MetraTC.Application.Services;
 using MetraTC.Domain.Entities;
 using MetraTC.Infrastructure.Persistence;
@@ -62,117 +63,176 @@ public class AssistantProposalService
             return false;
         }
 
+        bool MessageMentionsProduct(string msg, string prodName)
+        {
+            if (string.IsNullOrWhiteSpace(msg) || string.IsNullOrWhiteSpace(prodName)) return false;
+            var ml = msg.ToLowerInvariant();
+            // generic tokens that alone are not distinctive
+            var generic = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+            {
+                "gaseosa","bebida","bebidas","litro","litros","kilo","kilos","gramo","gramos","paquete","paquetes","botella","botellas","unidad","unidades","producto","productos","l","ml","cc"
+            };
+            string Sing(string x) => x.EndsWith("s") && x.Length > 2 ? x[..^1] : x;
+            string NormToken(string t) => Sing(t.ToLowerInvariant());
+            // tokenize product name: keep letters/digits, length >=2 or numeric
+            var rawTokens = prodName.ToLowerInvariant().Split(new[] {' ', '-', '_', '.', ',', '(', ')', '/'}, StringSplitOptions.RemoveEmptyEntries);
+            var tokens = rawTokens
+                .Select(t => new string(t.Where(char.IsLetterOrDigit).ToArray()).ToLowerInvariant())
+                .Where(t => t.Length >= 2 || int.TryParse(t, out _))
+                .Select(NormToken)
+                .Where(t => t.Length >= 2)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            if (tokens.Count == 0) return false;
+            int matched = 0;
+            bool hasDistinctive = false;
+            foreach (var tok in tokens)
+            {
+                // word-boundary tolerant: contains as substring but ensure token appears
+                // use simple contains; for short tokens like "up" require word boundary to avoid false positives
+                bool contains;
+                if (tok.Length <= 2)
+                {
+                    // require word boundary for very short tokens
+                    contains = System.Text.RegularExpressions.Regex.IsMatch(ml, @"\b" + System.Text.RegularExpressions.Regex.Escape(tok) + @"\b");
+                }
+                else
+                {
+                    contains = ml.Contains(tok);
+                }
+                if (contains)
+                {
+                    matched++;
+                    if (!generic.Contains(tok) && tok.Length >= 3)
+                        hasDistinctive = true;
+                }
+            }
+            if (hasDistinctive) return true;
+            if (matched >= 2) return true;
+            return false;
+        }
+
         // Ambigüedad: 2+ productos faltan y usuario manda un solo sku/precio sin decir producto
         var missingProducts = pending.Proposals.Where(p => p.MissingFields.Any(f => f == "Sku" || f == "Price")).ToList();
-        if (missingProducts.Count >= 2 && newRaws.Count == 1 && string.IsNullOrWhiteSpace(newRaws[0].Name) && (newRaws[0].Sku != null || newRaws[0].Price != null))
         {
-            var names = string.Join(" y ", missingProducts.Select(p => p.Name));
-            var clarification = $"⚠️ Me faltan SKU y precio para: {names}. Me pasaste un SKU/Precio sin decir a qué producto pertenece. Por favor decime natural a qué producto corresponde cada dato, ej: 'azúcar sku XXX precio 1500 y hierba sku YYY precio 2000'.";
-            return new ProposalResponse(pending.Proposals, clarification, NeedsConfirmation: false, HasMissingData: true);
+            var missingCount = missingProducts.Count;
+            if (missingCount >= 2 && newRaws.Count == 1)
+            {
+                var nr = newRaws[0];
+                bool mentionsAnyPending = pending.Proposals.Any(p => MessageMentionsProduct(message, p.Name));
+                if ((nr.Sku != null || nr.Price != null) && !mentionsAnyPending)
+                {
+                    var names = string.Join(" y ", missingProducts.Select(p => p.Name));
+                    var clarification = $"⚠️ Me faltan SKU y precio para: {names}. Me pasaste un SKU/Precio sin decir a qué producto pertenece. Por favor decime natural a qué producto corresponde cada dato, ej: 'para seven up sku 987... precio 3000 y para manteca sku 123... precio 2500'.";
+                    return new ProposalResponse(pending.Proposals, clarification, NeedsConfirmation: false, HasMissingData: true);
+                }
+            }
         }
 
         // Build patched raws from pending
         var patchedRaws = pending.Proposals.Select(p => new RawProductExtract(p.Name, p.Sku, p.Price, p.StockDelta, p.Barcode, p.Description, p.CategoryNames)).ToList();
         bool anyPatched = false;
+        var usedIndices = new HashSet<int>();
 
-        // If single newRaw and single pending with missing, simple merge even if name null (user sent only "sku es ... precio ...")
-        if (newRaws.Count == 1 && pending.Proposals.Count == 1)
+        // Unified patch: allow patching any pending (even already filled) if NamesMatch indicates correction
+        foreach (var nr in newRaws)
         {
-            var idx = pending.Proposals.FindIndex(p => p.MissingFields.Count>0);
-            if (idx >= 0)
+            int bestIdx = -1; int bestScore = -1;
+            for (int i = 0; i < pending.Proposals.Count; i++)
             {
-                var target = pending.Proposals[idx];
-                var nr = newRaws[0];
-                // If nr.Name is null but target has name, accept (correction without repeating name)
-                bool nameOk = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, target.Name);
-                if (nameOk)
+                if (usedIndices.Contains(i)) continue;
+                var pp = pending.Proposals[i];
+                // nr without name: only candidate if message explicitly mentions that product, unless single missing
+                if (string.IsNullOrWhiteSpace(nr.Name))
                 {
-                    var pr = patchedRaws[idx];
-                    var merged = new RawProductExtract(
-                        Name: !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
-                        Sku: !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
-                        Price: nr.Price ?? pr.Price,
-                        StockDelta: nr.StockDelta ?? pr.StockDelta,
-                        Barcode: !string.IsNullOrWhiteSpace(nr.Barcode) ? nr.Barcode : pr.Barcode,
-                        Description: !string.IsNullOrWhiteSpace(nr.Description) ? nr.Description : pr.Description,
-                        CategoryNames: nr.CategoryNames ?? pr.CategoryNames
-                    );
-                    if (merged.Sku != pr.Sku || merged.Price != pr.Price || merged.Name != pr.Name || merged.StockDelta != pr.StockDelta)
-                        anyPatched = true;
-                    patchedRaws[idx] = merged;
+                    var mentionsThis = MessageMentionsProduct(message, pp.Name);
+                    if (!mentionsThis)
+                    {
+                        // allow nameless patch only if there's a single pending with missing (Azúcar case)
+                        var missingCountSingle = pending.Proposals.Count(p => p.MissingFields.Count > 0);
+                        if (!(newRaws.Count == 1 && pending.Proposals.Count == 1 && pp.MissingFields.Count > 0))
+                        {
+                            if (missingCountSingle != 1) continue;
+                            // if single missing across many pendings, allow fallback but low score
+                        }
+                    }
                 }
+                else
+                {
+                    if (!NamesMatch(nr.Name, pp.Name)) continue;
+                }
+
+                int score = 0;
+                if (!string.IsNullOrWhiteSpace(nr.Name) && NamesMatch(nr.Name, pp.Name)) score += 10;
+                else if (string.IsNullOrWhiteSpace(nr.Name) && MessageMentionsProduct(message, pp.Name)) score += 8;
+                else if (string.IsNullOrWhiteSpace(nr.Name)) score += 3; // nameless fallback when single missing
+
+                if (pp.MissingFields.Count > 0) score += 3; // prioritize missing but not exclusive
+                if (!string.IsNullOrWhiteSpace(nr.Sku)) score += 2;
+                if (nr.Price != null) score += 2;
+                if (MessageMentionsProduct(message, pp.Name)) score += 5;
+
+                if (score > bestScore) { bestScore = score; bestIdx = i; }
+            }
+
+            // Edge: if nr.Name empty and no bestIdx but single missing exists, target that missing
+            if (bestIdx < 0 && string.IsNullOrWhiteSpace(nr.Name))
+            {
+                var missingIdxFallback = pending.Proposals.FindIndex(p => p.MissingFields.Count > 0 && !usedIndices.Contains(pending.Proposals.IndexOf(p)));
+                // try generic single-missing fallback
+                if (missingIdxFallback >= 0 && pending.Proposals.Count(p => p.MissingFields.Count > 0) == 1)
+                    bestIdx = missingIdxFallback;
+                else if (pending.Proposals.Count == 1 && !usedIndices.Contains(0))
+                    bestIdx = 0;
+            }
+
+            if (bestIdx >= 0)
+            {
+                var pr = patchedRaws[bestIdx];
+                var merged = new RawProductExtract(
+                    Name: !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
+                    Sku: !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
+                    Price: nr.Price ?? pr.Price,
+                    StockDelta: nr.StockDelta ?? pr.StockDelta,
+                    Barcode: !string.IsNullOrWhiteSpace(nr.Barcode) ? nr.Barcode : pr.Barcode,
+                    Description: !string.IsNullOrWhiteSpace(nr.Description) ? nr.Description : pr.Description,
+                    CategoryNames: nr.CategoryNames ?? pr.CategoryNames
+                );
+                if (merged.Sku != pr.Sku || merged.Price != pr.Price || merged.Name != pr.Name || merged.StockDelta != pr.StockDelta || merged.Barcode != pr.Barcode)
+                    anyPatched = true;
+                else
+                    anyPatched = true; // still counts as patched intent (even if same, avoid null return when mapping succeeded)
+                patchedRaws[bestIdx] = merged;
+                usedIndices.Add(bestIdx);
             }
         }
-        else
+
+        // Final fallback: if still not patched and we have a single newRaw with data, try single-missing patch (covers Azúcar inferencia)
+        if (!anyPatched && newRaws.Count == 1)
         {
-            // Multi pending: for each newRaw, find best matching pending with missing
-            foreach (var nr in newRaws)
+            var nr = newRaws[0];
+            if (!string.IsNullOrWhiteSpace(nr.Sku) || nr.Price != null)
             {
-                // find pending index to patch: prefer those with missing && name match
-                int bestIdx = -1; int bestScore = -1;
-                for (int i=0;i<pending.Proposals.Count;i++)
+                var missingIndices = pending.Proposals.Select((p, idx) => new { p, idx }).Where(x => x.p.MissingFields.Count > 0).Select(x => x.idx).ToList();
+                if (missingIndices.Count == 1)
                 {
-                    var pp = pending.Proposals[i];
-                    if (pp.MissingFields.Count==0) continue; // only patch those missing
-                    int score = 0;
-                    if (!string.IsNullOrWhiteSpace(nr.Name) && !string.IsNullOrWhiteSpace(pp.Name))
+                    var idx = missingIndices[0];
+                    if (!usedIndices.Contains(idx))
                     {
-                        if (NamesMatch(nr.Name, pp.Name)) score += 10;
-                        else continue;
-                    }
-                    else if (string.IsNullOrWhiteSpace(nr.Name) && patchedRaws.Count==pending.Proposals.Count)
-                    {
-                        // nr without name could be intended for the first missing one
-                        // give lower score but still candidate if only one missing
-                        var missingCount = pending.Proposals.Count(p=>p.MissingFields.Count>0);
-                        if (missingCount==1) score += 5;
-                        else continue;
-                    }
-                    // sku/price presence boosts
-                    if (!string.IsNullOrWhiteSpace(nr.Sku)) score+=2;
-                    if (nr.Price!=null) score+=2;
-                    if (score>bestScore){bestScore=score; bestIdx=i;}
-                }
-                if (bestIdx>=0)
-                {
-                    var pr = patchedRaws[bestIdx];
-                    var merged = new RawProductExtract(
-                        Name: !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
-                        Sku: !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
-                        Price: nr.Price ?? pr.Price,
-                        StockDelta: nr.StockDelta ?? pr.StockDelta,
-                        Barcode: !string.IsNullOrWhiteSpace(nr.Barcode) ? nr.Barcode : pr.Barcode,
-                        Description: !string.IsNullOrWhiteSpace(nr.Description) ? nr.Description : pr.Description,
-                        CategoryNames: nr.CategoryNames ?? pr.CategoryNames
-                    );
-                    patchedRaws[bestIdx]=merged;
-                    anyPatched=true;
-                }
-                else if (NamesMatch(nr.Name, pending.Proposals[0].Name) || string.IsNullOrWhiteSpace(nr.Name))
-                {
-                    // fallback: if no candidate but name matches first missing, patch it
-                }
-            }
-            // Also handle case where newRaws single but pending has 3 and nr.Name matches Azucar (the missing one) but logic above may have missed because we skipped due to missing name null check
-            // If still not patched and newRaws.Count==1 && single missing, allow name-null patch to the missing one
-            if (!anyPatched && newRaws.Count==1)
-            {
-                var nr = newRaws[0];
-                var missingIdx = pending.Proposals.FindIndex(p=>p.MissingFields.Count>0);
-                if (missingIdx>=0)
-                {
-                    var target = pending.Proposals[missingIdx];
-                    bool ok = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, target.Name) || nr.Name!.ToLower().Contains(target.Name!.ToLower().Split(' ')[0]);
-                    if (ok && (!string.IsNullOrWhiteSpace(nr.Sku) || nr.Price!=null))
-                    {
-                        var pr = patchedRaws[missingIdx];
-                        patchedRaws[missingIdx]= new RawProductExtract(
-                            !string.IsNullOrWhiteSpace(nr.Name)? nr.Name!.Trim(): pr.Name,
-                            !string.IsNullOrWhiteSpace(nr.Sku)? nr.Sku!.Trim().ToUpperInvariant(): pr.Sku,
-                            nr.Price ?? pr.Price,
-                            nr.StockDelta ?? pr.StockDelta,
-                            pr.Barcode, pr.Description, nr.CategoryNames ?? pr.CategoryNames);
-                        anyPatched=true;
+                        bool ok = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, pending.Proposals[idx].Name) || MessageMentionsProduct(message, pending.Proposals[idx].Name);
+                        // For single missing, allow even without explicit mention (inferencia válida)
+                        if (string.IsNullOrWhiteSpace(nr.Name)) ok = true;
+                        if (ok)
+                        {
+                            var pr = patchedRaws[idx];
+                            patchedRaws[idx] = new RawProductExtract(
+                                !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
+                                !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
+                                nr.Price ?? pr.Price,
+                                nr.StockDelta ?? pr.StockDelta,
+                                pr.Barcode, pr.Description, nr.CategoryNames ?? pr.CategoryNames);
+                            anyPatched = true;
+                        }
                     }
                 }
             }
