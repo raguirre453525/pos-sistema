@@ -50,7 +50,7 @@ public class AssistantService : IAssistantService
         var normalized = message.Trim().ToLowerInvariant();
         // Remove leading punctuation/spaces
         normalized = Regex.Replace(normalized, @"^[^\p{L}\p{N}]+", "");
-        return Regex.IsMatch(normalized, @"^(sí|si|dale|confirmo|hacelo|hace|ejecuta|ejecutá|ok|perfecto)\b");
+        return Regex.IsMatch(normalized, @"^(sí|si|dale|confirmo|confirmar|confirmado|hacelo|hace|ejecuta|ejecutá|ok|perfecto)\b");
     }
 
     public async Task<(string Reply, string Provider, ProposalResponse? Proposal)> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, CancellationToken ct)

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { SendHorizonal, Sparkles, Trash2 } from "lucide-react";
 import ChatMessage from "@/components/Asistente/ChatMessage";
-import { ApiError, askAssistant, getAssistantProviders, type ChatMessageDto, type ProposalResponse } from "@/lib/api";
+import { ApiError, askAssistant, confirmAssistantProposal, getAssistantProviders, type ChatMessageDto, type ProposalResponse } from "@/lib/api";
 
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; proposal?: ProposalResponse | null };
 
@@ -33,8 +33,10 @@ export default function AsistentePage() {
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<string>("mock");
   const [available, setAvailable] = useState<string[]>(["mock", "openai", "deepseek"]);
+  const [correctHint, setCorrectHint] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Load persisted chat on mount (no default messages)
   useEffect(() => {
@@ -66,6 +68,7 @@ export default function AsistentePage() {
       localStorage.removeItem(STORAGE_KEY);
     } catch {}
     setError(null);
+    setCorrectHint(false);
   }
 
   async function send() {
@@ -76,6 +79,7 @@ export default function AsistentePage() {
       return;
     }
     setError(null);
+    setCorrectHint(false);
     const userMsg: UiMessage = { id: Date.now().toString(), role: "user", content: text };
     // cap to MAX_MESSAGES when adding
     setMessages((prev) => [...prev, userMsg].slice(-MAX_MESSAGES));
@@ -100,6 +104,48 @@ export default function AsistentePage() {
       setError(msg);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function handleConfirm() {
+    if (loading) return;
+    // find last proposal message to check hasMissingData guard
+    const last = messages[messages.length - 1];
+    if (last?.proposal?.hasMissingData) return;
+    setError(null);
+    setCorrectHint(false);
+    const userMsg: UiMessage = { id: Date.now().toString(), role: "user", content: "confirmar" };
+    setMessages((prev) => [...prev, userMsg].slice(-MAX_MESSAGES));
+    setLoading(true);
+    try {
+      const prevSlice = messages.slice(-MAX_MESSAGES);
+      const history: ChatMessageDto[] = prevSlice.map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+      const historyCapped = history.slice(-(MAX_MESSAGES - 1));
+      const res = await confirmAssistantProposal(historyCapped);
+      setProvider(res.provider);
+      const assistantMsg: UiMessage = { id: (Date.now() + 1).toString(), role: "assistant", content: res.reply, proposal: res.proposal ?? null };
+      setMessages((prev) => [...prev, assistantMsg].slice(-MAX_MESSAGES));
+    } catch (e) {
+      const err = e as ApiError;
+      const msg = err?.message || "Error al confirmar.";
+      setError(msg);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  function handleCorrect() {
+    setError(null);
+    setCorrectHint(true);
+    setInput("");
+    // focus with ref, fallback to querySelector per spec
+    if (inputRef.current) {
+      inputRef.current.focus();
+    } else {
+      (document.querySelector('input[aria-label="Pregunta al asistente"]') as HTMLInputElement | null)?.focus();
     }
   }
 
@@ -154,7 +200,7 @@ export default function AsistentePage() {
             </p>
           </div>
         )}
-        {messages.map((msg) => (
+        {messages.map((msg, idx) => (
           <div key={msg.id}>
             <ChatMessage role={msg.role} content={msg.content} />
             {msg.proposal && msg.proposal.proposals.length > 0 && (
@@ -172,8 +218,8 @@ export default function AsistentePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {msg.proposal.proposals.map((p, idx) => (
-                      <tr key={idx} className="border-t border-border">
+                    {msg.proposal.proposals.map((p, j) => (
+                      <tr key={j} className="border-t border-border">
                         <td className="px-2 py-1 font-medium">{p.name || "-"}</td>
                         <td className="px-2 py-1 text-center">{p.exists ? "Sí" : "No"}</td>
                         <td className="px-2 py-1 text-center">
@@ -192,6 +238,27 @@ export default function AsistentePage() {
                 <div className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
                   {msg.proposal.hasMissingData ? "⚠️ Faltan datos obligatorios. Respondé con los campos faltantes." : "¿Te parece bien? Decí \"sí, dale\" para confirmar o decime qué corregir."}
                 </div>
+                {idx === messages.length - 1 && (
+                  <div className="flex gap-2 px-3 py-2 border-t border-border bg-muted/20">
+                    <button
+                      type="button"
+                      onClick={handleConfirm}
+                      disabled={loading || !!msg.proposal.hasMissingData}
+                      title={msg.proposal.hasMissingData ? "Faltan datos obligatorios" : "Confirmar propuesta"}
+                      className="bg-red-500 hover:bg-red-600 text-white rounded-full px-4 py-1 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Confirmar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCorrect}
+                      disabled={loading}
+                      className="border border-border bg-card hover:bg-muted rounded-full px-4 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                    >
+                      Corregir
+                    </button>
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -209,17 +276,27 @@ export default function AsistentePage() {
         )}
       </div>
 
+      {correctHint && (
+        <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+          Decí qué corregir (ej: &apos;el sku es XXX&apos; o &apos;el precio es 1500&apos;)
+        </div>
+      )}
+
       <div className="mt-auto flex flex-row">
         <div className="relative w-full">
           <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
             <Sparkles size={18} className="text-muted-foreground" />
           </div>
           <input
+            ref={inputRef}
             type="text"
             aria-label="Pregunta al asistente"
             placeholder="Pregunta al asistente..."
             value={input}
-            onChange={(e) => setInput(e.target.value)}
+            onChange={(e) => {
+              setInput(e.target.value);
+              if (correctHint) setCorrectHint(false);
+            }}
             onKeyDown={onKeyDown}
             disabled={loading}
             className="block w-full pl-10 pr-3 py-2 border border-border rounded-full bg-muted text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all disabled:opacity-50"

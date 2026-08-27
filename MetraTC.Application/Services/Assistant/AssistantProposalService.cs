@@ -186,7 +186,7 @@ public class AssistantProposalService
             var currentPart = p.CurrentStock != null ? $" (stock actual: {p.CurrentStock})" : "";
             if (p.Exists && p.MissingFields.Count == 0)
             {
-                sb.AppendLine($"Detecté **{p.Name}**: {stockPart}{currentPart}. ¿Confirmás la reposición? Decime \"sí, dale\" para ejecutar o decime qué corregir.");
+                sb.AppendLine($"Detecté **{p.Name}**: {stockPart}{currentPart}. ¿Confirmás la reposición? Podés tocar **Confirmar** o **Corregir** abajo, o decímelo escribiendo (\"sí, dale\").");
             }
             else if (!p.Exists && p.MissingFields.Count > 0)
             {
@@ -196,14 +196,14 @@ public class AssistantProposalService
             else if (!p.Exists && p.MissingFields.Count == 0)
             {
                 var priceStr = p.Price != null ? $" a ${p.Price}" : "";
-                sb.AppendLine($"Detecté **{p.Name}**{priceStr} {stockPart}. No existe en inventario, se creará nuevo. ¿Te parece bien? Decime \"sí, dale\" para confirmar o decime qué corregir.");
+                sb.AppendLine($"Detecté **{p.Name}**{priceStr} {stockPart}. No existe en inventario, se creará nuevo. ¿Te parece bien? Podés tocar **Confirmar** o **Corregir** abajo, o decímelo escribiendo.");
             }
             else
             {
                 // fallback single
                 sb.AppendLine($"Detecté **{p.Name}**: {stockPart}{currentPart}.");
                 if (!hasMissing)
-                    sb.AppendLine("¿Te parece bien? Decime \"sí, dale\" para confirmar o decime qué corregir (ej: \"no, la coca es 1500 no 1600\" o \"el sku está mal\").");
+                    sb.AppendLine("¿Te parece bien? Podés tocar **Confirmar** o **Corregir** abajo, o decímelo escribiendo (\"sí, dale\").");
                 else
                     sb.AppendLine($"Faltan: {string.Join(", ", p.MissingFields)}.");
             }
@@ -227,7 +227,7 @@ public class AssistantProposalService
         }
         else
         {
-            sb.AppendLine("¿Te parece bien? Decime \"sí, dale\" para confirmar o decime qué corregir (ej: \"no, la coca es 1500 no 1600\" o \"el sku está mal\").");
+            sb.AppendLine("¿Te parece bien? Podés tocar **Confirmar** o **Corregir** abajo, o decímelo escribiendo.");
         }
         return sb.ToString().Trim();
     }

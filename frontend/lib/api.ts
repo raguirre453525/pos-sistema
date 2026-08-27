@@ -258,6 +258,10 @@ export function askAssistant(message: string, history?: ChatMessageDto[]) {
   });
 }
 
+export function confirmAssistantProposal(history?: ChatMessageDto[]) {
+  return askAssistant("confirmar", history);
+}
+
 export function getAssistantProviders() {
   return apiFetch<ProvidersResponseDto>("/api/assistant/providers");
 }
