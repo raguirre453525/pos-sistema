@@ -1,25 +1,45 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { SendHorizonal, Sparkles } from "lucide-react";
+import { SendHorizonal, Sparkles, Trash2 } from "lucide-react";
 import ChatMessage from "@/components/Asistente/ChatMessage";
 import { ApiError, askAssistant, getAssistantProviders, type ChatMessageDto } from "@/lib/api";
-import { EXAMPLE_MESSAGES } from "@/constants/chat";
 
 type UiMessage = { id: string; role: "user" | "assistant"; content: string };
 
+const STORAGE_KEY = "metratc:asistente:messages";
+const MAX_MESSAGES = 10;
+
+function loadStoredMessages(): UiMessage[] {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as UiMessage[];
+    if (!Array.isArray(parsed)) return [];
+    // cap to MAX_MESSAGES and validate shape
+    return parsed
+      .filter((m) => m && (m.role === "user" || m.role === "assistant") && typeof m.content === "string")
+      .slice(-MAX_MESSAGES);
+  } catch {
+    return [];
+  }
+}
+
 export default function AsistentePage() {
-  const [messages, setMessages] = useState<UiMessage[]>(() =>
-    EXAMPLE_MESSAGES.map((m) => ({ id: m.id, role: m.role, content: m.content }))
-  );
+  const [messages, setMessages] = useState<UiMessage[]>([]);
+  const [hydrated, setHydrated] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [provider, setProvider] = useState<string>("mock");
-  const [available, setAvailable] = useState<string[]>(["mock", "openai", "gemini"]);
+  const [available, setAvailable] = useState<string[]>(["mock", "openai", "deepseek"]);
+
   const listRef = useRef<HTMLDivElement>(null);
 
+  // Load persisted chat on mount (no default messages)
   useEffect(() => {
+    setMessages(loadStoredMessages());
+    setHydrated(true);
     getAssistantProviders()
       .then((p) => {
         setProvider(p.current);
@@ -28,9 +48,25 @@ export default function AsistentePage() {
       .catch(() => {});
   }, []);
 
+  // Persist on change (cap 10, no basura acumulada)
+  useEffect(() => {
+    if (!hydrated) return;
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(messages.slice(-MAX_MESSAGES)));
+    } catch {}
+  }, [messages, hydrated]);
+
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
+
+  function clearChat() {
+    setMessages([]);
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {}
+    setError(null);
+  }
 
   async function send() {
     const text = input.trim();
@@ -41,30 +77,27 @@ export default function AsistentePage() {
     }
     setError(null);
     const userMsg: UiMessage = { id: Date.now().toString(), role: "user", content: text };
-    setMessages((prev) => [...prev, userMsg]);
+    // cap to MAX_MESSAGES when adding
+    setMessages((prev) => [...prev, userMsg].slice(-MAX_MESSAGES));
     setInput("");
     setLoading(true);
     try {
-      const history: ChatMessageDto[] = [...messages, userMsg].map((m) => ({
+      // history = last MAX_MESSAGES without the current userMsg (backend also caps to 20, we send 10)
+      const prevSlice = messages.slice(-MAX_MESSAGES);
+      const history: ChatMessageDto[] = prevSlice.map((m) => ({
         role: m.role,
         content: m.content,
       }));
-      // Send only last 20 + current handled by backend, but we send history without last user (backend adds message)
-      const historyWithoutLast = history.slice(0, -1).slice(-20);
-      const res = await askAssistant(text, historyWithoutLast);
+      // backend gets history (last 10) + current message separately
+      const historyCapped = history.slice(-(MAX_MESSAGES - 1));
+      const res = await askAssistant(text, historyCapped);
       setProvider(res.provider);
-      setMessages((prev) => [
-        ...prev,
-        { id: (Date.now() + 1).toString(), role: "assistant", content: res.reply },
-      ]);
+      const assistantMsg: UiMessage = { id: (Date.now() + 1).toString(), role: "assistant", content: res.reply };
+      setMessages((prev) => [...prev, assistantMsg].slice(-MAX_MESSAGES));
     } catch (e) {
       const err = e as ApiError;
       const msg = err?.message || "Error al contactar al asistente.";
       setError(msg);
-      // Fallback: keep mock hint if API fails and we were on mock-like content
-      if (err?.status === 400 && msg.toLowerCase().includes("apikey")) {
-        // keep error banner visible
-      }
     } finally {
       setLoading(false);
     }
@@ -86,9 +119,18 @@ export default function AsistentePage() {
           <span className="inline-flex items-center rounded-full bg-primary text-primary-foreground px-3 py-1 text-xs font-medium">
             {provider}
           </span>
-          <span className="text-xs text-muted-foreground hidden sm:inline">
-            disponibles: {available.join(", ")}
-          </span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">disponibles: {available.join(", ")}</span>
+          {messages.length > 0 && (
+            <button
+              type="button"
+              onClick={clearChat}
+              className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-muted transition-colors"
+              title="Borrar historial"
+            >
+              <Trash2 size={12} />
+              Limpiar
+            </button>
+          )}
         </div>
       </div>
 
@@ -97,14 +139,21 @@ export default function AsistentePage() {
           {error}
           {error.toLowerCase().includes("apikey") && (
             <span className="block mt-1 text-xs">
-              Configurá <code>Assistant:OpenAI:ApiKey</code> en <code>backend/appsettings.Development.json</code> o
-              variable <code>Assistant__OpenAI__ApiKey</code> y poné <code>Assistant:Provider=openai</code>.
+              Configurá <code>Assistant:DeepSeek:ApiKey</code> en <code>backend/appsettings.Development.json</code> o variable{" "}
+              <code>Assistant__DeepSeek__ApiKey</code> y poné <code>Assistant:Provider=deepseek</code>.
             </span>
           )}
         </div>
       )}
 
       <div ref={listRef} className="flex flex-1 flex-col gap-1 overflow-y-auto">
+        {hydrated && messages.length === 0 && !loading && (
+          <div className="flex flex-1 items-center justify-center py-12">
+            <p className="text-sm text-muted-foreground text-center max-w-sm">
+              Aún no hay mensajes. Preguntá algo sobre tu inventario — por ejemplo, “¿qué productos tienen stock bajo?”.
+            </p>
+          </div>
+        )}
         {messages.map((msg) => (
           <ChatMessage key={msg.id} role={msg.role} content={msg.content} />
         ))}
