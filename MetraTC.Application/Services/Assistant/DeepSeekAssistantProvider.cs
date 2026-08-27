@@ -33,7 +33,7 @@ public class DeepSeekAssistantProvider : IAssistantProvider
 
         var model = _configuration["Assistant:DeepSeek:Model"];
         if (string.IsNullOrWhiteSpace(model))
-            model = "deepseek-chat"; // default: DeepSeek-V3 (fast/flash). Alternative: "deepseek-reasoner" for R1 reasoning model.
+            model = "deepseek-v4-flash"; // V4 Flash = deepseek flash (default). Alternatives: deepseek-v4-pro, legacy deepseek-chat/reasoner (retiran 2026-07-24)
 
         var messages = new List<object>
         {
@@ -57,11 +57,12 @@ public class DeepSeekAssistantProvider : IAssistantProvider
             model,
             messages,
             max_tokens = 800,
-            temperature = 0.7
+            temperature = 0.7,
+            thinking = new { type = "disabled" }
         };
 
         var json = JsonSerializer.Serialize(payload);
-        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.deepseek.com/v1/chat/completions")
+        using var request = new HttpRequestMessage(HttpMethod.Post, "https://api.deepseek.com/chat/completions")
         {
             Content = new StringContent(json, Encoding.UTF8, "application/json")
         };
