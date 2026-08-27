@@ -29,7 +29,7 @@ public class AssistantProductExtractor
         "- price: si mencionan \"$1500\" o \"a 1500\" \u2192 decimal.\n" +
         "- name: normaliza a singular y capitaliza (ej \"jugos cepita\" -> \"Jugo Cepita\"), sin plural extra ni sufijos de cantidad. Si dicen \"dos jugos cepita\" -> name \"Jugo Cepita\".\n" +
         "- Si no hay dato, null. No inventes sku/price si no estan explicitos.\n" +
-        "IMPORTANTE: Si el mensaje actual solo aporta datos faltantes (precio, sku, stock) y el historial menciona el producto (ej \"Yerba Union\"), asocia esos datos al producto del historial y devuelve name/stockDelta del historial completando con los nuevos. Nunca devuelvas name null si el historial tiene el nombre. Si el historial tiene \"Yerba Union con 20 unidades\" y el usuario dice \"sku XXX precio 1700\", devuelve {name:\"Yerba Union\", sku:\"XXX\", price:1700, stockDelta:20}.\n" +
+        "IMPORTANTE: Si el mensaje actual solo aporta datos faltantes (precio, sku, stock) y el historial menciona el producto (ej \"Yerba Union\"), asocia esos datos al producto del historial y devuelve name/stockDelta del historial completando con los nuevos. Nunca devuelvas name null si el historial tiene el nombre. Si el historial tiene \"Yerba Union con 20 unidades\" y el usuario dice \"sku XXX precio 1700\", devuelve {name:\"Yerba Union\", sku:\"XXX\", price:1700, stockDelta:20}. Si el mensaje dice \"del azucar ledesma, el sku es 9aldj1029 y el precio es 1350\" devuelve name \"Azucar Ledesma\" con esos sku/price y stockDelta del historial.\n" +
         "Responde SOLO JSON: { \"products\": [ { \"name\":..., \"sku\":..., \"price\":..., \"stockDelta\":..., \"barcode\":..., \"description\":..., \"categoryNames\":[...] } ] }";
 
     public AssistantProductExtractor(IConfiguration configuration, HttpClient httpClient, ILogger<AssistantProductExtractor> logger)
@@ -158,10 +158,27 @@ public class AssistantProductExtractor
         var hasNumber = Regex.IsMatch(segment, @"\d");
         if (!hasIntentKeyword && !hasNumber) return null;
 
-        // SKU extraction: "SKU XXX123" or "sku: XXX"
+        // SKU extraction: "SKU XXX123" or "sku: XXX" or "sku es XXX"
         string? sku = null;
-        var skuMatch = Regex.Match(segment, @"sku\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-]*)", RegexOptions.IgnoreCase);
-        if (skuMatch.Success) sku = skuMatch.Groups[1].Value.Trim().ToUpperInvariant();
+        var skuMatch = Regex.Match(segment, @"sku\s*(?:es)?\s*[:\-]?\s*([A-Za-z0-9][A-Za-z0-9_\-]*)", RegexOptions.IgnoreCase);
+        if (skuMatch.Success)
+        {
+            sku = skuMatch.Groups[1].Value.Trim().ToUpperInvariant();
+            // Fallback: si capturó "ES" porque regex capturó el "es" literal, recapturar siguiente token alfanumérico
+            if (sku == "ES" || sku == "E")
+            {
+                var retry = Regex.Match(segment, @"sku\s*(?:es)?\s*[:\-]?\s*(?:es\s+)?([A-Za-z0-9][A-Za-z0-9_\-]*)", RegexOptions.IgnoreCase);
+                // segunda captura más robusta: buscar token después de "sku es"
+                var alt = Regex.Match(segment, @"sku\s+es\s+([A-Za-z0-9][A-Za-z0-9_\-]*)", RegexOptions.IgnoreCase);
+                if (alt.Success) sku = alt.Groups[1].Value.Trim().ToUpperInvariant();
+                else
+                {
+                    var nextToken = Regex.Match(segment.Substring(skuMatch.Index + skuMatch.Length).Trim(), @"^([A-Za-z0-9][A-Za-z0-9_\-]*)");
+                    if (nextToken.Success) sku = nextToken.Groups[1].Value.Trim().ToUpperInvariant();
+                    else sku = null;
+                }
+            }
+        }
 
         // Price extraction: "$1500" or "a 1500" or "precio 1500" or "a $1500"
         decimal? price = null;
@@ -278,9 +295,9 @@ public class AssistantProductExtractor
     private string? ExtractName(string segment, string? sku, decimal? price, int? stockDelta, List<string>? categories)
     {
         var cleaned = segment;
-        // Remove sku token
+        // Remove sku token (soporta "sku es XXX")
         if (!string.IsNullOrWhiteSpace(sku))
-            cleaned = Regex.Replace(cleaned, @"sku\s*[:\-]?\s*" + Regex.Escape(sku), "", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"sku\s*(?:es)?\s*[:\-]?\s*" + Regex.Escape(sku), "", RegexOptions.IgnoreCase);
         // Remove price tokens
         cleaned = Regex.Replace(cleaned, @"\$\s*\d+(?:[.,]\d+)?", "", RegexOptions.IgnoreCase);
         cleaned = Regex.Replace(cleaned, @"\bprecio\b[^,]*", "", RegexOptions.IgnoreCase);

@@ -40,61 +40,137 @@ public class AssistantProposalService
 
     public async Task<ProposalResponse?> TryPatchPendingAsync(ProposalResponse pending, string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
     {
-        if (pending == null || !pending.HasMissingData || pending.Proposals.Count == 0) return null;
-
+        if (pending == null || !pending.HasMissingData) return null;
         var newRaws = await _extractor.ExtractAsync(message, history, inventoryContext, ct);
         if (newRaws == null || newRaws.Count == 0) return null;
 
-        // Single pending correction: if new extract is single but with different name, treat as new product -> don't patch
-        var pendingProp = pending.Proposals[0];
-        // If multiple raws, treat as new distinct request -> not a patch
-        if (newRaws.Count != 1 && pending.Proposals.Count == 1) return null;
-
-        var fresh = newRaws[0];
-        if (!string.IsNullOrWhiteSpace(fresh.Name) && !string.IsNullOrWhiteSpace(pendingProp.Name)
-            && !fresh.Name.Equals(pendingProp.Name, StringComparison.OrdinalIgnoreCase))
-        {
-            // Different product name -> not a correction of pending
-            return null;
+        // Helpers para comparar nombres tolerante
+        string Norm(string? s) => (s ?? "").Trim().ToLowerInvariant();
+        bool NamesMatch(string? a, string? b){
+            if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) return false;
+            var na = Norm(a); var nb = Norm(b);
+            if (na == nb) return true;
+            // singular trick
+            string Sing(string x){ return x.EndsWith("s") && x.Length>2 ? x[..^1] : x; }
+            if (Sing(na) == Sing(nb)) return true;
+            // contains both ways
+            if (na.Contains(nb) || nb.Contains(na)) return true;
+            // token overlap >= half
+            var ta = na.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Sing).Where(x=>x.Length>=2).ToHashSet();
+            var tb = nb.Split(' ', StringSplitOptions.RemoveEmptyEntries).Select(Sing).Where(x=>x.Length>=2).ToHashSet();
+            if (ta.Count>0 && tb.Count>0 && ta.Intersect(tb).Count() >= Math.Min(ta.Count, tb.Count)) return true;
+            return false;
         }
 
-        // Merge: fill missing fields from pending where fresh has null
-        var merged = new RawProductExtract(
-            Name: !string.IsNullOrWhiteSpace(fresh.Name) ? fresh.Name : pendingProp.Name,
-            Sku: !string.IsNullOrWhiteSpace(fresh.Sku) ? fresh.Sku : pendingProp.Sku,
-            Price: fresh.Price ?? pendingProp.Price,
-            StockDelta: fresh.StockDelta ?? pendingProp.StockDelta,
-            Barcode: !string.IsNullOrWhiteSpace(fresh.Barcode) ? fresh.Barcode : pendingProp.Barcode,
-            Description: !string.IsNullOrWhiteSpace(fresh.Description) ? fresh.Description : pendingProp.Description,
-            CategoryNames: fresh.CategoryNames ?? pendingProp.CategoryNames
-        );
+        // Build patched raws from pending
+        var patchedRaws = pending.Proposals.Select(p => new RawProductExtract(p.Name, p.Sku, p.Price, p.StockDelta, p.Barcode, p.Description, p.CategoryNames)).ToList();
+        bool anyPatched = false;
 
-        // If merged still has no name, cannot patch
-        if (string.IsNullOrWhiteSpace(merged.Name)) return null;
-
-        // If merged didn't add anything new (all fields equal to pending), avoid infinite loop -> return null so caller can handle reminder
-        bool addsSomething =
-            (!string.IsNullOrWhiteSpace(fresh.Sku) && !string.Equals(fresh.Sku, pendingProp.Sku, StringComparison.OrdinalIgnoreCase)) ||
-            (fresh.Price != null && fresh.Price != pendingProp.Price) ||
-            (fresh.StockDelta != null && fresh.StockDelta != pendingProp.StockDelta) ||
-            (!string.IsNullOrWhiteSpace(fresh.Name) ) ||
-            (fresh.Barcode != null) || (fresh.CategoryNames != null);
-        if (!addsSomething && string.IsNullOrWhiteSpace(fresh.Sku) && fresh.Price == null)
+        // If single newRaw and single pending with missing, simple merge even if name null (user sent only "sku es ... precio ...")
+        if (newRaws.Count == 1 && pending.Proposals.Count == 1)
         {
-            // Fresh had nothing useful (e.g. extractor returned only name without new data)
-            // Still, if pending missing Sku/Price and fresh is empty, no patch
-            return null;
+            var idx = pending.Proposals.FindIndex(p => p.MissingFields.Count>0);
+            if (idx >= 0)
+            {
+                var target = pending.Proposals[idx];
+                var nr = newRaws[0];
+                // If nr.Name is null but target has name, accept (correction without repeating name)
+                bool nameOk = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, target.Name);
+                if (nameOk)
+                {
+                    var pr = patchedRaws[idx];
+                    var merged = new RawProductExtract(
+                        Name: !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
+                        Sku: !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
+                        Price: nr.Price ?? pr.Price,
+                        StockDelta: nr.StockDelta ?? pr.StockDelta,
+                        Barcode: !string.IsNullOrWhiteSpace(nr.Barcode) ? nr.Barcode : pr.Barcode,
+                        Description: !string.IsNullOrWhiteSpace(nr.Description) ? nr.Description : pr.Description,
+                        CategoryNames: nr.CategoryNames ?? pr.CategoryNames
+                    );
+                    if (merged.Sku != pr.Sku || merged.Price != pr.Price || merged.Name != pr.Name || merged.StockDelta != pr.StockDelta)
+                        anyPatched = true;
+                    patchedRaws[idx] = merged;
+                }
+            }
+        }
+        else
+        {
+            // Multi pending: for each newRaw, find best matching pending with missing
+            foreach (var nr in newRaws)
+            {
+                // find pending index to patch: prefer those with missing && name match
+                int bestIdx = -1; int bestScore = -1;
+                for (int i=0;i<pending.Proposals.Count;i++)
+                {
+                    var pp = pending.Proposals[i];
+                    if (pp.MissingFields.Count==0) continue; // only patch those missing
+                    int score = 0;
+                    if (!string.IsNullOrWhiteSpace(nr.Name) && !string.IsNullOrWhiteSpace(pp.Name))
+                    {
+                        if (NamesMatch(nr.Name, pp.Name)) score += 10;
+                        else continue;
+                    }
+                    else if (string.IsNullOrWhiteSpace(nr.Name) && patchedRaws.Count==pending.Proposals.Count)
+                    {
+                        // nr without name could be intended for the first missing one
+                        // give lower score but still candidate if only one missing
+                        var missingCount = pending.Proposals.Count(p=>p.MissingFields.Count>0);
+                        if (missingCount==1) score += 5;
+                        else continue;
+                    }
+                    // sku/price presence boosts
+                    if (!string.IsNullOrWhiteSpace(nr.Sku)) score+=2;
+                    if (nr.Price!=null) score+=2;
+                    if (score>bestScore){bestScore=score; bestIdx=i;}
+                }
+                if (bestIdx>=0)
+                {
+                    var pr = patchedRaws[bestIdx];
+                    var merged = new RawProductExtract(
+                        Name: !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
+                        Sku: !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
+                        Price: nr.Price ?? pr.Price,
+                        StockDelta: nr.StockDelta ?? pr.StockDelta,
+                        Barcode: !string.IsNullOrWhiteSpace(nr.Barcode) ? nr.Barcode : pr.Barcode,
+                        Description: !string.IsNullOrWhiteSpace(nr.Description) ? nr.Description : pr.Description,
+                        CategoryNames: nr.CategoryNames ?? pr.CategoryNames
+                    );
+                    patchedRaws[bestIdx]=merged;
+                    anyPatched=true;
+                }
+                else if (NamesMatch(nr.Name, pending.Proposals[0].Name) || string.IsNullOrWhiteSpace(nr.Name))
+                {
+                    // fallback: if no candidate but name matches first missing, patch it
+                }
+            }
+            // Also handle case where newRaws single but pending has 3 and nr.Name matches Azucar (the missing one) but logic above may have missed because we skipped due to missing name null check
+            // If still not patched and newRaws.Count==1 && single missing, allow name-null patch to the missing one
+            if (!anyPatched && newRaws.Count==1)
+            {
+                var nr = newRaws[0];
+                var missingIdx = pending.Proposals.FindIndex(p=>p.MissingFields.Count>0);
+                if (missingIdx>=0)
+                {
+                    var target = pending.Proposals[missingIdx];
+                    bool ok = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, target.Name) || nr.Name!.ToLower().Contains(target.Name!.ToLower().Split(' ')[0]);
+                    if (ok && (!string.IsNullOrWhiteSpace(nr.Sku) || nr.Price!=null))
+                    {
+                        var pr = patchedRaws[missingIdx];
+                        patchedRaws[missingIdx]= new RawProductExtract(
+                            !string.IsNullOrWhiteSpace(nr.Name)? nr.Name!.Trim(): pr.Name,
+                            !string.IsNullOrWhiteSpace(nr.Sku)? nr.Sku!.Trim().ToUpperInvariant(): pr.Sku,
+                            nr.Price ?? pr.Price,
+                            nr.StockDelta ?? pr.StockDelta,
+                            pr.Barcode, pr.Description, nr.CategoryNames ?? pr.CategoryNames);
+                        anyPatched=true;
+                    }
+                }
+            }
         }
 
-        var mergedList = new List<RawProductExtract> { merged };
-        // Handle multi-pending case: append remaining pending proposals unchanged (not patched)
-        for (int i = 1; i < pending.Proposals.Count; i++)
-        {
-            var pp = pending.Proposals[i];
-            mergedList.Add(new RawProductExtract(pp.Name, pp.Sku, pp.Price, pp.StockDelta, pp.Barcode, pp.Description, pp.CategoryNames));
-        }
-
-        return await BuildFromRawsAsync(mergedList, ct);
+        if (!anyPatched) return null;
+        return await BuildFromRawsAsync(patchedRaws, ct);
     }
 
     private async Task<ProposalResponse?> BuildFromRawsAsync(List<RawProductExtract> rawList, CancellationToken ct)
