@@ -15,6 +15,13 @@ public class ReportsController : ControllerBase
         _reportsService = reportsService;
     }
 
+    [HttpGet("dashboard")]
+    public async Task<IActionResult> GetDashboard([FromQuery] DateTime? from, [FromQuery] DateTime? to)
+    {
+        var result = await _reportsService.GetDashboardAsync(from, to);
+        return Ok(result);
+    }
+
     [HttpGet("low-stock")]
     public async Task<IActionResult> GetLowStock([FromQuery] int threshold = 5)
     {

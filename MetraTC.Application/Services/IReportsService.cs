@@ -23,4 +23,6 @@ public interface IReportsService
         int page = 1,
         int pageSize = 20,
         string? reasonContains = null);
+
+    Task<DashboardSummaryDto> GetDashboardAsync(DateTime? from, DateTime? to);
 }

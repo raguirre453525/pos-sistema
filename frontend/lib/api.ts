@@ -186,8 +186,31 @@ export function createSale(dto: CreateSaleDto) {
 }
 
 // ---------- Reports ----------
+export type DailySaleDto = { date: string; total: number; count: number };
+export type CategorySaleDto = { category: string; total: number; quantity: number };
+export type TopProductDto = { productId: string; sku: string; name: string; quantity: number; revenue: number };
+export type DashboardSummaryDto = {
+  salesCount: number;
+  totalRevenue: number;
+  productsSoldQuantity: number;
+  ticketAverage: number;
+  lowStockCount: number;
+  dailySales: DailySaleDto[];
+  salesByCategory: CategorySaleDto[];
+  topProducts: TopProductDto[];
+  recentSales: SaleDto[];
+};
+
 export function getLowStock(threshold = 5) {
   return apiFetch<LowStockDto[]>(`/api/reports/low-stock?threshold=${threshold}`);
+}
+
+export function getDashboard(params: { from?: string; to?: string }) {
+  const qs = new URLSearchParams();
+  if (params.from) qs.set("from", params.from);
+  if (params.to) qs.set("to", params.to);
+  const suffix = qs.toString() ? `?${qs.toString()}` : "";
+  return apiFetch<DashboardSummaryDto>(`/api/reports/dashboard${suffix}`);
 }
 
 export function getSalesReport(params: {

@@ -172,6 +172,155 @@ public class ReportsService : IReportsService
         };
     }
 
+    public async Task<DashboardSummaryDto> GetDashboardAsync(DateTime? from, DateTime? to)
+    {
+        var normalizedFrom = NormalizeFrom(from);
+        var normalizedTo = NormalizeTo(to);
+
+        if (normalizedFrom.HasValue && normalizedTo.HasValue && normalizedFrom.Value > normalizedTo.Value)
+            throw new ArgumentException("from no puede ser mayor que to");
+
+        var query = _context.Sales
+            .IgnoreQueryFilters()
+            .Include(s => s.Items)
+                .ThenInclude(i => i.Product)
+                    .ThenInclude(p => p.Categories)
+            .AsNoTracking()
+            .AsQueryable();
+
+        if (normalizedFrom.HasValue)
+            query = query.Where(s => s.Date >= normalizedFrom.Value);
+        if (normalizedTo.HasValue)
+            query = query.Where(s => s.Date <= normalizedTo.Value);
+
+        // NOTE: POS es pequeño, ToList en memoria está bien. Para volúmenes grandes usar GroupBy en DB.
+        var sales = await query.ToListAsync();
+
+        var salesCount = sales.Count;
+        var totalRevenue = sales.Sum(s => s.Total);
+        var productsSoldQuantity = sales.SelectMany(s => s.Items).Sum(i => i.Quantity);
+        var ticketAverage = salesCount > 0 ? totalRevenue / salesCount : 0;
+
+        var lowStockCount = await _context.Products.CountAsync(p => p.IsActive && p.Stock <= 5);
+
+        // DailySales: buckets por cada día del rango, o últimos 7 días si sin filtro
+        DateTime startDate;
+        DateTime endDate;
+        if (normalizedFrom.HasValue)
+            startDate = normalizedFrom.Value.Date;
+        else if (normalizedTo.HasValue)
+            startDate = normalizedTo.Value.Date.AddDays(-6);
+        else
+            startDate = DateTime.UtcNow.Date.AddDays(-6);
+
+        if (normalizedTo.HasValue)
+            endDate = normalizedTo.Value.Date;
+        else if (normalizedFrom.HasValue)
+            endDate = normalizedFrom.Value.Date.AddDays(6);
+        else
+            endDate = DateTime.UtcNow.Date;
+
+        // Si el rango es invertido por lógica de fallback, corregimos
+        if (startDate > endDate)
+        {
+            var tmp = startDate;
+            startDate = endDate;
+            endDate = tmp;
+        }
+
+        // Limitar rango muy grande a 366 días para no generar buckets infinitos
+        var totalDays = (endDate - startDate).Days + 1;
+        if (totalDays > 366) totalDays = 366;
+
+        var dailySales = new List<DailySaleDto>();
+        // Agrupa por fecha UTC
+        var groupedByDay = sales.GroupBy(s => s.Date.Date).ToDictionary(g => g.Key, g => g.ToList());
+        for (int i = 0; i < totalDays; i++)
+        {
+            var day = startDate.AddDays(i);
+            var dayKey = day.Date;
+            if (groupedByDay.TryGetValue(dayKey, out var daySales))
+            {
+                dailySales.Add(new DailySaleDto
+                {
+                    Date = DateTime.SpecifyKind(dayKey, DateTimeKind.Utc),
+                    Total = daySales.Sum(s => s.Total),
+                    Count = daySales.Count
+                });
+            }
+            else
+            {
+                dailySales.Add(new DailySaleDto
+                {
+                    Date = DateTime.SpecifyKind(dayKey, DateTimeKind.Utc),
+                    Total = 0,
+                    Count = 0
+                });
+            }
+        }
+
+        // SalesByCategory
+        var categoryAgg = new Dictionary<string, (decimal Total, int Quantity)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var item in sales.SelectMany(s => s.Items))
+        {
+            var catNames = item.Product?.Categories?.Select(c => c.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();
+            List<string> cats;
+            if (catNames == null || catNames.Count == 0)
+                cats = new List<string> { "Sin categoría" };
+            else
+                cats = catNames!;
+
+            foreach (var cat in cats)
+            {
+                if (!categoryAgg.TryGetValue(cat, out var agg))
+                    agg = (0, 0);
+                agg.Total += item.Subtotal;
+                agg.Quantity += item.Quantity;
+                categoryAgg[cat] = agg;
+            }
+        }
+        var salesByCategory = categoryAgg
+            .Select(kv => new CategorySaleDto { Category = kv.Key, Total = kv.Value.Total, Quantity = kv.Value.Quantity })
+            .OrderByDescending(c => c.Total)
+            .ToList();
+
+        // TopProducts
+        var topProducts = sales.SelectMany(s => s.Items)
+            .GroupBy(i => i.ProductId)
+            .Select(g =>
+            {
+                var first = g.First();
+                return new TopProductDto
+                {
+                    ProductId = g.Key,
+                    Sku = first.Product?.Sku ?? string.Empty,
+                    Name = first.Product?.Name ?? "Producto",
+                    Quantity = g.Sum(x => x.Quantity),
+                    Revenue = g.Sum(x => x.Subtotal)
+                };
+            })
+            .OrderByDescending(p => p.Quantity)
+            .Take(5)
+            .ToList();
+
+        // RecentSales: últimas 5 dentro del rango
+        var recent = sales.OrderByDescending(s => s.Date).ThenByDescending(s => s.Id).Take(5).ToList();
+        var recentDtos = _mapper.Map<List<SaleDto>>(recent);
+
+        return new DashboardSummaryDto
+        {
+            SalesCount = salesCount,
+            TotalRevenue = totalRevenue,
+            ProductsSoldQuantity = productsSoldQuantity,
+            TicketAverage = ticketAverage,
+            LowStockCount = lowStockCount,
+            DailySales = dailySales,
+            SalesByCategory = salesByCategory,
+            TopProducts = topProducts,
+            RecentSales = recentDtos
+        };
+    }
+
     private static DateTime? NormalizeFrom(DateTime? from)
     {
         if (!from.HasValue) return null;
