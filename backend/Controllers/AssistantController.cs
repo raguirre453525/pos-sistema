@@ -34,8 +34,8 @@ public class AssistantController : ControllerBase
 
         try
         {
-            var (reply, provider) = await _assistantService.GetResponseAsync(request.Message, history, ct);
-            return Ok(new ChatResponseDto(reply, provider));
+            var (reply, provider, proposal) = await _assistantService.GetResponseAsync(request.Message, history, ct);
+            return Ok(new ChatResponseDto(reply, provider, proposal));
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("Configura Assistant:OpenAI:ApiKey"))
         {

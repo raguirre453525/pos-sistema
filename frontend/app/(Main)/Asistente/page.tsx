@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { SendHorizonal, Sparkles, Trash2 } from "lucide-react";
 import ChatMessage from "@/components/Asistente/ChatMessage";
-import { ApiError, askAssistant, getAssistantProviders, type ChatMessageDto } from "@/lib/api";
+import { ApiError, askAssistant, getAssistantProviders, type ChatMessageDto, type ProposalResponse } from "@/lib/api";
 
-type UiMessage = { id: string; role: "user" | "assistant"; content: string };
+type UiMessage = { id: string; role: "user" | "assistant"; content: string; proposal?: ProposalResponse | null };
 
 const STORAGE_KEY = "metratc:asistente:messages";
 const MAX_MESSAGES = 10;
@@ -92,7 +92,7 @@ export default function AsistentePage() {
       const historyCapped = history.slice(-(MAX_MESSAGES - 1));
       const res = await askAssistant(text, historyCapped);
       setProvider(res.provider);
-      const assistantMsg: UiMessage = { id: (Date.now() + 1).toString(), role: "assistant", content: res.reply };
+      const assistantMsg: UiMessage = { id: (Date.now() + 1).toString(), role: "assistant", content: res.reply, proposal: res.proposal ?? null };
       setMessages((prev) => [...prev, assistantMsg].slice(-MAX_MESSAGES));
     } catch (e) {
       const err = e as ApiError;
@@ -155,7 +155,46 @@ export default function AsistentePage() {
           </div>
         )}
         {messages.map((msg) => (
-          <ChatMessage key={msg.id} role={msg.role} content={msg.content} />
+          <div key={msg.id}>
+            <ChatMessage role={msg.role} content={msg.content} />
+            {msg.proposal && msg.proposal.proposals.length > 0 && (
+              <div className="mx-2 mb-2 overflow-x-auto rounded-xl border border-border bg-card">
+                <table className="w-full text-xs">
+                  <thead className="bg-muted">
+                    <tr>
+                      <th className="px-2 py-1 text-left">Producto</th>
+                      <th className="px-2 py-1">Existe?</th>
+                      <th className="px-2 py-1">Acción</th>
+                      <th className="px-2 py-1">Stock</th>
+                      <th className="px-2 py-1">Precio</th>
+                      <th className="px-2 py-1">Categoría</th>
+                      <th className="px-2 py-1">Faltantes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {msg.proposal.proposals.map((p, idx) => (
+                      <tr key={idx} className="border-t border-border">
+                        <td className="px-2 py-1 font-medium">{p.name || "-"}</td>
+                        <td className="px-2 py-1 text-center">{p.exists ? "Sí" : "No"}</td>
+                        <td className="px-2 py-1 text-center">
+                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${p.exists ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                            {p.action}
+                          </span>
+                        </td>
+                        <td className="px-2 py-1 text-center">{p.stockDelta != null ? `+${p.stockDelta} (actual: ${p.currentStock ?? "-"})` : p.currentStock != null ? `actual: ${p.currentStock}` : "-"}</td>
+                        <td className="px-2 py-1 text-center">{p.price != null ? (p.exists ? `${p.currentPrice} → ${p.price}` : `${p.price}`) : (p.currentPrice ?? "-")}</td>
+                        <td className="px-2 py-1 text-center">{p.categoryNames?.join(", ") ?? "-"}</td>
+                        <td className="px-2 py-1 text-center">{p.missingFields.length ? <span className="text-red-600 font-medium">{p.missingFields.join(", ")}</span> : "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
+                  {msg.proposal.hasMissingData ? "⚠️ Faltan datos obligatorios. Respondé con los campos faltantes." : "¿Te parece bien? Decí \"sí, dale\" para confirmar o decime qué corregir."}
+                </div>
+              </div>
+            )}
+          </div>
         ))}
         {loading && (
           <div className="flex justify-start mb-2 p-2">

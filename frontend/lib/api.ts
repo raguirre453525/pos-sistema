@@ -227,7 +227,28 @@ export function getStockAudits(params: {
 // ---------- Assistant ----------
 export type ChatMessageDto = { role: "user" | "assistant"; content: string };
 export type ChatRequestDto = { message: string; history?: ChatMessageDto[] };
-export type ChatResponseDto = { reply: string; provider: string };
+export type ProductProposal = {
+  name: string;
+  sku: string | null;
+  price: number | null;
+  stockDelta: number | null;
+  barcode: string | null;
+  description: string | null;
+  categoryNames: string[] | null;
+  exists: boolean;
+  existingId: string | null;
+  currentPrice: number | null;
+  currentStock: number | null;
+  missingFields: string[];
+  action: string;
+};
+export type ProposalResponse = {
+  proposals: ProductProposal[];
+  naturalReply: string;
+  needsConfirmation: boolean;
+  hasMissingData: boolean;
+};
+export type ChatResponseDto = { reply: string; provider: string; proposal?: ProposalResponse | null };
 export type ProvidersResponseDto = { current: string; available: string[] };
 
 export function askAssistant(message: string, history?: ChatMessageDto[]) {
