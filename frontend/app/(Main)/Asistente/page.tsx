@@ -34,6 +34,7 @@ export default function AsistentePage() {
   const [provider, setProvider] = useState<string>("mock");
   const [available, setAvailable] = useState<string[]>(["mock", "openai", "deepseek"]);
   const [correctHint, setCorrectHint] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
 
   const listRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -69,6 +70,7 @@ export default function AsistentePage() {
     } catch {}
     setError(null);
     setCorrectHint(false);
+    setShowClearConfirm(false);
   }
 
   async function send() {
@@ -160,16 +162,11 @@ export default function AsistentePage() {
     <main className="h-full p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-foreground text-2xl">ASISTENTE</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">Provider:</span>
-          <span className="inline-flex items-center rounded-full bg-primary text-primary-foreground px-3 py-1 text-xs font-medium">
-            {provider}
-          </span>
-          <span className="text-xs text-muted-foreground hidden sm:inline">disponibles: {available.join(", ")}</span>
+        <div className="flex items-center gap-2 ml-auto">
           {messages.length > 0 && (
             <button
               type="button"
-              onClick={clearChat}
+              onClick={() => setShowClearConfirm(true)}
               className="inline-flex items-center gap-1 rounded-full border border-border px-3 py-1 text-xs hover:bg-muted transition-colors"
               title="Borrar historial"
             >
@@ -209,6 +206,7 @@ export default function AsistentePage() {
                   <thead className="bg-muted">
                     <tr>
                       <th className="px-2 py-1 text-left">Producto</th>
+                      <th className="px-2 py-1">SKU</th>
                       <th className="px-2 py-1">Existe?</th>
                       <th className="px-2 py-1">Acción</th>
                       <th className="px-2 py-1">Stock</th>
@@ -218,9 +216,12 @@ export default function AsistentePage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {msg.proposal.proposals.map((p, j) => (
+                    {msg.proposal.proposals.map((p, j) => {
+                      const skuMissing = p.missingFields.includes("Sku");
+                      return (
                       <tr key={j} className="border-t border-border">
                         <td className="px-2 py-1 font-medium">{p.name || "-"}</td>
+                        <td className={`px-2 py-1 text-center font-mono uppercase text-[11px] ${skuMissing ? "text-red-400" : ""}`}>{p.sku ? p.sku.toUpperCase() : "—"}</td>
                         <td className="px-2 py-1 text-center">{p.exists ? "Sí" : "No"}</td>
                         <td className="px-2 py-1 text-center">
                           <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${p.exists ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
@@ -232,7 +233,7 @@ export default function AsistentePage() {
                         <td className="px-2 py-1 text-center">{p.categoryNames?.join(", ") ?? "-"}</td>
                         <td className="px-2 py-1 text-center">{p.missingFields.length ? <span className="text-red-600 font-medium">{p.missingFields.join(", ")}</span> : "-"}</td>
                       </tr>
-                    ))}
+                    )})}
                   </tbody>
                 </table>
                 <div className="px-3 py-2 text-[11px] text-muted-foreground border-t border-border">
@@ -313,6 +314,31 @@ export default function AsistentePage() {
           <SendHorizonal size={18} className="text-background" />
         </button>
       </div>
+
+      {showClearConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4" onClick={() => setShowClearConfirm(false)}>
+          <div className="bg-card border border-border rounded-xl shadow-xl max-w-sm w-full p-5 flex flex-col gap-4" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-labelledby="clear-confirm-title">
+            <h3 id="clear-confirm-title" className="text-sm font-semibold text-foreground">¿Deseas borrar el chat?</h3>
+            <p className="text-xs text-muted-foreground">Esta acción no se puede deshacer.</p>
+            <div className="flex justify-end gap-2 mt-2">
+              <button
+                type="button"
+                onClick={() => setShowClearConfirm(false)}
+                className="rounded-full border border-border bg-card hover:bg-muted px-4 py-1.5 text-xs font-medium transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={clearChat}
+                className="rounded-full bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 text-xs font-medium transition-colors"
+              >
+                Confirmar borrado
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

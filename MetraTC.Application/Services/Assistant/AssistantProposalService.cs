@@ -62,6 +62,15 @@ public class AssistantProposalService
             return false;
         }
 
+        // Ambigüedad: 2+ productos faltan y usuario manda un solo sku/precio sin decir producto
+        var missingProducts = pending.Proposals.Where(p => p.MissingFields.Any(f => f == "Sku" || f == "Price")).ToList();
+        if (missingProducts.Count >= 2 && newRaws.Count == 1 && string.IsNullOrWhiteSpace(newRaws[0].Name) && (newRaws[0].Sku != null || newRaws[0].Price != null))
+        {
+            var names = string.Join(" y ", missingProducts.Select(p => p.Name));
+            var clarification = $"⚠️ Me faltan SKU y precio para: {names}. Me pasaste un SKU/Precio sin decir a qué producto pertenece. Por favor decime natural a qué producto corresponde cada dato, ej: 'azúcar sku XXX precio 1500 y hierba sku YYY precio 2000'.";
+            return new ProposalResponse(pending.Proposals, clarification, NeedsConfirmation: false, HasMissingData: true);
+        }
+
         // Build patched raws from pending
         var patchedRaws = pending.Proposals.Select(p => new RawProductExtract(p.Name, p.Sku, p.Price, p.StockDelta, p.Barcode, p.Description, p.CategoryNames)).ToList();
         bool anyPatched = false;
