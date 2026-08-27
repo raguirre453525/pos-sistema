@@ -35,7 +35,71 @@ public class AssistantProposalService
     {
         var rawList = await _extractor.ExtractAsync(message, history, inventoryContext, ct);
         if (rawList == null || rawList.Count == 0) return null;
+        return await BuildFromRawsAsync(rawList, ct);
+    }
 
+    public async Task<ProposalResponse?> TryPatchPendingAsync(ProposalResponse pending, string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
+    {
+        if (pending == null || !pending.HasMissingData || pending.Proposals.Count == 0) return null;
+
+        var newRaws = await _extractor.ExtractAsync(message, history, inventoryContext, ct);
+        if (newRaws == null || newRaws.Count == 0) return null;
+
+        // Single pending correction: if new extract is single but with different name, treat as new product -> don't patch
+        var pendingProp = pending.Proposals[0];
+        // If multiple raws, treat as new distinct request -> not a patch
+        if (newRaws.Count != 1 && pending.Proposals.Count == 1) return null;
+
+        var fresh = newRaws[0];
+        if (!string.IsNullOrWhiteSpace(fresh.Name) && !string.IsNullOrWhiteSpace(pendingProp.Name)
+            && !fresh.Name.Equals(pendingProp.Name, StringComparison.OrdinalIgnoreCase))
+        {
+            // Different product name -> not a correction of pending
+            return null;
+        }
+
+        // Merge: fill missing fields from pending where fresh has null
+        var merged = new RawProductExtract(
+            Name: !string.IsNullOrWhiteSpace(fresh.Name) ? fresh.Name : pendingProp.Name,
+            Sku: !string.IsNullOrWhiteSpace(fresh.Sku) ? fresh.Sku : pendingProp.Sku,
+            Price: fresh.Price ?? pendingProp.Price,
+            StockDelta: fresh.StockDelta ?? pendingProp.StockDelta,
+            Barcode: !string.IsNullOrWhiteSpace(fresh.Barcode) ? fresh.Barcode : pendingProp.Barcode,
+            Description: !string.IsNullOrWhiteSpace(fresh.Description) ? fresh.Description : pendingProp.Description,
+            CategoryNames: fresh.CategoryNames ?? pendingProp.CategoryNames
+        );
+
+        // If merged still has no name, cannot patch
+        if (string.IsNullOrWhiteSpace(merged.Name)) return null;
+
+        // If merged didn't add anything new (all fields equal to pending), avoid infinite loop -> return null so caller can handle reminder
+        bool addsSomething =
+            (!string.IsNullOrWhiteSpace(fresh.Sku) && !string.Equals(fresh.Sku, pendingProp.Sku, StringComparison.OrdinalIgnoreCase)) ||
+            (fresh.Price != null && fresh.Price != pendingProp.Price) ||
+            (fresh.StockDelta != null && fresh.StockDelta != pendingProp.StockDelta) ||
+            (!string.IsNullOrWhiteSpace(fresh.Name) ) ||
+            (fresh.Barcode != null) || (fresh.CategoryNames != null);
+        if (!addsSomething && string.IsNullOrWhiteSpace(fresh.Sku) && fresh.Price == null)
+        {
+            // Fresh had nothing useful (e.g. extractor returned only name without new data)
+            // Still, if pending missing Sku/Price and fresh is empty, no patch
+            return null;
+        }
+
+        var mergedList = new List<RawProductExtract> { merged };
+        // Handle multi-pending case: append remaining pending proposals unchanged (not patched)
+        for (int i = 1; i < pending.Proposals.Count; i++)
+        {
+            var pp = pending.Proposals[i];
+            mergedList.Add(new RawProductExtract(pp.Name, pp.Sku, pp.Price, pp.StockDelta, pp.Barcode, pp.Description, pp.CategoryNames));
+        }
+
+        return await BuildFromRawsAsync(mergedList, ct);
+    }
+
+    private async Task<ProposalResponse?> BuildFromRawsAsync(List<RawProductExtract> rawList, CancellationToken ct)
+    {
+        if (rawList == null || rawList.Count == 0) return null;
         var proposals = new List<ProductProposal>();
 
         foreach (var raw in rawList)

@@ -29,6 +29,7 @@ public class AssistantProductExtractor
         "- price: si mencionan \"$1500\" o \"a 1500\" \u2192 decimal.\n" +
         "- name: normaliza a singular y capitaliza (ej \"jugos cepita\" -> \"Jugo Cepita\"), sin plural extra ni sufijos de cantidad. Si dicen \"dos jugos cepita\" -> name \"Jugo Cepita\".\n" +
         "- Si no hay dato, null. No inventes sku/price si no estan explicitos.\n" +
+        "IMPORTANTE: Si el mensaje actual solo aporta datos faltantes (precio, sku, stock) y el historial menciona el producto (ej \"Yerba Union\"), asocia esos datos al producto del historial y devuelve name/stockDelta del historial completando con los nuevos. Nunca devuelvas name null si el historial tiene el nombre. Si el historial tiene \"Yerba Union con 20 unidades\" y el usuario dice \"sku XXX precio 1700\", devuelve {name:\"Yerba Union\", sku:\"XXX\", price:1700, stockDelta:20}.\n" +
         "Responde SOLO JSON: { \"products\": [ { \"name\":..., \"sku\":..., \"price\":..., \"stockDelta\":..., \"barcode\":..., \"description\":..., \"categoryNames\":[...] } ] }";
 
     public AssistantProductExtractor(IConfiguration configuration, HttpClient httpClient, ILogger<AssistantProductExtractor> logger)
@@ -92,11 +93,38 @@ public class AssistantProductExtractor
 
     private List<RawProductExtract> MockExtract(string message, IReadOnlyList<ChatMessage> history)
     {
-        // Build combined text: current message + last user messages for correction context
         var combined = message ?? "";
         combined = NormalizeNumberWords(combined);
-        // If history contains recent corrections, the current message alone is enough; but we also check history for sku context
-        // Simple: try to parse combined
+
+        // Extract nameHint from history: last assistant message with Detecté **name**
+        string? nameHint = null;
+        if (history != null)
+        {
+            for (int i = history.Count - 1; i >= 0; i--)
+            {
+                var h = history[i];
+                if (h.Role == "assistant" && !string.IsNullOrWhiteSpace(h.Content) && h.Content.Contains("Detecté **"))
+                {
+                    var m = Regex.Match(h.Content, @"Detecté \*\*(.+?)\*\*");
+                    if (m.Success)
+                    {
+                        nameHint = m.Groups[1].Value.Trim();
+                        break;
+                    }
+                }
+            }
+        }
+        // If current message has no creation verb but has precio/sku/number and we have a hint, prepend hint so ParseSegment recovers name+stockDelta
+        if (nameHint != null)
+        {
+            var hasCreationVerb = Regex.IsMatch(combined, @"(crear|creá|agregar|reponer|reponé)", RegexOptions.IgnoreCase);
+            var hasDataHint = Regex.IsMatch(combined, @"(precio|sku|\d)", RegexOptions.IgnoreCase);
+            var hasNameAlready = combined.IndexOf(nameHint, StringComparison.OrdinalIgnoreCase) >= 0;
+            if (!hasCreationVerb && hasDataHint && !hasNameAlready)
+            {
+                combined = nameHint + " " + combined;
+            }
+        }
 
         var results = new List<RawProductExtract>();
         // Try to detect multiple products split by comma, " y ", ";"

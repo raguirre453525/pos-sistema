@@ -101,11 +101,38 @@ public class AssistantService : IAssistantService
                 // Execute
                 var result = await _proposalService.ExecuteAsync(pending, ct);
                 _cache.Remove(CacheKey);
-                // Refresh inventory context after execution for reply context? Keep simple
                 var successReply = $"✅ Ejecutado:\n{result}";
                 return (successReply, provider.Name, null);
             }
-            // If not confirmation, we fall through to try building a new proposal (correction loop).
+
+            // Pending has missing data -> try to patch with new message before any LLM fallback
+            if (pending.HasMissingData)
+            {
+                ProposalResponse? patched = null;
+                try
+                {
+                    patched = await _proposalService.TryPatchPendingAsync(pending, message, history, inventoryContext, ct);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "TryPatchPending failed");
+                    patched = null;
+                }
+
+                if (patched != null)
+                {
+                    // If patched is complete it still needs confirmation, don't execute automatically
+                    _cache.Set(CacheKey, patched, TimeSpan.FromMinutes(10));
+                    return (patched.NaturalReply, provider.Name, patched);
+                }
+
+                // Patched null: user didn't provide patchable data nor new valid product -> don't hallucinante via LLM
+                // Also try normal BuildProposal: if user sent a totally new product, BuildProposal will handle it below.
+                // But if BuildProposal also yields nothing, we must return reminder instead of LLM.
+                // We defer to BuildProposal below; if that also returns null we will return reminder at fallback.
+                // Mark that we are in pending-missing state to block LLM later.
+            }
+            // If not confirmation and not patched, fall through to try building a new proposal (correction loop).
             // If the new message yields a proposal, it will overwrite pending.
         }
 
@@ -129,6 +156,12 @@ public class AssistantService : IAssistantService
         }
 
         // No proposal -> normal chat with LLM (if user was trying to correct but extractor returned empty, we keep pending)
+        // Block hallucination: if pending has missing data and no new proposal was built, don't call LLM
+        if (_cache.TryGetValue<ProposalResponse>(CacheKey, out var stillPending) && stillPending != null && stillPending.HasMissingData)
+        {
+            var reminder = stillPending.NaturalReply + "\n\nDecime los datos exactos que faltan (ej: \"SKU YERBA01 precio 1700\").";
+            return (reminder, provider.Name, stillPending);
+        }
         // Do not clear pending here; pending remains for next confirmation unless overwritten by new proposal
         var reply = await provider.GetResponseAsync(message, history, inventoryContext, ct);
         return (reply, provider.Name, null);
