@@ -47,9 +47,11 @@ builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<ISalesService, SalesService>();
 builder.Services.AddScoped<IReportsService, ReportsService>();
 
-// Assistant - hybrid provider (mock | openai)
+// Assistant - hybrid provider (mock | openai | deepseek)
 builder.Services.AddScoped<MockAssistantProvider>();
 builder.Services.AddHttpClient<OpenAiAssistantProvider>();
+builder.Services.AddScoped<DeepSeekAssistantProvider>();
+builder.Services.AddHttpClient<DeepSeekAssistantProvider>();
 builder.Services.AddScoped<IAssistantService, AssistantService>();
 
 var app = builder.Build();

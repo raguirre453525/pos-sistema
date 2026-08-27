@@ -41,6 +41,10 @@ public class AssistantController : ControllerBase
         {
             return BadRequest(new { message = "Configura Assistant:OpenAI:ApiKey en appsettings.Development.json o variable de entorno Assistant__OpenAI__ApiKey" });
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Configura Assistant:DeepSeek:ApiKey"))
+        {
+            return BadRequest(new { message = "Configura Assistant:DeepSeek:ApiKey en appsettings.Development.json o variable de entorno Assistant__DeepSeek__ApiKey" });
+        }
         catch (InvalidOperationException ex) when (ex.Message.Contains("inválido"))
         {
             return StatusCode(500, new { message = ex.Message });
@@ -55,14 +59,22 @@ public class AssistantController : ControllerBase
         }
         catch (HttpRequestException ex)
         {
-            _logger.LogError(ex, "OpenAI request failed");
+            _logger.LogError(ex, "Assistant provider request failed");
             // 429 already wrapped as InvalidOperationException with 429 prefix
             if (ex.Message.Contains("429"))
+            {
+                if (ex.Message.Contains("DeepSeek"))
+                    return StatusCode(502, new { message = "DeepSeek está con mucho tráfico (429). Probá de nuevo en unos segundos." });
                 return StatusCode(502, new { message = "OpenAI está con mucho tráfico (429). Probá de nuevo en unos segundos." });
+            }
+            if (ex.Message.Contains("DeepSeek"))
+                return StatusCode(502, new { message = "No se pudo contactar a DeepSeek. Probá de nuevo más tarde." });
             return StatusCode(502, new { message = "No se pudo contactar a OpenAI. Probá de nuevo más tarde." });
         }
         catch (InvalidOperationException ex) when (ex.Message.StartsWith("429"))
         {
+            if (ex.Message.Contains("DeepSeek"))
+                return StatusCode(502, new { message = "DeepSeek está con mucho tráfico (429). Probá de nuevo en unos segundos." });
             return StatusCode(502, new { message = "OpenAI está con mucho tráfico (429). Probá de nuevo en unos segundos." });
         }
     }
