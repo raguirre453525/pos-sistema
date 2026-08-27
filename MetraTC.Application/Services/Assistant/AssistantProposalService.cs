@@ -204,10 +204,10 @@ public class AssistantProposalService
                 var nameNorm = raw.Name.Trim().ToLowerInvariant();
                 var nameNormSingular = nameNorm.EndsWith("s") && nameNorm.Length > 1 ? nameNorm[..^1] : nameNorm;
 
-                // Prepare tokens for ranking (singularized)
+                // Tokens singularizados; incluye números ("3") aunque Length==1 para no perder unidades.
                 var tokens = nameNorm.Split(' ', StringSplitOptions.RemoveEmptyEntries)
                     .Select(t => t.EndsWith("s") && t.Length > 1 ? t[..^1] : t)
-                    .Where(t => t.Length >= 2)
+                    .Where(t => t.Length >= 2 || int.TryParse(t, out _))
                     .ToList();
 
                 // Query candidates with tolerant LIKE both directions + singular variant
@@ -228,15 +228,26 @@ public class AssistantProposalService
                     candidates = all.Where(p =>
                     {
                         var pn = p.Name.ToLowerInvariant();
-                        return tokens.Any(t => pn.Contains(t));
+                        return tokens.Count(t => pn.Contains(t)) >= 1;
                     }).ToList();
                 }
 
                 if (candidates.Count > 0)
                 {
-                    // Rank by best coincidence: contains all tokens wins
+                    // Umbral anti-falso-positivo: evita que "Gaseosa Seven Up 3 Litros" matchee "Gaseosa Pepsi"
+                    // solo por token genérico "gaseosa". Requiere containsAll o >=2 tokens con al menos 1 distintivo no genérico.
+                    var genericTokens = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        "gaseosa","bebida","yerba","azucar","manteca","leche","aceite","harina","producto","litro","litros","kilo","kilos","gramo","paquete"
+                    };
+                    const int threshold = 30; // containsAll=100 pasa; 2 tokens=20+2 activo=22 no pasa sin distintivo -> necesita 3 tokens o distintivo
+
                     Product? best = null;
                     int bestScore = -1;
+                    bool bestContainsAll = false;
+                    int bestTotalMatches = 0;
+                    int bestDistinctiveMatches = 0;
+
                     foreach (var c in candidates)
                     {
                         var pn = c.Name.ToLowerInvariant();
@@ -246,7 +257,7 @@ public class AssistantProposalService
                         if (containsAll) score += 100;
                         foreach (var t in tokens)
                         {
-                            if (pn.Contains(t)) score += 10;
+                            if (pn.Contains(t) || pnSing.Contains(t)) score += 10;
                         }
                         // shorter distance to input preferred
                         score -= Math.Abs(pn.Length - nameNorm.Length) / 5;
@@ -255,9 +266,22 @@ public class AssistantProposalService
                         {
                             bestScore = score;
                             best = c;
+                            bestContainsAll = containsAll;
+                            bestTotalMatches = tokens.Count(t => pn.Contains(t) || pnSing.Contains(t));
+                            bestDistinctiveMatches = tokens.Count(t => !genericTokens.Contains(t) && t.Length >= 4 && (pn.Contains(t) || pnSing.Contains(t)));
                         }
                     }
-                    existing = best ?? candidates.FirstOrDefault();
+
+                    // Solo acepta existing si pasa evidencia: containsAll o (>=2 matches con 1 distintivo) o score >= threshold
+                    bool passesThreshold = false;
+                    if (best != null)
+                    {
+                        if (bestContainsAll) passesThreshold = true;
+                        else if (bestTotalMatches >= 2 && bestDistinctiveMatches >= 1) passesThreshold = true;
+                        else if (bestScore >= threshold) passesThreshold = true;
+                    }
+
+                    existing = passesThreshold ? best : null;
                 }
             }
 
