@@ -150,6 +150,12 @@ export type UpdateCategoryDto = {
   description?: string | null;
 };
 
+export type UpdateProductDto = {
+  name: string;
+  price: number;
+  description?: string | null;
+};
+
 // ---------- Products ----------
 export function getProducts() {
   return apiFetch<ProductDto[]>("/api/Products");
@@ -162,6 +168,13 @@ export function getProduct(id: string) {
 export function createProduct(dto: CreateProductDto) {
   return apiFetch<ProductDto>("/api/Products", {
     method: "POST",
+    body: JSON.stringify(dto),
+  });
+}
+
+export function updateProduct(id: string, dto: UpdateProductDto) {
+  return apiFetch<void>(`/api/Products/${id}`, {
+    method: "PUT",
     body: JSON.stringify(dto),
   });
 }

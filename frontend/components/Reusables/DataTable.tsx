@@ -39,13 +39,17 @@ interface DataTableProps<TData, Tvalue> {
     data: TData[]
     placeholder?: string
     label: string
+    onRowClick?: (row: TData) => void
+    hideSearch?: boolean
 }
 
 export function DataTable<TData, TValue>({
     columns,
     data,
     placeholder = "Buscar...",
-    label
+    label,
+    onRowClick,
+    hideSearch = false,
 }: DataTableProps<TData, TValue>) {
     
     const [sorting, setSorting] = React.useState<SortingState>([])
@@ -74,14 +78,16 @@ export function DataTable<TData, TValue>({
     })
     return (
         <div>
-            <div className="flex items-center py-4">
-        <Input
-          placeholder={placeholder}
-          value={globalFilter ?? ""}
-          onChange={(event) => setGlobalFilter(event.target.value)}
-          className="max-w-sm"
-        />
-      </div>
+            {!hideSearch && (
+              <div className="flex items-center py-4">
+                <Input
+                  placeholder={placeholder}
+                  value={globalFilter ?? ""}
+                  onChange={(event) => setGlobalFilter(event.target.value)}
+                  className="max-w-sm"
+                />
+              </div>
+            )}
             <div className="overflow-hidden rounded-md border"> 
         <Table className="table-fixed">
                 <TableHeader>
@@ -105,6 +111,8 @@ export function DataTable<TData, TValue>({
                         table.getRowModel().rows.map((row) => (
                             <TableRow
                                 key={row.id}
+                                onClick={() => onRowClick?.(row.original as TData)}
+                                className={onRowClick ? "cursor-pointer hover:bg-muted/50" : undefined}
                             >
                         {row.getVisibleCells().map((cell) => (
                             <TableCell key={cell.id}>

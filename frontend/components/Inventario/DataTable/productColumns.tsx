@@ -100,13 +100,31 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
       ),
       cell: ({ row }) => {
         const stock = row.getValue("stock") as number;
-        const low = stock <= 5;
-        const zero = stock === 0;
+        const isOut = stock === 0;
+        const isLow = stock > 0 && stock <= 5;
         return (
-          <span
-            className={`font-medium px-2 py-0.5 rounded-full text-xs ${zero ? "bg-red-100 text-red-700 border border-red-200" : low ? "bg-amber-100 text-amber-700 border border-amber-200" : ""}`}
-          >
-            {stock.toLocaleString()}
+          <span className="inline-flex items-center gap-1.5">
+            <span
+              className={`font-medium px-2 py-0.5 rounded-full text-xs border ${
+                isOut
+                  ? "bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300"
+                  : isLow
+                    ? "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-300 dark:border-red-800"
+                    : "bg-transparent border-transparent"
+              }`}
+            >
+              {stock.toLocaleString()}
+            </span>
+            {isLow && (
+              <span className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+                ¡Stock bajo!
+              </span>
+            )}
+            {isOut && (
+              <span className="inline-flex items-center rounded-full bg-zinc-500 px-2 py-0.5 text-[10px] font-bold text-white">
+                Sin stock
+              </span>
+            )}
           </span>
         );
       },
