@@ -4,6 +4,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Field, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus } from "lucide-react";
+import CategoryFormModal from "@/components/Categorias/CategoryFormModal";
 import { createProduct, adjustStock, getCategories, assignCategory, CategoryDto, ApiError } from "@/lib/api";
 
 export function NewProductForm() {
@@ -18,36 +21,31 @@ export function NewProductForm() {
   const [error, setError] = useState<string | null>(null);
 
   const [categories, setCategories] = useState<CategoryDto[]>([]);
-  const [selectedCategoryIds, setSelectedCategoryIds] = useState<Set<string>>(new Set());
+  const [selectedCategoryId, setSelectedCategoryId] = useState<string>("");
   const [catLoading, setCatLoading] = useState(true);
+  const [showCatModal, setShowCatModal] = useState(false);
+
+  const fetchCategories = async () => {
+    setCatLoading(true);
+    try {
+      const data = await getCategories();
+      setCategories(data);
+    } catch {
+      setCategories([]);
+    } finally {
+      setCatLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setCatLoading(true);
-      try {
-        const data = await getCategories();
-        if (!cancelled) setCategories(data);
-      } catch {
-        // silent — categories optional on product creation
-        if (!cancelled) setCategories([]);
-      } finally {
-        if (!cancelled) setCatLoading(false);
-      }
-    }
-    load();
-    return () => {
-      cancelled = true;
-    };
+    void fetchCategories();
   }, []);
 
-  const toggleCategory = (id: string) => {
-    setSelectedCategoryIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const activeCategories = categories.filter((c) => c.isActive);
+
+  const handleCategoryCreated = async (cat: CategoryDto) => {
+    await fetchCategories();
+    setSelectedCategoryId(cat.id);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -88,25 +86,21 @@ export function NewProductForm() {
       if (stockNum > 0) {
         await adjustStock(product.id, { delta: stockNum, reason: "Stock inicial" });
       }
-      // Assign selected categories sequentially (Product POST does not accept categoryIds)
-      if (selectedCategoryIds.size > 0) {
-        const ids = Array.from(selectedCategoryIds);
-        for (const catId of ids) {
-          try {
-            await assignCategory(product.id, catId);
-          } catch (catErr) {
-            const msg =
-              catErr instanceof ApiError
+      if (selectedCategoryId) {
+        try {
+          await assignCategory(product.id, selectedCategoryId);
+        } catch (catErr) {
+          const msg =
+            catErr instanceof ApiError
+              ? catErr.message
+              : catErr instanceof Error
                 ? catErr.message
-                : catErr instanceof Error
-                  ? catErr.message
-                  : "Error al asignar categoría";
-            // surface but don't block navigation — product already created
-            setError(`Producto creado, pero falló asignar categoría: ${msg}`);
-            // wait a moment then navigate anyway? keep error visible
-            // break after first failure to avoid spamming
-            break;
-          }
+                : "Error al asignar categoría";
+          setError(`Producto creado, pero falló asignar categoría: ${msg}`);
+          // still navigate after warning
+          setTimeout(() => router.push("/Inventario"), 800);
+          setLoading(false);
+          return;
         }
       }
       router.push("/Inventario");
@@ -119,87 +113,97 @@ export function NewProductForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit}>
-      <FieldGroup>
-        <Field>
-          <FieldLabel htmlFor="sku">SKU *</FieldLabel>
-          <Input id="sku" placeholder="PROD-001" value={sku} onChange={(e) => setSku(e.target.value)} required />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="name">Nombre *</FieldLabel>
-          <Input id="name" placeholder="Aceite" value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="barcode">Barcode (opcional)</FieldLabel>
-          <Input id="barcode" placeholder="779..." value={barcode} onChange={(e) => setBarcode(e.target.value)} />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="description">Descripción (opcional)</FieldLabel>
-          <Input id="description" placeholder="Detalle" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={200} />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="precio">Precio *</FieldLabel>
-          <Input id="precio" type="number" step="0.01" min="0" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
-        </Field>
-        <Field>
-          <FieldLabel htmlFor="stock">Stock inicial</FieldLabel>
-          <Input id="stock" type="number" min="0" placeholder="0" value={stock} onChange={(e) => setStock(e.target.value)} />
-          <p className="text-xs text-muted-foreground">Se creará con 0 y luego se ajusta si es &gt;0.</p>
-        </Field>
+    <>
+      <form onSubmit={handleSubmit}>
+        <FieldGroup>
+          <Field>
+            <FieldLabel htmlFor="sku">SKU *</FieldLabel>
+            <Input id="sku" placeholder="PROD-001" value={sku} onChange={(e) => setSku(e.target.value)} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="name">Nombre *</FieldLabel>
+            <Input id="name" placeholder="Aceite" value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="barcode">Barcode (opcional)</FieldLabel>
+            <Input id="barcode" placeholder="779..." value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="description">Descripción (opcional)</FieldLabel>
+            <Input id="description" placeholder="Detalle" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={200} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="precio">Precio *</FieldLabel>
+            <Input id="precio" type="number" step="0.01" min="0" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="stock">Stock inicial</FieldLabel>
+            <Input id="stock" type="number" min="0" placeholder="0" value={stock} onChange={(e) => setStock(e.target.value)} />
+            <p className="text-xs text-muted-foreground">Se creará con 0 y luego se ajusta si es &gt;0.</p>
+          </Field>
 
-        <Field>
-          <FieldLabel>Categorías</FieldLabel>
-          {catLoading ? (
-            <p className="text-xs text-muted-foreground">Cargando categorías…</p>
-          ) : categories.length === 0 ? (
-            <p className="text-xs text-muted-foreground">No hay categorías. Podés crearlas en Inventario → Categorías.</p>
-          ) : (
-            <div className="flex flex-wrap gap-2 rounded-lg border border-input p-3 bg-background max-h-40 overflow-auto">
-              {categories.map((c) => {
-                const checked = selectedCategoryIds.has(c.id);
-                return (
-                  <label
-                    key={c.id}
-                    className={`flex items-center gap-2 text-sm px-2 py-1 rounded-full border cursor-pointer select-none transition-colors ${checked ? "bg-primary text-primary-foreground border-primary" : "bg-muted text-muted-foreground border-border hover:bg-accent"}`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={checked}
-                      onChange={() => toggleCategory(c.id)}
-                      className="sr-only"
-                    />
-                    <span>{c.name}</span>
-                  </label>
-                );
-              })}
-            </div>
-          )}
-        </Field>
+          <Field>
+            <FieldLabel>Categoría</FieldLabel>
+            {catLoading ? (
+              <p className="text-xs text-muted-foreground">Cargando categorías…</p>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Select
+                  value={selectedCategoryId || "__none"}
+                  onValueChange={(v) => setSelectedCategoryId(v === "__none" ? "" : v)}
+                >
+                  <SelectTrigger className="flex-1">
+                    <SelectValue placeholder="Sin categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none">Sin categoría</SelectItem>
+                    {activeCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCatModal(true)} className="gap-1 shrink-0">
+                  <Plus className="h-3.5 w-3.5" />
+                  Nueva categoría
+                </Button>
+              </div>
+            )}
+          </Field>
 
-        {error && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{error}</p>}
-        <Field orientation="horizontal">
-          <Button
-            type="reset"
-            variant="outline"
-            onClick={() => {
-              setSku("");
-              setName("");
-              setPrice("");
-              setStock("0");
-              setBarcode("");
-              setDescription("");
-              setSelectedCategoryIds(new Set());
-              setError(null);
-            }}
-          >
-            Resetear
-          </Button>
-          <Button type="submit" disabled={loading}>
-            {loading ? "Creando…" : "Crear"}
-          </Button>
-        </Field>
-      </FieldGroup>
-    </form>
+          {error && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{error}</p>}
+          <Field orientation="horizontal">
+            <Button
+              type="reset"
+              variant="outline"
+              onClick={() => {
+                setSku("");
+                setName("");
+                setPrice("");
+                setStock("0");
+                setBarcode("");
+                setDescription("");
+                setSelectedCategoryId("");
+                setError(null);
+              }}
+            >
+              Resetear
+            </Button>
+            <Button type="submit" disabled={loading}>
+              {loading ? "Creando…" : "Crear"}
+            </Button>
+          </Field>
+        </FieldGroup>
+      </form>
+
+      <CategoryFormModal
+        open={showCatModal}
+        onClose={() => setShowCatModal(false)}
+        onSuccess={handleCategoryCreated}
+        categories={categories}
+      />
+    </>
   );
 }
 
