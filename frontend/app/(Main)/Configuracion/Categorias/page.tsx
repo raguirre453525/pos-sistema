@@ -5,14 +5,8 @@ import Link from "next/link";
 import { ArrowLeft, Pencil, Trash2, Search, Plus, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  getCategories,
-  createCategory,
-  updateCategory,
-  deleteCategory,
-  CategoryDto,
-  ApiError,
-} from "@/lib/api";
+import CategoryFormModal from "@/components/Categorias/CategoryFormModal";
+import { getCategories, deleteCategory, CategoryDto, ApiError } from "@/lib/api";
 
 export default function CategoriasPage() {
   const [categories, setCategories] = useState<CategoryDto[]>([]);
@@ -22,10 +16,6 @@ export default function CategoriasPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryDto | null>(null);
-  const [formName, setFormName] = useState("");
-  const [formDescription, setFormDescription] = useState("");
-  const [formError, setFormError] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -70,75 +60,24 @@ export default function CategoriasPage() {
 
   const openCreate = () => {
     setEditingCategory(null);
-    setFormName("");
-    setFormDescription("");
-    setFormError(null);
     setShowCreateModal(true);
   };
 
   const openEdit = (cat: CategoryDto) => {
     setEditingCategory(cat);
-    setFormName(cat.name);
-    setFormDescription(cat.description ?? "");
-    setFormError(null);
     setShowCreateModal(true);
   };
 
   const closeModal = () => {
-    if (saving) return;
     setShowCreateModal(false);
     setEditingCategory(null);
-    setFormError(null);
   };
 
-  const validate = (): string | null => {
-    const name = formName.trim();
-    if (!name) return "El nombre es obligatorio";
-    if (name.length < 2) return "El nombre debe tener al menos 2 caracteres";
-    if (name.length > 100) return "El nombre no puede exceder 100 caracteres";
-    if ((formDescription ?? "").length > 500) return "La descripción no puede exceder 500 caracteres";
-    // unique case-insensitive among active, excluding current editing
-    const exists = categories.some(
-      (c) =>
-        c.isActive &&
-        c.name.trim().toLowerCase() === name.toLowerCase() &&
-        c.id !== editingCategory?.id
-    );
-    if (exists) return `Ya existe una categoría activa con el nombre "${name}"`;
-    return null;
-  };
-
-  const handleSave = async () => {
-    const validationMsg = validate();
-    if (validationMsg) {
-      setFormError(validationMsg);
-      return;
-    }
-    setSaving(true);
-    setFormError(null);
+  const handleModalSuccess = async (cat: CategoryDto) => {
+    const isEdit = !!editingCategory;
+    setBannerSuccess(`Categoría "${cat.name}" ${isEdit ? "actualizada" : "creada"}`);
     setBannerError(null);
-    try {
-      const dto = {
-        name: formName.trim(),
-        description: formDescription.trim() ? formDescription.trim() : null,
-      };
-      if (editingCategory) {
-        await updateCategory(editingCategory.id, dto);
-        setBannerSuccess(`Categoría "${dto.name}" actualizada`);
-      } else {
-        await createCategory(dto);
-        setBannerSuccess(`Categoría "${dto.name}" creada`);
-      }
-      setShowCreateModal(false);
-      setEditingCategory(null);
-      await fetchCategories();
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al guardar";
-      setFormError(msg);
-      // If 409 duplicate from backend, keep modal open with error
-    } finally {
-      setSaving(false);
-    }
+    await fetchCategories();
   };
 
   const confirmDelete = (cat: CategoryDto) => {
@@ -321,54 +260,13 @@ export default function CategoriasPage() {
         </div>
       )}
 
-      {/* Create/Edit modal */}
-      {showCreateModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded-2xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
-            <h3 className="text-lg font-semibold">{editingCategory ? "Editar categoría" : "Nueva categoría"}</h3>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">
-                Nombre <span className="text-red-500">*</span>
-              </label>
-              <Input
-                value={formName}
-                onChange={(e) => setFormName(e.target.value)}
-                placeholder="Ej: Bebidas"
-                maxLength={100}
-                autoFocus
-              />
-              <span className="text-xs text-muted-foreground text-right">{formName.length}/100</span>
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <label className="text-sm font-medium">Descripción</label>
-              <textarea
-                value={formDescription}
-                onChange={(e) => setFormDescription(e.target.value)}
-                placeholder="Descripción opcional"
-                maxLength={500}
-                rows={3}
-                className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 placeholder:text-muted-foreground resize-none"
-              />
-              <span className="text-xs text-muted-foreground text-right">{formDescription.length}/500</span>
-            </div>
-
-            {formError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 text-sm">{formError}</div>
-            )}
-
-            <div className="flex justify-end gap-2 mt-1">
-              <Button variant="outline" onClick={closeModal} disabled={saving}>
-                Cancelar
-              </Button>
-              <Button onClick={handleSave} disabled={saving}>
-                {saving ? "Guardando..." : editingCategory ? "Guardar" : "Crear"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <CategoryFormModal
+        open={showCreateModal}
+        onClose={closeModal}
+        onSuccess={handleModalSuccess}
+        editingCategory={editingCategory}
+        categories={categories}
+      />
 
       {/* Delete confirm modal */}
       {deleteConfirmId && deleteTarget && (
