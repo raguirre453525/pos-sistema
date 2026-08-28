@@ -41,6 +41,7 @@ interface DataTableProps<TData, Tvalue> {
     label: string
     onRowClick?: (row: TData) => void
     hideSearch?: boolean
+    hidePagination?: boolean
 }
 
 export function DataTable<TData, TValue>({
@@ -50,14 +51,24 @@ export function DataTable<TData, TValue>({
     label,
     onRowClick,
     hideSearch = false,
+    hidePagination = false,
 }: DataTableProps<TData, TValue>) {
     
     const [sorting, setSorting] = React.useState<SortingState>([])
     const [globalFilter, setGlobalFilter] = React.useState("")
     const [pagination, setPagination] = React.useState({
         pageIndex: 0,
-        pageSize: 5,
+        pageSize: hidePagination ? 1000 : 5,
     })
+
+    React.useEffect(() => {
+        if (hidePagination) {
+            setPagination((prev) => {
+                const desired = Math.max(data.length, 1000)
+                return prev.pageSize === desired ? prev : { ...prev, pageSize: desired }
+            })
+        }
+    }, [hidePagination, data.length])
 
     const table = useReactTable({
         data,
@@ -131,7 +142,7 @@ export function DataTable<TData, TValue>({
                 </TableBody>
             </Table> 
         </div>
-        <DataTablePagination table={table} label={label} />
+        {!hidePagination && <DataTablePagination table={table} label={label} />}
     </div>
         
     )

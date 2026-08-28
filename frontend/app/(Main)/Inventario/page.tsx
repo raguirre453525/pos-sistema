@@ -82,7 +82,7 @@ function InventarioPageContent() {
   // B2 states
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
-  const [sortBy, setSortBy] = useState<"name" | "stock" | "price">("name");
+  const [sortBy, setSortBy] = useState<"name_asc" | "name_desc" | "price_asc" | "price_desc" | "stock_asc" | "stock_desc">("name_asc");
 
   // Drawer / selected product
   const [selectedProduct, setSelectedProduct] = useState<ProductDto | null>(null);
@@ -235,12 +235,25 @@ function InventarioPageContent() {
     } else if (stockFilter === "out") {
       result = result.filter((p) => p.stock === 0);
     }
-    if (sortBy === "name") {
-      result.sort((a, b) => a.name.localeCompare(b.name, "es"));
-    } else if (sortBy === "stock") {
-      result.sort((a, b) => a.stock - b.stock);
-    } else if (sortBy === "price") {
-      result.sort((a, b) => a.price - b.price);
+    switch (sortBy) {
+      case "name_asc":
+        result.sort((a, b) => a.name.localeCompare(b.name, "es"));
+        break;
+      case "name_desc":
+        result.sort((a, b) => b.name.localeCompare(a.name, "es"));
+        break;
+      case "price_asc":
+        result.sort((a, b) => a.price - b.price);
+        break;
+      case "price_desc":
+        result.sort((a, b) => b.price - a.price);
+        break;
+      case "stock_asc":
+        result.sort((a, b) => a.stock - b.stock);
+        break;
+      case "stock_desc":
+        result.sort((a, b) => b.stock - a.stock);
+        break;
     }
     return result;
   }, [products, search, selectedCategoryId, productCategories, stockFilter, sortBy]);
@@ -249,10 +262,10 @@ function InventarioPageContent() {
     setSearch("");
     setSelectedCategoryId("all");
     setStockFilter("all");
-    setSortBy("name");
+    setSortBy("name_asc");
   };
 
-  const hasActiveFilters = search !== "" || selectedCategoryId !== "all" || stockFilter !== "all" || sortBy !== "name";
+  const hasActiveFilters = search !== "" || selectedCategoryId !== "all" || stockFilter !== "all" || sortBy !== "name_asc";
 
   const handleAdjust = async () => {
     if (!adjustTarget) return;
@@ -564,32 +577,19 @@ function InventarioPageContent() {
                     />
                   </div>
 
-                  <div className="flex items-center gap-1">
-                    <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                      <SelectTrigger className="w-[180px] border-input bg-card">
-                        <SelectValue placeholder="Todas" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">Todas</SelectItem>
-                        {activeCategories.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name} ({c.productCount})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={openCreateFromFilter}
-                      className="gap-1 px-2"
-                      aria-label="Crear categoría"
-                      title="Crear categoría"
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+                    <SelectTrigger className="w-[180px] border-input bg-card">
+                      <SelectValue placeholder="Todas" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">Todas</SelectItem>
+                      {activeCategories.map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name} ({c.productCount})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
 
                   {catError && (
                     <span className="text-xs text-red-600 border border-red-200 bg-red-50 rounded px-2 py-1">{catError}</span>
@@ -608,12 +608,15 @@ function InventarioPageContent() {
 
                   <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
                     <SelectTrigger className="w-[200px] border-input bg-card">
-                      <SelectValue placeholder="Ordenar" />
+                      <SelectValue placeholder="Nombre A-Z" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="name">Nombre A-Z</SelectItem>
-                      <SelectItem value="stock">Stock menor primero</SelectItem>
-                      <SelectItem value="price">Precio menor primero</SelectItem>
+                      <SelectItem value="name_asc">Nombre A-Z</SelectItem>
+                      <SelectItem value="name_desc">Nombre Z-A</SelectItem>
+                      <SelectItem value="price_asc">Precio: menor a mayor</SelectItem>
+                      <SelectItem value="price_desc">Precio: mayor a menor</SelectItem>
+                      <SelectItem value="stock_asc">Stock: menor a mayor</SelectItem>
+                      <SelectItem value="stock_desc">Stock: mayor a menor</SelectItem>
                     </SelectContent>
                   </Select>
 
@@ -647,6 +650,7 @@ function InventarioPageContent() {
                   label="Producto"
                   placeholder="Buscar por SKU, nombre…"
                   hideSearch
+                  hidePagination
                   onRowClick={(p) => setSelectedProduct(p as ProductDto)}
                 />
               )}
