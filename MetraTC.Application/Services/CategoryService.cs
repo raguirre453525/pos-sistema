@@ -24,26 +24,39 @@ public class CategoryService : ICategoryService
 
     public async Task<IEnumerable<CategoryDto>> GetAllAsync()
     {
-        // Query directly via DbContext to ensure ordering and to include product counts.
-        // Uses query filter IsActive automatically; ordering by Name.
-        var categories = await _db.Categories
-            .Include(c => c.Products)
+        // Project ProductCount directly in DB to avoid relying on Include + in-memory Count.
+        // Counts only active products (p.IsActive) via the ProductCategories join; category filter IsActive via query filter.
+        var dtos = await _db.Categories
             .OrderBy(c => c.Name)
+            .Select(c => new CategoryDto(
+                c.Id,
+                c.Name,
+                c.Description,
+                c.IsActive,
+                c.Products.Count(p => p.IsActive)
+            ))
             .ToListAsync();
 
-        return _mapper.Map<IEnumerable<CategoryDto>>(categories);
+        return dtos;
     }
 
     public async Task<CategoryDto> GetByIdAsync(Guid id)
     {
-        var category = await _db.Categories
-            .Include(c => c.Products)
-            .FirstOrDefaultAsync(c => c.Id == id);
+        var dto = await _db.Categories
+            .Where(c => c.Id == id)
+            .Select(c => new CategoryDto(
+                c.Id,
+                c.Name,
+                c.Description,
+                c.IsActive,
+                c.Products.Count(p => p.IsActive)
+            ))
+            .FirstOrDefaultAsync();
 
-        if (category == null)
+        if (dto == null)
             throw new KeyNotFoundException($"No se encontró ninguna categoría con el ID: {id}");
 
-        return _mapper.Map<CategoryDto>(category);
+        return dto;
     }
 
     public async Task<CategoryDto> CreateAsync(CreateCategoryDto dto)
@@ -82,9 +95,12 @@ public class CategoryService : ICategoryService
         category.Update(normalizedName, dto.Description);
         await _repository.UpdateAsync(category);
 
-        // Reload with products for accurate ProductCount mapping
-        var reloaded = await _db.Categories.Include(c => c.Products).FirstAsync(c => c.Id == id);
-        return _mapper.Map<CategoryDto>(reloaded);
+        // Reload with DB-projected count for accurate ProductCount
+        var reloadedDto = await _db.Categories
+            .Where(c => c.Id == id)
+            .Select(c => new CategoryDto(c.Id, c.Name, c.Description, c.IsActive, c.Products.Count(p => p.IsActive)))
+            .FirstAsync();
+        return reloadedDto;
     }
 
     public async Task DeleteAsync(Guid id)

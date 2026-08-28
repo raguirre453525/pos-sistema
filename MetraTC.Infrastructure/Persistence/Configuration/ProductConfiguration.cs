@@ -2,7 +2,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
 
-namespace MetraTC.Infrastructure.Persistence.Configurations;
+namespace MetraTC.Infrastructure.Persistence.Configuration;
 
 public class ProductConfiguration : IEntityTypeConfiguration<Product>
 {

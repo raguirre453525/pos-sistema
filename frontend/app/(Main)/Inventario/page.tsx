@@ -330,9 +330,8 @@ export default function InventarioPage() {
     }
   };
 
-  const handleCategoryCreated = async (cat: CategoryDto) => {
+  const handleCategoryCreated = async (_cat: CategoryDto) => {
     await refreshCategoriesAndMap();
-    setSelectedCategoryId(cat.id);
   };
 
   const activeCategories = useMemo(() => categories.filter((c) => c.isActive), [categories]);
@@ -408,24 +407,32 @@ export default function InventarioPage() {
                 />
               </div>
 
-              <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                <SelectTrigger className="w-[180px] border-input bg-card">
-                  <SelectValue placeholder="Todas" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {activeCategories.map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name} ({c.productCount})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <div className="flex items-center gap-1">
+                <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+                  <SelectTrigger className="w-[180px] border-input bg-card">
+                    <SelectValue placeholder="Todas" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas</SelectItem>
+                    {activeCategories.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name} ({c.productCount})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
 
-              <Button variant="outline" size="sm" onClick={() => setShowCatModal(true)} className="gap-1.5">
-                <Plus className="h-4 w-4" />
-                Nueva categoría
-              </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowCatModal(true)}
+                  className="gap-1 px-2"
+                  aria-label="Crear categoría"
+                  title="Crear categoría"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
 
               {catError && (
                 <span className="text-xs text-red-600 border border-red-200 bg-red-50 rounded px-2 py-1">{catError}</span>
