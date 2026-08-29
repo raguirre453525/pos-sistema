@@ -543,21 +543,74 @@ export function togglePromotion(id: string) {
 }
 
 export async function uploadProductImage(id: string, file: File) {
+  // FIX: validación cliente evita crash y request innecesario; mensajes claros para UI
+  const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
+  const ext = "." + (file.name.split(".").pop() ?? "").toLowerCase();
+  if (file.size > 5 * 1024 * 1024) throw new ApiError("Archivo muy grande (máximo 5MB)", 400, { message: "Archivo muy grande (máximo 5MB)" });
+  if (file.type && !file.type.startsWith("image/")) throw new ApiError("Formato no soportado (solo imágenes)", 400, { message: "Formato no soportado (solo imágenes)" });
+  if (!allowedExts.includes(ext) && file.type && !file.type.startsWith("image/")) throw new ApiError("Extensión no permitida (jpg, jpeg, png, webp)", 400, { message: "Extensión no permitida" });
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${API_URL}/api/Products/${id}/image`, { method: "POST", body: form });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new ApiError((data?.title ?? data?.detail ?? text) || `HTTP ${res.status}`, res.status, data);
-  return data as { imageUrl: string };
+  try {
+    const res = await fetch(`${API_URL}/api/Products/${id}/image`, { method: "POST", body: form });
+    const text = await res.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text ? { message: text } : null; }
+    if (!res.ok) {
+      const msg = (data?.message ?? data?.title ?? data?.detail ?? (typeof data === "string" ? data : null) ?? text) || `HTTP ${res.status}`;
+      throw new ApiError(msg, res.status, data);
+    }
+    return data as { imageUrl: string };
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(e instanceof Error ? e.message : "Error de red al subir imagen", 0, e);
+  }
 }
 
 export async function uploadPromotionImage(id: string, file: File) {
+  const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
+  const ext = "." + (file.name.split(".").pop() ?? "").toLowerCase();
+  if (file.size > 5 * 1024 * 1024) throw new ApiError("Archivo muy grande (máximo 5MB)", 400, { message: "Archivo muy grande (máximo 5MB)" });
+  if (file.type && !file.type.startsWith("image/")) throw new ApiError("Formato no soportado (solo imágenes)", 400, { message: "Formato no soportado (solo imágenes)" });
+  if (!allowedExts.includes(ext) && file.type && !file.type.startsWith("image/")) throw new ApiError("Extensión no permitida (jpg, jpeg, png, webp)", 400, { message: "Extensión no permitida" });
   const form = new FormData();
   form.append("file", file);
-  const res = await fetch(`${API_URL}/api/Promotions/${id}/image`, { method: "POST", body: form });
-  const text = await res.text();
-  const data = text ? JSON.parse(text) : null;
-  if (!res.ok) throw new ApiError((data?.title ?? data?.detail ?? text) || `HTTP ${res.status}`, res.status, data);
-  return data as { imageUrl: string };
+  try {
+    const res = await fetch(`${API_URL}/api/Promotions/${id}/image`, { method: "POST", body: form });
+    const text = await res.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text ? { message: text } : null; }
+    if (!res.ok) {
+      const msg = (data?.message ?? data?.title ?? data?.detail ?? (typeof data === "string" ? data : null) ?? text) || `HTTP ${res.status}`;
+      throw new ApiError(msg, res.status, data);
+    }
+    return data as { imageUrl: string };
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(e instanceof Error ? e.message : "Error de red al subir imagen", 0, e);
+  }
+}
+
+export async function uploadProductImageTemp(file: File) {
+  const allowedExts = [".jpg", ".jpeg", ".png", ".webp"];
+  const ext = "." + (file.name.split(".").pop() ?? "").toLowerCase();
+  if (file.size > 5 * 1024 * 1024) throw new ApiError("Archivo muy grande (máximo 5MB)", 400, { message: "Archivo muy grande (máximo 5MB)" });
+  if (file.type && !file.type.startsWith("image/")) throw new ApiError("Formato no soportado (solo imágenes)", 400, { message: "Formato no soportado (solo imágenes)" });
+  if (!allowedExts.includes(ext) && file.type && !file.type.startsWith("image/")) throw new ApiError("Extensión no permitida (jpg, jpeg, png, webp)", 400, { message: "Extensión no permitida" });
+  const form = new FormData();
+  form.append("file", file);
+  try {
+    const res = await fetch(`${API_URL}/api/Products/image-upload`, { method: "POST", body: form });
+    const text = await res.text();
+    let data: any = null;
+    try { data = text ? JSON.parse(text) : null; } catch { data = text ? { message: text } : null; }
+    if (!res.ok) {
+      const msg = (data?.message ?? data?.title ?? data?.detail ?? (typeof data === "string" ? data : null) ?? text) || `HTTP ${res.status}`;
+      throw new ApiError(msg, res.status, data);
+    }
+    return data as { imageUrl: string };
+  } catch (e) {
+    if (e instanceof ApiError) throw e;
+    throw new ApiError(e instanceof Error ? e.message : "Error de red al subir imagen", 0, e);
+  }
 }

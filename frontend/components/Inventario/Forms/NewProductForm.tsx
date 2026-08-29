@@ -46,6 +46,13 @@ export function NewProductForm() {
     void fetchCategories();
   }, []);
 
+  // FIX: revoca objectURL al desmontar / cambio de preview para evitar leak que podía colgar la app al editar
+  useEffect(() => {
+    return () => {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+    };
+  }, [previewUrl]);
+
   const activeCategories = categories.filter((c) => c.isActive);
 
   const handleCategoryCreated = async (cat: CategoryDto) => {
@@ -55,6 +62,11 @@ export function NewProductForm() {
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const f = e.target.files?.[0] ?? null;
+    setError(null);
+    if (f) {
+      if (f.size > 5 * 1024 * 1024) { setError("Archivo muy grande (máximo 5MB)"); (e.target as HTMLInputElement).value = ""; return; }
+      if (f.type && !f.type.startsWith("image/")) { setError("Formato no soportado (solo imágenes)"); (e.target as HTMLInputElement).value = ""; return; }
+    }
     setSelectedFile(f);
     if (previewUrl) URL.revokeObjectURL(previewUrl);
     if (f) setPreviewUrl(URL.createObjectURL(f));
@@ -138,11 +150,20 @@ export function NewProductForm() {
         minStock: minStockNum,
       });
       if (selectedFile) {
-        try {
-          await uploadProductImage(product.id, selectedFile);
-        } catch (uploadErr) {
-          const msg = uploadErr instanceof ApiError ? uploadErr.message : uploadErr instanceof Error ? uploadErr.message : "Error al subir imagen";
-          setError(`Producto creado, pero falló subir imagen: ${msg}`);
+        // FIX: validación previa + try/catch evita que error no atrapado cierre la app (crash reportado al editar/cambiar imagen)
+        if (selectedFile.size > 5 * 1024 * 1024) {
+          setError("Producto creado, pero falló subir imagen: Archivo muy grande (máximo 5MB)");
+        } else if (selectedFile.type && !selectedFile.type.startsWith("image/")) {
+          setError("Producto creado, pero falló subir imagen: Formato no soportado (solo imágenes)");
+        } else {
+          try {
+            await uploadProductImage(product.id, selectedFile);
+          } catch (uploadErr) {
+            const msg = uploadErr instanceof ApiError ? uploadErr.message : uploadErr instanceof Error ? uploadErr.message : "Error al subir imagen";
+            setError(`Producto creado, pero falló subir imagen: ${msg}`);
+          } finally {
+            if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); }
+          }
         }
       }
       if (stockNum > 0) {

@@ -55,17 +55,29 @@ public class ProductService : IProductService
         if (updateProductDto.ImageUrl != null)
         {
             if (!string.IsNullOrWhiteSpace(updateProductDto.ImageUrl))
+                // FIX: ImageUrl admite ruta relativa /images/... o URL absoluta externa (http...), se valida longitud en entidad; no filtrar externa
                 product.SetImageUrl(updateProductDto.ImageUrl);
             // else preserve existing — do nothing
         }
         if (updateProductDto.Unit != null)
         {
             if (!string.IsNullOrWhiteSpace(updateProductDto.Unit))
-                product.SetUnit(updateProductDto.Unit);
+            {
+                // FIX: Unit inválido no debe tirar excepción no controlada 500 ni crash front; FluentValidation ya valida, aquí defendemos y mapeamos a 400
+                try { product.SetUnit(updateProductDto.Unit); }
+                catch (ArgumentException) { throw; } // ExceptionMiddleware -> 400 BadRequest {message}
+            }
             // else preserve
         }
         if (updateProductDto.MinStock.HasValue)
-            product.SetMinStock(updateProductDto.MinStock);
+        {
+            // FIX: redondeo a 3 decimales evita overflow decimal(18,3) con valores legacy con más decimales / NaN
+            var roundedMin = Math.Round(updateProductDto.MinStock.Value, 3, MidpointRounding.AwayFromZero);
+            // defensa extra: NaN no aplica a decimal pero legacy int->decimal puede traer valores extremos
+            if (roundedMin < 0) roundedMin = 0;
+            if (roundedMin > 99999) roundedMin = 99999;
+            product.SetMinStock(roundedMin);
+        }
 
         if (oldPrice != updateProductDto.Price)
         {

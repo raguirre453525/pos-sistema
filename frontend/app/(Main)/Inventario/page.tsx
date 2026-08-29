@@ -116,6 +116,14 @@ function InventarioPageContent() {
   const [quickSuccess, setQuickSuccess] = useState<string | null>(null);
   const [assignCatId, setAssignCatId] = useState<string>("");
 
+  // FIX: revoca objectURL al desmontar para evitar leak; hardening evita crash por URLs huérfanas
+  useEffect(() => {
+    return () => {
+      if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickPreviewUrl]);
+
   // Bulk price adjustment state
   const [showBulk, setShowBulk] = useState(false);
   const [bulkCategoryId, setBulkCategoryId] = useState<string>("all");
@@ -600,12 +608,17 @@ function InventarioPageContent() {
 
       await updateProduct(selectedProduct.id, dto);
       if (quickSelectedFile) {
-        try {
-          const res = await uploadProductImage(selectedProduct.id, quickSelectedFile);
-          dto.imageUrl = res.imageUrl;
-        } catch (upErr) {
-          const msg = upErr instanceof ApiError ? upErr.message : upErr instanceof Error ? upErr.message : "Error al subir imagen";
-          setQuickError(`Producto actualizado, pero falló subir imagen: ${msg}`);
+        // FIX: validación cliente previa evita crash y no hace fetch si inválido; envuelto en try/catch para no cerrar la app
+        if (quickSelectedFile.size > 5*1024*1024) { setQuickError("Producto actualizado, pero falló subir imagen: Archivo muy grande (máximo 5MB)"); }
+        else if (quickSelectedFile.type && !quickSelectedFile.type.startsWith("image/")) { setQuickError("Producto actualizado, pero falló subir imagen: Formato no soportado (solo imágenes)"); }
+        else {
+          try {
+            const res = await uploadProductImage(selectedProduct.id, quickSelectedFile);
+            dto.imageUrl = res.imageUrl;
+          } catch (upErr) {
+            const msg = upErr instanceof ApiError ? upErr.message : upErr instanceof Error ? upErr.message : "Error al subir imagen";
+            setQuickError(`Producto actualizado, pero falló subir imagen: ${msg}`);
+          }
         }
       }
       setQuickSuccess("Producto actualizado");
@@ -1291,7 +1304,7 @@ function InventarioPageContent() {
                 </div>
                 <div>
                   <label className="text-xs font-medium">o Subir archivo</label>
-                  <Input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; setQuickSelectedFile(f); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); if (f) setQuickPreviewUrl(URL.createObjectURL(f)); else setQuickPreviewUrl(null); }} className="bg-card border-input mt-1" />
+                  <Input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; setQuickError(null); if (f) { if (f.size > 5*1024*1024) { setQuickError("Archivo muy grande (máximo 5MB)"); (e.target as HTMLInputElement).value=""; return; } if (f.type && !f.type.startsWith("image/")) { setQuickError("Formato no soportado (solo imágenes)"); (e.target as HTMLInputElement).value=""; return; } } setQuickSelectedFile(f); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); if (f) setQuickPreviewUrl(URL.createObjectURL(f)); else setQuickPreviewUrl(null); }} className="bg-card border-input mt-1" />
                   {quickSelectedFile && quickPreviewUrl && (
                     <div className="flex items-center gap-2 mt-2">
                       <img src={quickPreviewUrl} alt="preview file" className="h-12 w-12 object-cover rounded border" />

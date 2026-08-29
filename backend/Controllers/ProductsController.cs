@@ -3,6 +3,7 @@ using MetraTC.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using static MetraTC.Application.DTOs.ProductDtos;
 
@@ -17,14 +18,16 @@ public class ProductsController : ControllerBase
     private readonly IProductPriceHistoryService _priceHistoryService;
     private readonly IWebHostEnvironment _env;
     private readonly ApplicationDbContext _context;
+    private readonly ILogger<ProductsController> _logger;
 
-    public ProductsController(IProductService productService, ICategoryService categoryService, IProductPriceHistoryService priceHistoryService, IWebHostEnvironment env, ApplicationDbContext context)
+    public ProductsController(IProductService productService, ICategoryService categoryService, IProductPriceHistoryService priceHistoryService, IWebHostEnvironment env, ApplicationDbContext context, ILogger<ProductsController> logger)
     {
         _productService = productService;
         _categoryService = categoryService;
         _priceHistoryService = priceHistoryService;
         _env = env;
         _context = context;
+        _logger = logger;
     }
 
     [HttpPost]
@@ -106,55 +109,76 @@ public class ProductsController : ControllerBase
     [HttpPost("{id}/image")]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
     {
-        if (file == null || file.Length == 0) return BadRequest("Archivo requerido");
-        if (file.Length > 5 * 1024 * 1024) return BadRequest("Máximo 5MB");
-        if (file.ContentType == null || !file.ContentType.StartsWith("image/")) return BadRequest("Solo imágenes");
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
-        if (!allowed.Contains(ext)) return BadRequest("Extensión no permitida (jpg, jpeg, png, webp)");
-
-        var product = await _context.Products.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id);
-        if (product == null) return NotFound($"No se encontró producto con ID: {id}");
-
-        var webRoot = _env.WebRootPath;
-        if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
-            webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-        var dir = Path.Combine(webRoot, "images", "products");
-        Directory.CreateDirectory(dir);
-        var fileName = $"{id}{ext}";
-        var fullPath = Path.Combine(dir, fileName);
-        using (var stream = new FileStream(fullPath, FileMode.Create))
+        // FIX: crash al editar producto y cambiar imagen - causas probables: DirectoryNotFound cuando wwwroot no existe,
+        // NullReference si file==null, y excepción no controlada por FileStream sin await using / sin CreateDirectory del parent.
+        // Diagnóstico temporal deja traza en terminal; hardening evita cierre de back/front.
+        try
         {
-            await file.CopyToAsync(stream);
+            Console.WriteLine($"[Upload] Product {id} file {file?.FileName} {file?.Length}");
+            if (file == null || file.Length == 0) return BadRequest(new { message = "Archivo requerido" });
+            if (file.Length > 5 * 1024 * 1024) return BadRequest(new { message = "Archivo muy grande (máximo 5MB)" });
+            if (file.ContentType == null || !file.ContentType.StartsWith("image/")) return BadRequest(new { message = "Formato no soportado (solo imágenes)" });
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+            if (!allowed.Contains(ext)) return BadRequest(new { message = "Extensión no permitida (jpg, jpeg, png, webp)" });
+
+            var product = await _context.Products.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id);
+            if (product == null) return NotFound(new { message = $"No se encontró producto con ID: {id}" });
+
+            var webRoot = _env.WebRootPath;
+            if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
+                webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            var dir = Path.Combine(webRoot, "images", "products");
+            Directory.CreateDirectory(dir);
+            var fileName = $"{id}{ext}";
+            var fullPath = Path.Combine(dir, fileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            await using var fs = new FileStream(fullPath, FileMode.Create);
+            await file.CopyToAsync(fs);
+            var url = $"/images/products/{fileName}";
+            product.SetImageUrl(url);
+            await _context.SaveChangesAsync();
+            return Ok(new { imageUrl = url });
         }
-        var url = $"/images/products/{fileName}";
-        product.SetImageUrl(url);
-        await _context.SaveChangesAsync();
-        return Ok(new { imageUrl = url });
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Upload] Error al subir imagen producto {Id} file {FileName}", id, file?.FileName);
+            Console.WriteLine($"[Upload][Error] Product {id} {ex.GetType().Name}: {ex.Message}");
+            return StatusCode(500, new { message = "Error interno al subir imagen" });
+        }
     }
 
     [HttpPost("image-upload")]
     public async Task<IActionResult> UploadImageTemp(IFormFile file)
     {
-        if (file == null || file.Length == 0) return BadRequest("Archivo requerido");
-        if (file.Length > 5 * 1024 * 1024) return BadRequest("Máximo 5MB");
-        if (file.ContentType == null || !file.ContentType.StartsWith("image/")) return BadRequest("Solo imágenes");
-        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
-        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
-        if (!allowed.Contains(ext)) return BadRequest("Extensión no permitida");
-        var webRoot = _env.WebRootPath;
-        if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
-            webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-        var dir = Path.Combine(webRoot, "images", "products");
-        Directory.CreateDirectory(dir);
-        var tempId = Guid.NewGuid();
-        var fileName = $"{tempId}{ext}";
-        var fullPath = Path.Combine(dir, fileName);
-        using (var stream = new FileStream(fullPath, FileMode.Create))
+        try
         {
-            await file.CopyToAsync(stream);
+            Console.WriteLine($"[UploadTemp] file {file?.FileName} {file?.Length}");
+            if (file == null || file.Length == 0) return BadRequest(new { message = "Archivo requerido" });
+            if (file.Length > 5 * 1024 * 1024) return BadRequest(new { message = "Archivo muy grande (máximo 5MB)" });
+            if (file.ContentType == null || !file.ContentType.StartsWith("image/")) return BadRequest(new { message = "Formato no soportado (solo imágenes)" });
+            var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+            var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+            if (!allowed.Contains(ext)) return BadRequest(new { message = "Extensión no permitida" });
+            var webRoot = _env.WebRootPath;
+            if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
+                webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+            var dir = Path.Combine(webRoot, "images", "products");
+            Directory.CreateDirectory(dir);
+            var tempId = Guid.NewGuid();
+            var fileName = $"{tempId}{ext}";
+            var fullPath = Path.Combine(dir, fileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+            await using var fs = new FileStream(fullPath, FileMode.Create);
+            await file.CopyToAsync(fs);
+            var url = $"/images/products/{fileName}";
+            return Ok(new { imageUrl = url });
         }
-        var url = $"/images/products/{fileName}";
-        return Ok(new { imageUrl = url });
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[UploadTemp] Error al subir imagen temporal {FileName}", file?.FileName);
+            Console.WriteLine($"[UploadTemp][Error] {ex.GetType().Name}: {ex.Message}");
+            return StatusCode(500, new { message = "Error interno al subir imagen" });
+        }
     }
 }
