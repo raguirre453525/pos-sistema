@@ -348,7 +348,7 @@ public class AssistantProposalService
             bool exists = existing != null;
             Guid? existingId = existing?.Id;
             decimal? currentPrice = existing?.Price;
-            int? currentStock = existing?.Stock;
+            decimal? currentStock = existing?.Stock;
 
             var missing = new List<string>();
             string action;

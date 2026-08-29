@@ -16,7 +16,7 @@ public class SalesRepository : ISalesRepository
         _context = context;
     }
 
-    public async Task<Sale> CreateAsync(List<(Guid productId, int quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null, List<(Guid promotionId, int quantity)>? combos = null)
+    public async Task<Sale> CreateAsync(List<(Guid productId, decimal quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null, List<(Guid promotionId, int quantity)>? combos = null)
     {
         var hasItems = items != null && items.Any();
         var hasCombos = combos != null && combos.Any();
@@ -32,6 +32,8 @@ public class SalesRepository : ISalesRepository
             {
                 if (qty <= 0)
                     throw new ArgumentException("La cantidad debe ser mayor a cero", nameof(items));
+                if (decimal.Round(qty, 3) != qty)
+                    throw new ArgumentException("La cantidad no puede tener más de 3 decimales", nameof(items));
             }
             foreach (var (pid, _) in items!)
             {
@@ -54,7 +56,7 @@ public class SalesRepository : ISalesRepository
         List<Promotion> comboPromos = new();
         Dictionary<Guid, Promotion> promoDict = new();
         List<SalePromotion> salePromotions = new();
-        List<(Guid productId, int quantity, Guid promotionId, string promotionName)> comboComponents = new();
+        List<(Guid productId, decimal quantity, Guid promotionId, string promotionName)> comboComponents = new();
         decimal comboTotalPaid = 0;
         decimal comboTotalOriginal = 0;
         if (hasCombos)
@@ -117,7 +119,7 @@ public class SalesRepository : ISalesRepository
         }
 
         // Agrupar cantidades totales por producto (items + componentes combo)
-        var groupedTotals = new Dictionary<Guid, int>();
+        var groupedTotals = new Dictionary<Guid, decimal>();
         if (hasItems)
         {
             foreach (var g in items!.GroupBy(x => x.productId).Select(g => (productId: g.Key, quantity: g.Sum(v => v.quantity))))
@@ -131,10 +133,21 @@ public class SalesRepository : ISalesRepository
         }
         var grouped = groupedTotals.Select(kv => (productId: kv.Key, quantity: kv.Value)).ToList();
 
-        // Validar stock y aplicar ajuste
+        // Validar modo de venta (un => entero, kg => decimal 3) y stock
         foreach (var (productId, quantity) in grouped)
         {
             var product = productDict[productId];
+            if (!product.IsSoldByWeight)
+            {
+                // Por unidad: debe ser entero
+                if (quantity != Math.Truncate(quantity))
+                    throw new ArgumentException($"El producto {product.Sku} se vende por unidad: la cantidad debe ser entera (recibido {quantity})", nameof(items));
+            }
+            else
+            {
+                if (decimal.Round(quantity, 3) != quantity)
+                    throw new ArgumentException($"El producto {product.Sku} se vende a granel: máximo 3 decimales", nameof(items));
+            }
             if (product.Stock < quantity)
                 throw new ArgumentException($"Stock insuficiente para el producto {product.Sku}. Disponible: {product.Stock}, solicitado: {quantity}");
             product.AdjustStock(-quantity);

@@ -8,7 +8,7 @@ public class SaleItem : BaseEntity
     public Sale Sale { get; private set; } = null!;
     public Guid ProductId { get; private set; }
     public Product Product { get; private set; } = null!;
-    public int Quantity { get; private set; }
+    public decimal Quantity { get; private set; }
     public decimal UnitPrice { get; private set; }
     public decimal Subtotal { get; private set; }
     // Trazabilidad combo: nullable para historial. Ver ADR: SalePromotion + SaleItem.PromotionId permite ver "qué combos se vendieron" y descontar stock por componente.
@@ -20,19 +20,22 @@ public class SaleItem : BaseEntity
     {
     }
 
-    public SaleItem(Guid productId, int quantity, decimal unitPrice, Guid? promotionId = null, string? promotionName = null)
+    public SaleItem(Guid productId, decimal quantity, decimal unitPrice, Guid? promotionId = null, string? promotionName = null)
     {
         if (productId == Guid.Empty)
             throw new ArgumentException("El ProductId es obligatorio", nameof(productId));
         if (quantity <= 0)
             throw new ArgumentException("La cantidad debe ser mayor a cero", nameof(quantity));
+        // Validación de decimales: hasta 3 decimales (para peso)
+        if (decimal.Round(quantity, 3) != quantity)
+            throw new ArgumentException("La cantidad no puede tener más de 3 decimales", nameof(quantity));
         if (unitPrice < 0)
             throw new ArgumentException("El precio unitario no puede ser negativo", nameof(unitPrice));
 
         ProductId = productId;
-        Quantity = quantity;
+        Quantity = Math.Round(quantity, 3, MidpointRounding.AwayFromZero);
         UnitPrice = unitPrice;
-        Subtotal = quantity * unitPrice;
+        Subtotal = Math.Round(Quantity * unitPrice, 2, MidpointRounding.AwayFromZero);
         PromotionId = promotionId;
         PromotionName = string.IsNullOrWhiteSpace(promotionName) ? null : promotionName.Trim();
     }

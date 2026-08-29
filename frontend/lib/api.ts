@@ -56,8 +56,9 @@ export type ProductDto = {
   price: number;
   stock: number;
   imageUrl?: string | null;
-  unit?: string | null;
+  unit?: "un" | "kg" | string | null;
   minStock?: number | null;
+  isSoldByWeight?: boolean;
 };
 
 export type CreateProductDto = {
@@ -67,7 +68,7 @@ export type CreateProductDto = {
   barcode?: string | null;
   description?: string | null;
   imageUrl?: string | null;
-  unit?: string | null;
+  unit?: "un" | "kg" | string | null;
   minStock?: number | null;
 };
 
@@ -192,7 +193,7 @@ export type UpdateProductDto = {
   price: number;
   description?: string | null;
   imageUrl?: string | null;
-  unit?: string | null;
+  unit?: "un" | "kg" | string | null;
   minStock?: number | null;
 };
 

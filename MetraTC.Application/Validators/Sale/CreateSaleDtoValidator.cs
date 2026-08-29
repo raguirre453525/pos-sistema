@@ -18,7 +18,8 @@ public class CreateSaleDtoValidator : AbstractValidator<CreateSaleDto>
             item.RuleFor(i => i.ProductId)
                 .NotEmpty().WithMessage("El ProductId es obligatorio");
             item.RuleFor(i => i.Quantity)
-                .GreaterThan(0).WithMessage("La cantidad debe ser mayor a cero");
+                .GreaterThan(0).WithMessage("La cantidad debe ser mayor a cero")
+                .Must(q => decimal.Round(q, 3) == q).WithMessage("La cantidad no puede tener más de 3 decimales");
         });
         RuleForEach(x => x.Combos).ChildRules(c =>
         {

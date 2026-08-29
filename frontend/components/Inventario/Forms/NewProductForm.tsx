@@ -17,8 +17,7 @@ export function NewProductForm() {
   const [stock, setStock] = useState("0");
   const [barcode, setBarcode] = useState("");
   const [description, setDescription] = useState("");
-  const [unit, setUnit] = useState("");
-  const [unitCustom, setUnitCustom] = useState("");
+  const [unit, setUnit] = useState<"un" | "kg">("un");
   const [minStock, setMinStock] = useState("");
   const [imageUrl, setImageUrl] = useState("");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -62,7 +61,8 @@ export function NewProductForm() {
     else setPreviewUrl(null);
   };
 
-  const resolvedUnit = unit === "Otro" ? unitCustom.trim() : unit.trim();
+  const isKg = unit === "kg";
+  const resolvedUnit: "un" | "kg" = unit;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -84,20 +84,40 @@ export function NewProductForm() {
       setError("Precio debe ser >= 0");
       return;
     }
-    const stockNum = parseInt(stock || "0", 10);
+    const stockNum = parseFloat(stock || "0");
     if (isNaN(stockNum) || stockNum < 0) {
       setError("Stock debe ser >= 0");
       return;
     }
-    if (resolvedUnit && (resolvedUnit.length < 1 || resolvedUnit.length > 20)) {
-      setError("Unidad debe tener entre 1 y 20 caracteres");
+    if (isKg) {
+      if (Math.round(stockNum * 1000) / 1000 !== stockNum) {
+        setError("Stock a granel no puede tener más de 3 decimales");
+        return;
+      }
+    } else {
+      if (!Number.isInteger(stockNum)) {
+        setError("Stock por unidad debe ser entero");
+        return;
+      }
+    }
+    if (resolvedUnit !== "un" && resolvedUnit !== "kg") {
+      setError("Modo de venta debe ser 'un' o 'kg'");
       return;
     }
     let minStockNum: number | null = null;
     if (minStock.trim() !== "") {
-      minStockNum = parseInt(minStock, 10);
+      minStockNum = parseFloat(minStock);
       if (isNaN(minStockNum) || minStockNum < 0 || minStockNum > 99999) {
         setError("Stock mínimo debe estar entre 0 y 99999");
+        return;
+      }
+      if (isKg) {
+        if (Math.round(minStockNum * 1000) / 1000 !== minStockNum) {
+          setError("Stock mínimo a granel no puede tener más de 3 decimales");
+          return;
+        }
+      } else if (!Number.isInteger(minStockNum)) {
+        setError("Stock mínimo por unidad debe ser entero");
         return;
       }
     }
@@ -171,30 +191,32 @@ export function NewProductForm() {
             <Input id="barcode" placeholder="779..." value={barcode} onChange={(e) => setBarcode(e.target.value)} />
           </Field>
           <Field>
-            <FieldLabel>Unidad</FieldLabel>
-            <div className="flex gap-2">
-              <Select value={unit || "__none"} onValueChange={(v) => setUnit(v === "__none" ? "" : v)}>
-                <SelectTrigger className="flex-1">
-                  <SelectValue placeholder="Unidad" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none">Sin unidad</SelectItem>
-                  <SelectItem value="un">Unidad</SelectItem>
-                  <SelectItem value="kg">Kg</SelectItem>
-                  <SelectItem value="lt">Litro</SelectItem>
-                  <SelectItem value="pack">Pack</SelectItem>
-                  <SelectItem value="caja">Caja</SelectItem>
-                  <SelectItem value="Otro">Otro</SelectItem>
-                </SelectContent>
-              </Select>
-              {unit === "Otro" && (
-                <Input placeholder="Ej: metro" value={unitCustom} onChange={(e) => setUnitCustom(e.target.value)} className="flex-1" maxLength={20} />
-              )}
-            </div>
+            <FieldLabel>Modo de venta</FieldLabel>
+            <Select value={unit} onValueChange={(v) => setUnit(v as "un" | "kg")}>
+              <SelectTrigger className="flex-1">
+                <SelectValue placeholder="Modo de venta" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="un">Por unidad (paquete)</SelectItem>
+                <SelectItem value="kg">A granel por peso (kg)</SelectItem>
+              </SelectContent>
+            </Select>
+            <p className="text-xs text-muted-foreground">
+              {isKg ? "Se vende fraccionado, stock en kg (ej: 0,4 kg)" : "Se vende por unidades enteras (ej: 1 paquete Yerba 1kg)"}
+            </p>
           </Field>
           <Field>
             <FieldLabel htmlFor="minStock">Stock mínimo</FieldLabel>
-            <Input id="minStock" type="number" min="0" max="99999" placeholder="Ej: 5 — vacío = 5 por defecto" value={minStock} onChange={(e) => setMinStock(e.target.value)} />
+            <Input
+              id="minStock"
+              type="number"
+              min="0"
+              max="99999"
+              step={isKg ? "0.001" : "1"}
+              placeholder={isKg ? "Ej: 2.5 kg" : "Ej: 2"}
+              value={minStock}
+              onChange={(e) => setMinStock(e.target.value)}
+            />
           </Field>
           <Field>
             <FieldLabel htmlFor="imageUrl">URL de imagen</FieldLabel>
@@ -229,7 +251,7 @@ export function NewProductForm() {
           </Field>
           <Field>
             <FieldLabel htmlFor="stock">Stock inicial</FieldLabel>
-            <Input id="stock" type="number" min="0" placeholder="0" value={stock} onChange={(e) => setStock(e.target.value)} />
+            <Input id="stock" type="number" min="0" step={isKg ? "0.001" : "1"} placeholder={isKg ? "Ej: 15.5" : "Ej: 10"} value={stock} onChange={(e) => setStock(e.target.value)} />
             <p className="text-xs text-muted-foreground">Se creará con 0 y luego se ajusta si es &gt;0.</p>
           </Field>
 
@@ -275,8 +297,7 @@ export function NewProductForm() {
                 setStock("0");
                 setBarcode("");
                 setDescription("");
-                setUnit("");
-                setUnitCustom("");
+                setUnit("un");
                 setMinStock("");
                 setImageUrl("");
                 setSelectedFile(null);

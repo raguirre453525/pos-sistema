@@ -106,8 +106,7 @@ function InventarioPageContent() {
   const [quickName, setQuickName] = useState("");
   const [quickPrice, setQuickPrice] = useState("");
   const [quickDesc, setQuickDesc] = useState("");
-  const [quickUnit, setQuickUnit] = useState("");
-  const [quickUnitCustom, setQuickUnitCustom] = useState("");
+  const [quickUnit, setQuickUnit] = useState<"un" | "kg" | "">("");
   const [quickMinStock, setQuickMinStock] = useState("");
   const [quickImageUrl, setQuickImageUrl] = useState("");
   const [quickSelectedFile, setQuickSelectedFile] = useState<File | null>(null);
@@ -383,15 +382,9 @@ function InventarioPageContent() {
     setQuickName(selectedProduct.name);
     setQuickPrice(String(selectedProduct.price));
     setQuickDesc(selectedProduct.description ?? "");
-    setQuickUnit(selectedProduct.unit ?? "");
-    // if unit is custom not in list, treat as Otro
-    const knownUnits = ["un", "kg", "lt", "pack", "caja"];
-    if (selectedProduct.unit && !knownUnits.includes(selectedProduct.unit) && selectedProduct.unit !== "") {
-      setQuickUnit("Otro");
-      setQuickUnitCustom(selectedProduct.unit);
-    } else {
-      setQuickUnitCustom("");
-    }
+    const normUnit = (selectedProduct.unit ?? "").toLowerCase().trim();
+    if (normUnit === "kg" || normUnit === "granel") setQuickUnit("kg");
+    else setQuickUnit("un");
     setQuickMinStock(selectedProduct.minStock != null ? String(selectedProduct.minStock) : "");
     setQuickImageUrl(selectedProduct.imageUrl ?? "");
     setQuickSelectedFile(null);
@@ -422,7 +415,7 @@ function InventarioPageContent() {
         return isLow && p.stock > 0;
       });
     } else if (stockFilter === "out") {
-      result = result.filter((p) => p.stock === 0);
+      result = result.filter((p) => p.stock <= 0);
     }
     switch (sortBy) {
       case "name_asc":
@@ -458,9 +451,18 @@ function InventarioPageContent() {
 
   const handleAdjust = async () => {
     if (!adjustTarget) return;
-    const deltaNum = parseInt(delta, 10);
+    const deltaNum = parseFloat(delta.replace(",", "."));
     if (isNaN(deltaNum) || deltaNum === 0) {
-      setAdjustError("Delta debe ser un entero distinto de 0");
+      setAdjustError("Delta debe ser distinto de 0");
+      return;
+    }
+    if (Math.round(deltaNum * 1000) / 1000 !== deltaNum) {
+      setAdjustError("Delta no puede tener más de 3 decimales");
+      return;
+    }
+    const isWeightAdjust = adjustTarget.isSoldByWeight === true || (adjustTarget.unit ?? "").toLowerCase() === "kg";
+    if (!isWeightAdjust && !Number.isInteger(deltaNum)) {
+      setAdjustError("Para productos por unidad el delta debe ser entero");
       return;
     }
     if (!reason.trim() || reason.trim().length > 250) {
@@ -556,16 +558,26 @@ function InventarioPageContent() {
       setQuickError("Descripción no puede exceder 500 caracteres");
       return;
     }
-    const resolvedUnit = quickUnit === "Otro" ? quickUnitCustom.trim() : quickUnit.trim();
-    if (resolvedUnit && (resolvedUnit.length < 1 || resolvedUnit.length > 20)) {
-      setQuickError("Unidad debe tener entre 1 y 20 caracteres");
+    const resolvedUnit = (quickUnit || "").toLowerCase().trim();
+    if (resolvedUnit !== "un" && resolvedUnit !== "kg") {
+      setQuickError("La unidad debe ser 'un' o 'kg'");
       return;
     }
+    const isKgQuick = resolvedUnit === "kg";
     let minStockNum: number | null | undefined = undefined;
     if (quickMinStock.trim() !== "") {
-      const v = parseInt(quickMinStock, 10);
+      const v = parseFloat(quickMinStock.replace(",", "."));
       if (isNaN(v) || v < 0 || v > 99999) {
         setQuickError("Stock mínimo debe estar entre 0 y 99999");
+        return;
+      }
+      if (isKgQuick) {
+        if (Math.round(v * 1000) / 1000 !== v) {
+          setQuickError("Stock mínimo a granel no puede tener más de 3 decimales");
+          return;
+        }
+      } else if (!Number.isInteger(v)) {
+        setQuickError("Stock mínimo por unidad debe ser entero");
         return;
       }
       minStockNum = v;
@@ -1052,21 +1064,25 @@ function InventarioPageContent() {
                 <div className="mt-2 flex items-center gap-2">
                   <span className="font-medium">${Number(selectedProduct.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
                   {(() => {
+                    const isWeightDrawer = selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg";
+                    const unitLabel = isWeightDrawer ? "kg" : "un.";
+                    const stockStr = Number(selectedProduct.stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+                    const minStr = selectedProduct.minStock != null ? Number(selectedProduct.minStock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : null;
                     const isLow = selectedProduct.minStock != null ? selectedProduct.stock <= selectedProduct.minStock : selectedProduct.stock <= 5;
                     return (
                       <span
                         className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
-                          selectedProduct.stock === 0
+                          selectedProduct.stock <= 0
                             ? "bg-zinc-100 text-zinc-600 border-zinc-300"
                             : isLow
                               ? "bg-red-100 text-red-700 border-red-200"
                               : "bg-green-100 text-green-700 border-green-200"
                         }`}
                       >
-                        Stock: {selectedProduct.stock}
-                        {selectedProduct.minStock != null ? ` (mín: ${selectedProduct.minStock})` : ""}
-                        {isLow && selectedProduct.stock > 0 ? " · ¡Poco stock!" : isLow && selectedProduct.stock <= 5 && selectedProduct.stock > 0 ? " · ¡Stock bajo!" : ""}
-                        {selectedProduct.stock === 0 && " · Sin stock"}
+                        Stock: {stockStr} {unitLabel}
+                        {minStr != null ? ` (mín: ${minStr} ${unitLabel})` : ""}
+                        {isLow && selectedProduct.stock > 0 ? " · ¡Poco stock!" : ""}
+                        {selectedProduct.stock <= 0 && " · Sin stock"}
                       </span>
                     );
                   })()}
@@ -1235,28 +1251,34 @@ function InventarioPageContent() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs font-medium">Unidad</label>
+                  <label className="text-xs font-medium">Modo de venta</label>
                   <div className="flex gap-2 mt-1">
-                    <Select value={quickUnit || "__none"} onValueChange={(v) => setQuickUnit(v === "__none" ? "" : v)}>
+                    <Select value={quickUnit || "un"} onValueChange={(v) => setQuickUnit(v as "un" | "kg")}>
                       <SelectTrigger className="flex-1 bg-card border-input">
-                        <SelectValue placeholder="Unidad" />
+                        <SelectValue placeholder="Modo de venta" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="__none">Sin unidad</SelectItem>
-                        <SelectItem value="un">Unidad</SelectItem>
-                        <SelectItem value="kg">Kg</SelectItem>
-                        <SelectItem value="lt">Litro</SelectItem>
-                        <SelectItem value="pack">Pack</SelectItem>
-                        <SelectItem value="caja">Caja</SelectItem>
-                        <SelectItem value="Otro">Otro</SelectItem>
+                        <SelectItem value="un">Por unidad (paquete)</SelectItem>
+                        <SelectItem value="kg">A granel por peso (kg)</SelectItem>
                       </SelectContent>
                     </Select>
-                    {quickUnit === "Otro" && <Input placeholder="Ej: metro" value={quickUnitCustom} onChange={(e) => setQuickUnitCustom(e.target.value)} maxLength={20} className="flex-1 bg-card border-input" />}
                   </div>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {quickUnit === "kg" ? "Se vende fraccionado, stock en kg (ej: 0,4 kg)" : "Se vende por unidades enteras (ej: 1 paquete Yerba 1kg)"}
+                  </p>
                 </div>
                 <div>
                   <label className="text-xs font-medium">Stock mínimo</label>
-                  <Input type="number" min="0" max="99999" value={quickMinStock} onChange={(e) => setQuickMinStock(e.target.value)} placeholder="Ej: 5 — vacío = 5 por defecto" className="bg-card border-input mt-1" />
+                  <Input
+                    type="number"
+                    min="0"
+                    max="99999"
+                    step={quickUnit === "kg" ? "0.001" : "1"}
+                    value={quickMinStock}
+                    onChange={(e) => setQuickMinStock(e.target.value)}
+                    placeholder={quickUnit === "kg" ? "Ej: 2.5 kg" : "Ej: 2 — vacío = 5 por defecto"}
+                    className="bg-card border-input mt-1"
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-medium">URL de imagen</label>
@@ -1373,20 +1395,32 @@ function InventarioPageContent() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-card border border-border rounded-2xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
             <h3 className="text-lg font-semibold">Ajustar stock — {adjustTarget.name}</h3>
-            <p className="text-sm text-muted-foreground">SKU: {adjustTarget.sku} · Stock actual: {adjustTarget.stock}</p>
+            {(() => {
+              const isWeightAdj = adjustTarget.isSoldByWeight === true || (adjustTarget.unit ?? "").toLowerCase() === "kg";
+              const unitLabel = isWeightAdj ? "kg" : "un.";
+              const stockStr = Number(adjustTarget.stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+              return <p className="text-sm text-muted-foreground">SKU: {adjustTarget.sku} · Stock actual: {stockStr} {unitLabel}</p>;
+            })()}
 
-            <div className="flex gap-2 items-end">
-              <div className="flex-1">
-                <label className="text-sm font-medium">Delta (+/-)</label>
-                <Input type="number" value={delta} onChange={(e) => setDelta(e.target.value)} placeholder="Ej: 5 o -3" />
-              </div>
-              <Button variant="outline" onClick={() => setDelta(String(parseInt(delta || "0", 10) - 1))}>
-                -1
-              </Button>
-              <Button variant="outline" onClick={() => setDelta(String(parseInt(delta || "0", 10) + 1))}>
-                +1
-              </Button>
-            </div>
+            {(() => {
+              const isWeightAdj = adjustTarget.isSoldByWeight === true || (adjustTarget.unit ?? "").toLowerCase() === "kg";
+              const step = isWeightAdj ? 0.1 : 1;
+              const stepStr = isWeightAdj ? "0.1" : "1";
+              return (
+                <div className="flex gap-2 items-end">
+                  <div className="flex-1">
+                    <label className="text-sm font-medium">Delta (+/-) {isWeightAdj ? "(kg, ej: 0.5 o -0.4)" : "(unidades, ej: 5 o -3)"}</label>
+                    <Input type="number" step={stepStr} value={delta} onChange={(e) => setDelta(e.target.value)} placeholder={isWeightAdj ? "Ej: 0.5 o -0.4" : "Ej: 5 o -3"} />
+                  </div>
+                  <Button variant="outline" onClick={() => setDelta(String((parseFloat(delta || "0") - step).toFixed(3).replace(/\.?0+$/, "")))}>
+                    -{stepStr}
+                  </Button>
+                  <Button variant="outline" onClick={() => setDelta(String((parseFloat(delta || "0") + step).toFixed(3).replace(/\.?0+$/, "")))}>
+                    +{stepStr}
+                  </Button>
+                </div>
+              );
+            })()}
 
             <div>
               <label className="text-sm font-medium">Motivo (1..250)</label>

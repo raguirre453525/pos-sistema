@@ -12,14 +12,21 @@ public class Product : BaseEntity
     public string Name { get; private set; }
     public string? Description { get; private set; }
     public decimal Price { get; private set; }
-    public int Stock { get; private set; }
+    public decimal Stock { get; private set; }
     public string? ImageUrl { get; private set; }
     public string? Unit { get; private set; }
-    public int? MinStock { get; private set; }
+    public decimal? MinStock { get; private set; }
+
+    /// <summary>
+    /// Modo de venta simplificado: "un" (por unidad) vs "kg" (a granel por peso).
+    /// Decisión: no se introduce columna SaleMode para minimizar migración; se normaliza Unit
+    /// a valores canónicos "un"/"kg". IsSoldByWeight computada. Bulto/caja diferido.
+    /// </summary>
+    public bool IsSoldByWeight => string.Equals(NormalizeUnit(Unit), "kg", StringComparison.OrdinalIgnoreCase);
 
     public ICollection<Category> Categories { get; private set; } = new List<Category>();
 
-    public Product(string sku, string name, decimal price, string? barcode = null, string? description = null, string? imageUrl = null, string? unit = null, int? minStock = null)
+    public Product(string sku, string name, decimal price, string? barcode = null, string? description = null, string? imageUrl = null, string? unit = null, decimal? minStock = null)
     {
         ValidateDataAndSku(sku, name, price);
 
@@ -56,6 +63,17 @@ public class Product : BaseEntity
         ImageUrl = trimmed;
     }
 
+    public static string? NormalizeUnit(string? unit)
+    {
+        if (string.IsNullOrWhiteSpace(unit)) return null;
+        var t = unit.Trim().ToLowerInvariant();
+        if (t == "granel") return "kg";
+        if (t == "kg" || t == "un") return t;
+        // legacy values (lt, pack, caja, etc.) se normalizan a "un" para compatibilidad hacia atrás
+        // pero la validación rechaza valores nuevos fuera de un/kg; este mapeo solo es para lectura
+        return t;
+    }
+
     public void SetUnit(string? unit)
     {
         if (string.IsNullOrWhiteSpace(unit))
@@ -63,13 +81,15 @@ public class Product : BaseEntity
             Unit = null;
             return;
         }
-        var trimmed = unit.Trim();
-        if (trimmed.Length < 1 || trimmed.Length > 20)
-            throw new ArgumentException("La unidad debe tener entre 1 y 20 caracteres", nameof(unit));
+        var trimmed = unit.Trim().ToLowerInvariant();
+        // Solo se permiten valores canónicos "un" y "kg" (granel se mapea a kg)
+        if (trimmed == "granel") trimmed = "kg";
+        if (trimmed != "un" && trimmed != "kg")
+            throw new ArgumentException("La unidad debe ser 'un' o 'kg'", nameof(unit));
         Unit = trimmed;
     }
 
-    public void SetMinStock(int? min)
+    public void SetMinStock(decimal? min)
     {
         if (min == null)
         {
@@ -87,18 +107,21 @@ public class Product : BaseEntity
         return Stock <= 5;
     }
 
-    public int AdjustStock(int delta)
+    public decimal AdjustStock(decimal delta)
     {
         if (delta == 0)
             throw new ArgumentException("El ajuste de stock no puede ser cero", nameof(delta));
 
-        var resultingStock = (long)Stock + delta;
+        var resultingStock = Stock + delta;
         if (resultingStock < 0)
             throw new ArgumentException("El stock resultante no puede ser negativo", nameof(delta));
-        if (resultingStock > int.MaxValue)
+        if (resultingStock > 999999999)
             throw new ArgumentException("El stock resultante excede el límite permitido", nameof(delta));
+        // Redondeo a 3 decimales para kg
+        resultingStock = Math.Round(resultingStock, 3, MidpointRounding.AwayFromZero);
+        delta = Math.Round(delta, 3, MidpointRounding.AwayFromZero);
 
-        Stock = (int)resultingStock;
+        Stock = resultingStock;
         return Stock;
     }
 

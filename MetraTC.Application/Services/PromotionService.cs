@@ -151,7 +151,7 @@ public class PromotionService : IPromotionService
             return new PromotionProductDto(l.ProductId, name, sku, price, l.Quantity, price * l.Quantity);
         }).ToList() ?? new List<PromotionProductDto>();
 
-        var productDtos = lines.Select(l => new ProductDto(l.ProductId, l.Sku, null, l.ProductName, null, l.UnitPrice, 0, null, null, null)).ToList();
+        var productDtos = lines.Select(l => new ProductDto(l.ProductId, l.Sku, null, l.ProductName, null, l.UnitPrice, 0, null, null, null, false)).ToList();
         // Para compat, Products son los productos distintos (sin multiplicar)
         var total = lines.Sum(x => x.LineTotal);
         decimal? savingAmount = null;

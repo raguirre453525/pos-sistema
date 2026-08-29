@@ -12,7 +12,8 @@ public class ProductProfile : Profile
 {
     public ProductProfile()
     {
-        CreateMap<Product, ProductDto>();
+        CreateMap<Product, ProductDto>()
+            .ForMember(d => d.IsSoldByWeight, o => o.MapFrom(s => s.IsSoldByWeight));
 
         CreateMap<CreateProductDto, Product>()
             .ConstructUsing(dto => new Product(dto.Sku, dto.Name, dto.Price, dto.Barcode, dto.Description, dto.ImageUrl, dto.Unit, dto.MinStock));

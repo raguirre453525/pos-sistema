@@ -19,8 +19,8 @@ public class UpdateProductDtoValidator : AbstractValidator<UpdateProductDto>
             .When(x => !string.IsNullOrWhiteSpace(x.ImageUrl));
 
         RuleFor(x => x.Unit)
-            .MinimumLength(1).WithMessage("La unidad debe tener al menos 1 carácter")
-            .MaximumLength(20).WithMessage("La unidad no puede exceder 20 caracteres")
+            .Must(u => string.IsNullOrWhiteSpace(u) || u.Trim().ToLowerInvariant() == "un" || u.Trim().ToLowerInvariant() == "kg" || u.Trim().ToLowerInvariant() == "granel")
+            .WithMessage("La unidad debe ser 'un' o 'kg'")
             .When(x => !string.IsNullOrWhiteSpace(x.Unit));
 
         RuleFor(x => x.MinStock)

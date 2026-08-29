@@ -17,8 +17,9 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .IsRequired();
 
         builder.Property(p => p.Stock)
+            .HasColumnType("decimal(18,3)")
             .IsRequired()
-            .HasDefaultValue(0);
+            .HasDefaultValue(0m);
 
         builder.HasMany<StockAdjustmentAudit>()
             .WithOne(a => a.Product)
@@ -43,9 +44,11 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .HasMaxLength(500);
 
         builder.Property(p => p.Unit)
-            .HasMaxLength(20);
+            .HasMaxLength(20)
+            .HasComment("Modo de venta canónico: un (por unidad) o kg (a granel por peso)");
 
-        builder.Property(p => p.MinStock);
+        builder.Property(p => p.MinStock)
+            .HasColumnType("decimal(18,3)");
 
         builder.HasMany(p => p.Categories)
             .WithMany(c => c.Products)

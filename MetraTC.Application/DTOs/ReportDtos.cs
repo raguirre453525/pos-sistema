@@ -18,8 +18,8 @@ public static class ReportDtos
         public string Sku { get; init; } = string.Empty;
         public string Name { get; init; } = string.Empty;
         public decimal Price { get; init; }
-        public int Stock { get; init; }
-        public int Threshold { get; init; }
+        public decimal Stock { get; init; }
+        public decimal Threshold { get; init; }
     }
 
     public record StockAuditDto
@@ -28,8 +28,8 @@ public static class ReportDtos
         public Guid ProductId { get; init; }
         public string Sku { get; init; } = string.Empty;
         public string ProductName { get; init; } = string.Empty;
-        public int Delta { get; init; }
-        public int ResultingStock { get; init; }
+        public decimal Delta { get; init; }
+        public decimal ResultingStock { get; init; }
         public string Reason { get; init; } = string.Empty;
         public DateTime AdjustedAt { get; init; }
     }
@@ -39,7 +39,7 @@ public record DashboardSummaryDto
 {
     public int SalesCount { get; init; }
     public decimal TotalRevenue { get; init; }
-    public int ProductsSoldQuantity { get; init; }
+    public decimal ProductsSoldQuantity { get; init; }
     public decimal TicketAverage { get; init; }
     public int LowStockCount { get; init; }
     public List<DailySaleDto> DailySales { get; init; } = new();
@@ -59,7 +59,7 @@ public record CategorySaleDto
 {
     public string Category { get; init; } = string.Empty;
     public decimal Total { get; init; }
-    public int Quantity { get; init; }
+    public decimal Quantity { get; init; }
 }
 
 public record TopProductDto
@@ -67,6 +67,6 @@ public record TopProductDto
     public Guid ProductId { get; init; }
     public string Sku { get; init; } = string.Empty;
     public string Name { get; init; } = string.Empty;
-    public int Quantity { get; init; }
+    public decimal Quantity { get; init; }
     public decimal Revenue { get; init; }
 }

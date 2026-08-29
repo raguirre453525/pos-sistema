@@ -13,21 +13,22 @@ namespace MetraTC.Application.DTOs
             string Name,
             string? Description,
             decimal Price,
-            int Stock,
+            decimal Stock,
             string? ImageUrl,
             string? Unit,
-            int? MinStock
+            decimal? MinStock,
+            bool IsSoldByWeight
         );
 
         public record StockAdjustmentDto(
-            int Delta,
+            decimal Delta,
             string Reason
         );
 
         public record StockAdjustmentResponseDto(
             ProductDto Product,
-            int Delta,
-            int ResultingStock,
+            decimal Delta,
+            decimal ResultingStock,
             string Reason,
             DateTime AdjustedAt
         );
@@ -40,7 +41,7 @@ namespace MetraTC.Application.DTOs
             string? Description,
             string? ImageUrl,
             string? Unit,
-            int? MinStock
+            decimal? MinStock
         );
 
         public record UpdateProductDto(
@@ -49,7 +50,7 @@ namespace MetraTC.Application.DTOs
             string? Description,
             string? ImageUrl,
             string? Unit,
-            int? MinStock
+            decimal? MinStock
         );
 
         public record ProductPriceHistoryDto(

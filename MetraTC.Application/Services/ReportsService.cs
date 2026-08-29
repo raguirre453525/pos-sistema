@@ -272,7 +272,7 @@ public class ReportsService : IReportsService
         }
 
         // SalesByCategory
-        var categoryAgg = new Dictionary<string, (decimal Total, int Quantity)>(StringComparer.OrdinalIgnoreCase);
+        var categoryAgg = new Dictionary<string, (decimal Total, decimal Quantity)>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in sales.SelectMany(s => s.Items))
         {
             var catNames = item.Product?.Categories?.Select(c => c.Name).Where(n => !string.IsNullOrWhiteSpace(n)).ToList();

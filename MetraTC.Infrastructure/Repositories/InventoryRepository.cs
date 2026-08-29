@@ -16,7 +16,7 @@ public class InventoryRepository : IInventoryRepository
 
     public async Task<(Product Product, StockAdjustmentAudit Audit)> AdjustStockAsync(
         Guid productId,
-        int delta,
+        decimal delta,
         string reason)
     {
         await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);

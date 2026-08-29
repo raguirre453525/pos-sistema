@@ -5,8 +5,8 @@ namespace MetraTC.Domain.Entities;
 public class StockAdjustmentAudit : BaseEntity
 {
     public Guid ProductId { get; private set; }
-    public int Delta { get; private set; }
-    public int ResultingStock { get; private set; }
+    public decimal Delta { get; private set; }
+    public decimal ResultingStock { get; private set; }
     public string Reason { get; private set; }
     public DateTime AdjustedAt { get; private set; }
 
@@ -17,7 +17,7 @@ public class StockAdjustmentAudit : BaseEntity
         Reason = string.Empty;
     }
 
-    public StockAdjustmentAudit(Product product, int delta, int resultingStock, string reason)
+    public StockAdjustmentAudit(Product product, decimal delta, decimal resultingStock, string reason)
     {
         if (product is null)
             throw new ArgumentNullException(nameof(product));

@@ -11,9 +11,11 @@ export interface InventoryItemProps {
   price: number;
   disabled?: boolean;
   onAdd?: () => void;
+  unit?: string | null;
+  isSoldByWeight?: boolean;
 }
 
-const ProdCard = ({ name, image, category, stock, price, disabled, onAdd }: InventoryItemProps) => {
+const ProdCard = ({ name, image, category, stock, price, disabled, onAdd, unit, isSoldByWeight }: InventoryItemProps) => {
   const [imgError, setImgError] = useState(false);
   const initials = name
     .split(" ")
@@ -21,7 +23,10 @@ const ProdCard = ({ name, image, category, stock, price, disabled, onAdd }: Inve
     .slice(0, 2)
     .map((w) => w[0]?.toUpperCase())
     .join("") || "PR";
-  const isOut = stock === 0 || !!disabled;
+  const isWeight = isSoldByWeight === true || (unit ?? "").toLowerCase() === "kg";
+  const unitLabel = isWeight ? "kg" : "un.";
+  const stockDisplay = Number(stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+  const isOut = stock <= 0 || !!disabled;
   const isLow = stock > 0 && stock <= 5;
 
   return (
@@ -65,12 +70,12 @@ const ProdCard = ({ name, image, category, stock, price, disabled, onAdd }: Inve
             </Badge>
           ) : isLow ? (
             <Badge variant="outline" className="text-[11px] border-red-300 text-red-600">
-              ¡Poco stock: {stock}
+              ¡Poco stock: {stockDisplay} {unitLabel}
             </Badge>
           ) : null}
         </div>
-        {!isOut && !isLow && <div className="text-xs text-muted-foreground mb-3">Stock: {stock}</div>}
-        {isLow && <div className="text-xs text-muted-foreground mb-3">Stock: {stock}</div>}
+        {!isOut && !isLow && <div className="text-xs text-muted-foreground mb-3">Stock: {stockDisplay} {unitLabel}</div>}
+        {isLow && <div className="text-xs text-muted-foreground mb-3">Stock: {stockDisplay} {unitLabel}</div>}
         <button
           type="button"
           disabled={isOut}

@@ -14,14 +14,14 @@ public static class AssistantDtos
         string Name,
         string? Sku,
         decimal? Price,
-        int? StockDelta,
+        decimal? StockDelta,
         string? Barcode,
         string? Description,
         List<string>? CategoryNames,
         bool Exists,
         Guid? ExistingId,
         decimal? CurrentPrice,
-        int? CurrentStock,
+        decimal? CurrentStock,
         List<string> MissingFields,
         string Action // "create" | "restock" | "restock+price_update"
     );

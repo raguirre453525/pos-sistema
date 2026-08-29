@@ -17,7 +17,7 @@ public static class SaleDtos
 
     public record CreateSaleItemDto(
         Guid ProductId,
-        int Quantity
+        decimal Quantity
     );
 
     public record SalePromotionDto(
@@ -52,7 +52,7 @@ public static class SaleDtos
         public Guid ProductId { get; init; }
         public string Sku { get; init; } = string.Empty;
         public string Name { get; init; } = string.Empty;
-        public int Quantity { get; init; }
+        public decimal Quantity { get; init; }
         public decimal UnitPrice { get; init; }
         public decimal Subtotal { get; init; }
         public Guid? PromotionId { get; init; }

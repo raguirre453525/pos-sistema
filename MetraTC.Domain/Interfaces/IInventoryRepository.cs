@@ -6,6 +6,6 @@ public interface IInventoryRepository
 {
     Task<(Product Product, StockAdjustmentAudit Audit)> AdjustStockAsync(
         Guid productId,
-        int delta,
+        decimal delta,
         string reason);
 }

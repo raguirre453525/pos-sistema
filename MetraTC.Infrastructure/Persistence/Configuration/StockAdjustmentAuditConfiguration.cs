@@ -13,6 +13,12 @@ public class StockAdjustmentAuditConfiguration : IEntityTypeConfiguration<StockA
         builder.Property(a => a.Reason)
             .HasMaxLength(250)
             .IsRequired();
+        builder.Property(a => a.Delta)
+            .HasColumnType("decimal(18,3)")
+            .IsRequired();
+        builder.Property(a => a.ResultingStock)
+            .HasColumnType("decimal(18,3)")
+            .IsRequired();
         builder.Property(a => a.AdjustedAt)
             .IsRequired();
         builder.HasIndex(a => new { a.ProductId, a.AdjustedAt });

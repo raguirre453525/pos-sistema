@@ -134,28 +134,49 @@ export default function VentasPage() {
     return m;
   }, [activePromos]);
 
+  const isWeightProduct = (p: ProductDto) =>
+    p.isSoldByWeight === true || (p.unit ?? "").toLowerCase() === "kg" || (p.unit ?? "").toLowerCase() === "granel";
+
+  const formatStock = (p: ProductDto) => {
+    const unitLabel = isWeightProduct(p) ? "kg" : "un.";
+    const stockStr = Number(p.stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+    return `Stock: ${stockStr} ${unitLabel}`;
+  };
+
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
   const addToCart = (product: ProductDto) => {
     setSaleMsg(null);
     setSaleError(null);
     const disc = discountMap.get(product.id) ?? 0;
     const unitPrice = disc > 0 ? product.price * (1 - disc / 100) : product.price;
+    const isWeight = isWeightProduct(product);
+    const initialQty = isWeight ? 0.5 : 1;
+    const step = isWeight ? 0.1 : 1;
     setCart((prev) => {
       const idx = prev.findIndex((c) => c.product.id === product.id);
       if (idx >= 0) {
         const cur = prev[idx];
-        if (cur.quantity + 1 > product.stock) {
+        const nextQty = round3(cur.quantity + step);
+        if (nextQty > product.stock + 1e-9) {
           setSaleError(`Stock insuficiente para ${product.name}. Disponible: ${product.stock}`);
           return prev;
         }
+        if (!isWeight && !Number.isInteger(nextQty)) {
+          setSaleError(`El producto ${product.name} se vende por unidad: cantidad entera`);
+          return prev;
+        }
         const next = [...prev];
-        next[idx] = { ...cur, quantity: cur.quantity + 1 };
+        next[idx] = { ...cur, quantity: nextQty };
         return next;
       }
-      if (product.stock < 1) {
+      if (product.stock < initialQty - 1e-9) {
         setSaleError(`Sin stock: ${product.name}`);
         return prev;
       }
-      return [...prev, { product, quantity: 1, unitPrice, originalPrice: product.price }];
+      // Si es por unidad pero initialQty no entero (no ocurre), asegura entero
+      const qty = isWeight ? round3(initialQty) : Math.trunc(initialQty);
+      return [...prev, { product, quantity: qty, unitPrice, originalPrice: product.price }];
     });
   };
 
@@ -163,11 +184,14 @@ export default function VentasPage() {
     setCart((prev) =>
       prev.map((c) => {
         if (c.product.id !== id) return c;
-        if (c.quantity + 1 > c.product.stock) {
+        const isWeight = isWeightProduct(c.product);
+        const step = isWeight ? 0.1 : 1;
+        const nextQty = round3(c.quantity + step);
+        if (nextQty > c.product.stock + 1e-9) {
           setSaleError(`Stock insuficiente para ${c.product.name}. Disponible: ${c.product.stock}`);
           return c;
         }
-        return { ...c, quantity: c.quantity + 1 };
+        return { ...c, quantity: nextQty };
       })
     );
   };
@@ -175,9 +199,38 @@ export default function VentasPage() {
     setCart((prev) => {
       const item = prev.find((c) => c.product.id === id);
       if (!item) return prev;
-      if (item.quantity <= 1) return prev.filter((c) => c.product.id !== id);
-      return prev.map((c) => (c.product.id === id ? { ...c, quantity: c.quantity - 1 } : c));
+      const isWeight = isWeightProduct(item.product);
+      const step = isWeight ? 0.1 : 1;
+      const nextQty = round3(item.quantity - step);
+      if (nextQty <= 0) return prev.filter((c) => c.product.id !== id);
+      // evita 0.0x flotante
+      return prev.map((c) => (c.product.id === id ? { ...c, quantity: nextQty <= 0 ? 0 : nextQty } : c));
     });
+  };
+  const setQty = (id: string, raw: string) => {
+    const parsed = parseFloat(raw.replace(",", "."));
+    if (isNaN(parsed) || parsed <= 0) {
+      // si vacía o inválida, no actualizar; deja que usuario corrija
+      return;
+    }
+    setCart((prev) =>
+      prev.map((c) => {
+        if (c.product.id !== id) return c;
+        const isWeight = isWeightProduct(c.product);
+        let v = round3(parsed);
+        if (!isWeight) v = Math.round(v);
+        if (v > c.product.stock + 1e-9) {
+          setSaleError(`Stock insuficiente para ${c.product.name}. Disponible: ${c.product.stock}`);
+          // clamp a stock
+          v = c.product.stock;
+          if (!isWeight) v = Math.trunc(v);
+        }
+        if (!isWeight && !Number.isInteger(v)) v = Math.round(v);
+        // valida 3 decimales
+        if (isWeight && round3(v) !== v) v = round3(v);
+        return { ...c, quantity: v };
+      })
+    );
   };
   const remove = (id: string) => setCart((prev) => prev.filter((c) => c.product.id !== id));
 
@@ -471,7 +524,9 @@ export default function VentasPage() {
                         category={p.description ?? "—"}
                         stock={p.stock}
                         price={hasDisc ? discPrice : p.price}
-                        disabled={p.stock === 0}
+                        disabled={p.stock <= 0}
+                        unit={p.unit}
+                        isSoldByWeight={p.isSoldByWeight}
                         onAdd={() => addToCart(p)}
                       />
                       {hasDisc && <div className="text-xs text-center mt-1"><span className="line-through text-muted-foreground">${p.price.toLocaleString("es-AR")}</span><span className="text-red-600 font-semibold ml-1">Ahora ${discPrice.toLocaleString("es-AR")}</span></div>}
@@ -546,8 +601,11 @@ export default function VentasPage() {
                       image="/img-prod.webp"
                       quantity={c.quantity}
                       stock={c.product.stock}
+                      unit={c.product.unit}
+                      isSoldByWeight={c.product.isSoldByWeight}
                       onInc={() => inc(c.product.id)}
                       onDec={() => dec(c.product.id)}
+                      onQtyChange={(v) => setQty(c.product.id, v)}
                       onRemove={() => remove(c.product.id)}
                     />
                     {c.unitPrice < c.originalPrice && (

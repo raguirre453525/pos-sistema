@@ -13,6 +13,7 @@ public class SaleItemConfiguration : IEntityTypeConfiguration<SaleItem>
         builder.HasKey(si => si.Id);
 
         builder.Property(si => si.Quantity)
+            .HasColumnType("decimal(18,3)")
             .IsRequired();
 
         builder.Property(si => si.UnitPrice)

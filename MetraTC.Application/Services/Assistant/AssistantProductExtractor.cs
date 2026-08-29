@@ -11,7 +11,7 @@ public record RawProductExtract(
     string? Name,
     string? Sku,
     decimal? Price,
-    int? StockDelta,
+    decimal? StockDelta,
     string? Barcode,
     string? Description,
     List<string>? CategoryNames

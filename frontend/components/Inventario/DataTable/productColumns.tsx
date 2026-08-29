@@ -104,7 +104,12 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
         const stock = row.getValue("stock") as number;
         const p = row.original as any;
         const minStock = (p.minStock ?? null) as number | null;
-        const isOut = stock === 0;
+        const unit = (p.unit ?? null) as string | null;
+        const isSoldByWeight = (p.isSoldByWeight ?? false) as boolean;
+        const isWeight = isSoldByWeight === true || (unit ?? "").toLowerCase() === "kg";
+        const unitLabel = isWeight ? "kg" : "un.";
+        const stockStr = Number(stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+        const isOut = stock <= 0;
         const isLow = stock > 0 && (minStock != null ? stock <= minStock : stock <= 5);
         return (
           <span className="inline-flex items-center gap-1.5">
@@ -117,7 +122,7 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
                     : "bg-transparent border-transparent"
               }`}
             >
-              {stock.toLocaleString()}
+              {stockStr} {unitLabel}
             </span>
             {isLow && (
               <span className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
