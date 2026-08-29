@@ -14,6 +14,7 @@ public class ProductProfile : Profile
     {
         CreateMap<Product, ProductDto>();
 
-        CreateMap<CreateProductDto, Product>();
+        CreateMap<CreateProductDto, Product>()
+            .ConstructUsing(dto => new Product(dto.Sku, dto.Name, dto.Price, dto.Barcode, dto.Description, dto.ImageUrl, dto.Unit, dto.MinStock));
     }
 }

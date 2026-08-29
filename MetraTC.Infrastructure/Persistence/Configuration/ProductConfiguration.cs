@@ -39,6 +39,14 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
         builder.Property(p => p.Description)
             .HasMaxLength(200);
 
+        builder.Property(p => p.ImageUrl)
+            .HasMaxLength(500);
+
+        builder.Property(p => p.Unit)
+            .HasMaxLength(20);
+
+        builder.Property(p => p.MinStock);
+
         builder.HasMany(p => p.Categories)
             .WithMany(c => c.Products)
             .UsingEntity(j => j.ToTable("ProductCategories"));

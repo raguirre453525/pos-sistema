@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import CategoryFormModal from "@/components/Categorias/CategoryFormModal";
-import { createProduct, adjustStock, getCategories, assignCategory, CategoryDto, ApiError } from "@/lib/api";
+import { createProduct, adjustStock, getCategories, assignCategory, uploadProductImage, CategoryDto, ApiError, API_URL } from "@/lib/api";
 
 export function NewProductForm() {
   const router = useRouter();
@@ -17,6 +17,12 @@ export function NewProductForm() {
   const [stock, setStock] = useState("0");
   const [barcode, setBarcode] = useState("");
   const [description, setDescription] = useState("");
+  const [unit, setUnit] = useState("");
+  const [unitCustom, setUnitCustom] = useState("");
+  const [minStock, setMinStock] = useState("");
+  const [imageUrl, setImageUrl] = useState("");
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -48,6 +54,16 @@ export function NewProductForm() {
     setSelectedCategoryId(cat.id);
   };
 
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0] ?? null;
+    setSelectedFile(f);
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    if (f) setPreviewUrl(URL.createObjectURL(f));
+    else setPreviewUrl(null);
+  };
+
+  const resolvedUnit = unit === "Otro" ? unitCustom.trim() : unit.trim();
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -73,16 +89,42 @@ export function NewProductForm() {
       setError("Stock debe ser >= 0");
       return;
     }
+    if (resolvedUnit && (resolvedUnit.length < 1 || resolvedUnit.length > 20)) {
+      setError("Unidad debe tener entre 1 y 20 caracteres");
+      return;
+    }
+    let minStockNum: number | null = null;
+    if (minStock.trim() !== "") {
+      minStockNum = parseInt(minStock, 10);
+      if (isNaN(minStockNum) || minStockNum < 0 || minStockNum > 99999) {
+        setError("Stock mínimo debe estar entre 0 y 99999");
+        return;
+      }
+    }
 
     setLoading(true);
     try {
+      if (selectedFile && imageUrl.trim()) {
+        // prioritize file, but keep warning via error? we just proceed, file wins
+      }
       const product = await createProduct({
         sku: sku.trim(),
         name: name.trim(),
         price: priceNum,
         barcode: barcode.trim() || null,
         description: description.trim() || null,
+        imageUrl: selectedFile ? null : (imageUrl.trim() || null),
+        unit: resolvedUnit || null,
+        minStock: minStockNum,
       });
+      if (selectedFile) {
+        try {
+          await uploadProductImage(product.id, selectedFile);
+        } catch (uploadErr) {
+          const msg = uploadErr instanceof ApiError ? uploadErr.message : uploadErr instanceof Error ? uploadErr.message : "Error al subir imagen";
+          setError(`Producto creado, pero falló subir imagen: ${msg}`);
+        }
+      }
       if (stockNum > 0) {
         await adjustStock(product.id, { delta: stockNum, reason: "Stock inicial" });
       }
@@ -127,6 +169,55 @@ export function NewProductForm() {
           <Field>
             <FieldLabel htmlFor="barcode">Barcode (opcional)</FieldLabel>
             <Input id="barcode" placeholder="779..." value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel>Unidad</FieldLabel>
+            <div className="flex gap-2">
+              <Select value={unit || "__none"} onValueChange={(v) => setUnit(v === "__none" ? "" : v)}>
+                <SelectTrigger className="flex-1">
+                  <SelectValue placeholder="Unidad" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none">Sin unidad</SelectItem>
+                  <SelectItem value="un">Unidad</SelectItem>
+                  <SelectItem value="kg">Kg</SelectItem>
+                  <SelectItem value="lt">Litro</SelectItem>
+                  <SelectItem value="pack">Pack</SelectItem>
+                  <SelectItem value="caja">Caja</SelectItem>
+                  <SelectItem value="Otro">Otro</SelectItem>
+                </SelectContent>
+              </Select>
+              {unit === "Otro" && (
+                <Input placeholder="Ej: metro" value={unitCustom} onChange={(e) => setUnitCustom(e.target.value)} className="flex-1" maxLength={20} />
+              )}
+            </div>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="minStock">Stock mínimo</FieldLabel>
+            <Input id="minStock" type="number" min="0" max="99999" placeholder="Ej: 5 — vacío = 5 por defecto" value={minStock} onChange={(e) => setMinStock(e.target.value)} />
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="imageUrl">URL de imagen</FieldLabel>
+            <div className="flex gap-2 items-center">
+              <Input id="imageUrl" type="url" placeholder="https://..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="flex-1" />
+              {imageUrl.trim() && !selectedFile && (
+                <img src={imageUrl.trim()} alt="preview url" className="h-10 w-10 object-cover rounded border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+              )}
+            </div>
+          </Field>
+          <Field>
+            <FieldLabel htmlFor="picture">o Subir archivo</FieldLabel>
+            <Input id="picture" type="file" accept="image/*" onChange={handleFileChange} />
+            {selectedFile && previewUrl && (
+              <div className="flex items-center gap-2 mt-2">
+                <img src={previewUrl} alt="preview file" className="h-16 w-16 object-cover rounded border" />
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedFile(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); (document.getElementById("picture") as HTMLInputElement | null)?.value && ((document.getElementById("picture") as HTMLInputElement).value = ""); }}>
+                  Quitar
+                </Button>
+                <span className="text-xs text-muted-foreground truncate">{selectedFile.name}</span>
+              </div>
+            )}
+            {selectedFile && imageUrl.trim() && <p className="text-xs text-amber-600">Se priorizará el archivo sobre la URL.</p>}
           </Field>
           <Field>
             <FieldLabel htmlFor="description">Descripción (opcional)</FieldLabel>
@@ -184,6 +275,13 @@ export function NewProductForm() {
                 setStock("0");
                 setBarcode("");
                 setDescription("");
+                setUnit("");
+                setUnitCustom("");
+                setMinStock("");
+                setImageUrl("");
+                setSelectedFile(null);
+                if (previewUrl) URL.revokeObjectURL(previewUrl);
+                setPreviewUrl(null);
                 setSelectedCategoryId("");
                 setError(null);
               }}

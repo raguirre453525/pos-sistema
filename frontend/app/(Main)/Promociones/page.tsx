@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { getProducts, getPromotions, createPromotion, updatePromotion, deletePromotion, togglePromotion, type ProductDto, type PromotionDto, type PromotionLineDto } from "@/lib/api";
+import { getProducts, getPromotions, createPromotion, updatePromotion, deletePromotion, togglePromotion, uploadPromotionImage, API_URL, type ProductDto, type PromotionDto, type PromotionLineDto } from "@/lib/api";
 import { Tag, BadgePercent, PackageCheck, Trash2, Pencil, Search, X, Plus, Minus } from "lucide-react";
 
 type SelectedLine = { id: string; qty: number };
@@ -40,6 +40,9 @@ export default function PromocionesPage() {
   const [searchProd, setSearchProd] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [formErr, setFormErr] = useState<string | null>(null);
+  const [promoImageUrl, setPromoImageUrl] = useState("");
+  const [selectedPromoFile, setSelectedPromoFile] = useState<File | null>(null);
+  const [promoPreviewUrl, setPromoPreviewUrl] = useState<string | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -50,7 +53,7 @@ export default function PromocionesPage() {
   };
   useEffect(() => { load(); }, []);
 
-  const openCreate = () => { setEditing(null); setForm(emptyForm); setFormErr(null); setSearchProd(""); setOpen(true); };
+  const openCreate = () => { setEditing(null); setForm(emptyForm); setFormErr(null); setSearchProd(""); setPromoImageUrl(""); setSelectedPromoFile(null); if (promoPreviewUrl) URL.revokeObjectURL(promoPreviewUrl); setPromoPreviewUrl(null); setOpen(true); };
   const openEdit = (pr: PromotionDto) => {
     setEditing(pr);
     const lines: SelectedLine[] = pr.lines?.length ? pr.lines.map(l => ({ id: l.productId, qty: l.quantity })) : pr.products.map(x => ({ id: x.id, qty: 1 }));
@@ -65,7 +68,7 @@ export default function PromocionesPage() {
       discountPercentage: pr.discountPercentage != null ? String(pr.discountPercentage) : "",
       lines,
     });
-    setFormErr(null); setSearchProd(""); setOpen(true);
+    setFormErr(null); setSearchProd(""); setPromoImageUrl(pr.imageUrl ?? ""); setSelectedPromoFile(null); if (promoPreviewUrl) URL.revokeObjectURL(promoPreviewUrl); setPromoPreviewUrl(null); setOpen(true);
   };
 
   const selectedLines = useMemo(() => {
@@ -124,9 +127,23 @@ export default function PromocionesPage() {
         comboPrice: form.type === 0 ? parseFloat(form.comboPrice) : null,
         discountPercentage: form.type === 1 ? parseFloat(form.discountPercentage) : null,
         lines: plines,
+        imageUrl: selectedPromoFile ? null : (promoImageUrl.trim() || null),
       };
-      if (editing) await updatePromotion(editing.id, payload);
-      else await createPromotion(payload);
+      let promoId: string | null = null;
+      if (editing) {
+        await updatePromotion(editing.id, payload);
+        promoId = editing.id;
+      } else {
+        const created = await createPromotion(payload);
+        promoId = created.id;
+      }
+      if (selectedPromoFile && promoId) {
+        try {
+          await uploadPromotionImage(promoId, selectedPromoFile);
+        } catch (upErr) {
+          setFormErr(`Promo guardada, pero falló subir imagen: ${upErr instanceof Error ? upErr.message : String(upErr)}`);
+        }
+      }
       setOpen(false); await load();
     } catch (e: unknown) { setFormErr(e instanceof Error ? e.message : String(e)); } finally { setSubmitting(false); }
   };
@@ -343,6 +360,29 @@ export default function PromocionesPage() {
                 </div>
 
                 <div><Label>Nombre *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ej: Combo verano 3x2" maxLength={80} /><div className="text-xs text-muted-foreground text-right">{form.name.length}/80</div></div>
+                <div className="space-y-2">
+                  <Label>Imagen del combo/promo</Label>
+                  <div className="flex gap-2 items-center">
+                    <Input type="url" placeholder="https://..." value={promoImageUrl} onChange={e => setPromoImageUrl(e.target.value)} className="flex-1" />
+                    {promoImageUrl.trim() && !selectedPromoFile && (
+                      <img src={promoImageUrl.trim().startsWith("/") ? `${API_URL}${promoImageUrl.trim()}` : promoImageUrl.trim()} alt="preview url" className="h-10 w-10 object-cover rounded border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <Label className="text-xs">o Subir archivo</Label>
+                    <Input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; setSelectedPromoFile(f); if (promoPreviewUrl) URL.revokeObjectURL(promoPreviewUrl); if (f) setPromoPreviewUrl(URL.createObjectURL(f)); else setPromoPreviewUrl(null); }} />
+                    {selectedPromoFile && promoPreviewUrl && (
+                      <div className="flex items-center gap-2 mt-1">
+                        <img src={promoPreviewUrl} alt="preview file" className="h-12 w-12 object-cover rounded border" />
+                        <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedPromoFile(null); if (promoPreviewUrl) URL.revokeObjectURL(promoPreviewUrl); setPromoPreviewUrl(null); }}>
+                          Quitar
+                        </Button>
+                        <span className="text-xs text-muted-foreground truncate">{selectedPromoFile.name}</span>
+                      </div>
+                    )}
+                    {selectedPromoFile && promoImageUrl.trim() && <p className="text-xs text-amber-600">Se priorizará el archivo sobre la URL.</p>}
+                  </div>
+                </div>
                 <div><Label>Descripción</Label><textarea className="w-full rounded-md border p-2 text-sm min-h-[60px]" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} maxLength={500} placeholder="Opcional — ej: Gaseosa Seven Up x3 a precio de 2" /><div className="text-xs text-muted-foreground text-right">{form.description.length}/500</div></div>
 
                 {form.type===0 ? (

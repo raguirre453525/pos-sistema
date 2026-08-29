@@ -1,5 +1,8 @@
 ﻿using MetraTC.Application.Services;
+using MetraTC.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using System.Threading.Tasks;
 using static MetraTC.Application.DTOs.ProductDtos;
 
@@ -12,12 +15,16 @@ public class ProductsController : ControllerBase
     private readonly IProductService _productService;
     private readonly ICategoryService _categoryService;
     private readonly IProductPriceHistoryService _priceHistoryService;
+    private readonly IWebHostEnvironment _env;
+    private readonly ApplicationDbContext _context;
 
-    public ProductsController(IProductService productService, ICategoryService categoryService, IProductPriceHistoryService priceHistoryService)
+    public ProductsController(IProductService productService, ICategoryService categoryService, IProductPriceHistoryService priceHistoryService, IWebHostEnvironment env, ApplicationDbContext context)
     {
         _productService = productService;
         _categoryService = categoryService;
         _priceHistoryService = priceHistoryService;
+        _env = env;
+        _context = context;
     }
 
     [HttpPost]
@@ -94,5 +101,60 @@ public class ProductsController : ControllerBase
     {
         var result = await _productService.BulkAdjustPricesAsync(dto);
         return Ok(result);
+    }
+
+    [HttpPost("{id}/image")]
+    public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Archivo requerido");
+        if (file.Length > 5 * 1024 * 1024) return BadRequest("Máximo 5MB");
+        if (file.ContentType == null || !file.ContentType.StartsWith("image/")) return BadRequest("Solo imágenes");
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+        if (!allowed.Contains(ext)) return BadRequest("Extensión no permitida (jpg, jpeg, png, webp)");
+
+        var product = await _context.Products.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id);
+        if (product == null) return NotFound($"No se encontró producto con ID: {id}");
+
+        var webRoot = _env.WebRootPath;
+        if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
+            webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var dir = Path.Combine(webRoot, "images", "products");
+        Directory.CreateDirectory(dir);
+        var fileName = $"{id}{ext}";
+        var fullPath = Path.Combine(dir, fileName);
+        using (var stream = new FileStream(fullPath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+        var url = $"/images/products/{fileName}";
+        product.SetImageUrl(url);
+        await _context.SaveChangesAsync();
+        return Ok(new { imageUrl = url });
+    }
+
+    [HttpPost("image-upload")]
+    public async Task<IActionResult> UploadImageTemp(IFormFile file)
+    {
+        if (file == null || file.Length == 0) return BadRequest("Archivo requerido");
+        if (file.Length > 5 * 1024 * 1024) return BadRequest("Máximo 5MB");
+        if (file.ContentType == null || !file.ContentType.StartsWith("image/")) return BadRequest("Solo imágenes");
+        var ext = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = new[] { ".jpg", ".jpeg", ".png", ".webp" };
+        if (!allowed.Contains(ext)) return BadRequest("Extensión no permitida");
+        var webRoot = _env.WebRootPath;
+        if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
+            webRoot = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+        var dir = Path.Combine(webRoot, "images", "products");
+        Directory.CreateDirectory(dir);
+        var tempId = Guid.NewGuid();
+        var fileName = $"{tempId}{ext}";
+        var fullPath = Path.Combine(dir, fileName);
+        using (var stream = new FileStream(fullPath, FileMode.Create))
+        {
+            await file.CopyToAsync(stream);
+        }
+        var url = $"/images/products/{fileName}";
+        return Ok(new { imageUrl = url });
     }
 }

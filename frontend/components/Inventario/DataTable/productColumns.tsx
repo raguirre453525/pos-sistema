@@ -55,15 +55,17 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
       ),
       cell: ({ row }) => {
         const p = row.original;
+        const imgSrc = (p as any).imageUrl as string | null | undefined;
+        const resolved = imgSrc ? (imgSrc.startsWith("/") ? `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:5240"}${imgSrc}` : imgSrc) : "/img-prod.webp";
+        const isExternal = resolved.startsWith("http");
         return (
           <div className="flex item-center gap-3 truncate max-w-[240px]">
-            <Image
-              src="/img-prod.webp"
-              alt={p.name}
-              width={40}
-              height={40}
-              className="rounded-md object-cover"
-            />
+            {isExternal ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={resolved} alt={p.name} width={40} height={40} className="rounded-md object-cover h-10 w-10" onError={(e) => ((e.target as HTMLImageElement).src = "/img-prod.webp")} />
+            ) : (
+              <Image src={resolved} alt={p.name} width={40} height={40} className="rounded-md object-cover" />
+            )}
             <span className="font-medium mt-2 truncate">{p.name}</span>
           </div>
         );
@@ -100,8 +102,10 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
       ),
       cell: ({ row }) => {
         const stock = row.getValue("stock") as number;
+        const p = row.original as any;
+        const minStock = (p.minStock ?? null) as number | null;
         const isOut = stock === 0;
-        const isLow = stock > 0 && stock <= 5;
+        const isLow = stock > 0 && (minStock != null ? stock <= minStock : stock <= 5);
         return (
           <span className="inline-flex items-center gap-1.5">
             <span
@@ -117,7 +121,7 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
             </span>
             {isLow && (
               <span className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
-                ¡Stock bajo!
+                ¡Poco stock!
               </span>
             )}
             {isOut && (

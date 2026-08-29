@@ -13,6 +13,7 @@ public class CreatePromotionDtoValidator : AbstractValidator<CreatePromotionDto>
         RuleFor(x => x.ComboPrice).GreaterThan(0).When(x => x.Type == PromotionType.Combo).WithMessage("ComboPrice debe ser > 0");
         RuleFor(x => x.DiscountPercentage).InclusiveBetween(1, 90).When(x => x.Type == PromotionType.Percentage);
         RuleFor(x => x.ValidTo).GreaterThanOrEqualTo(x => x.ValidFrom).When(x => x.ValidFrom.HasValue && x.ValidTo.HasValue);
+        RuleFor(x => x.ImageUrl).MaximumLength(500).When(x => !string.IsNullOrWhiteSpace(x.ImageUrl));
         RuleFor(x => x).Custom((dto, ctx) =>
         {
             var hasLines = dto.Lines != null && dto.Lines.Count > 0;
@@ -42,6 +43,7 @@ public class UpdatePromotionDtoValidator : AbstractValidator<UpdatePromotionDto>
         RuleFor(x => x.ComboPrice).GreaterThan(0).When(x => x.Type == PromotionType.Combo);
         RuleFor(x => x.DiscountPercentage).InclusiveBetween(1, 90).When(x => x.Type == PromotionType.Percentage);
         RuleFor(x => x.ValidTo).GreaterThanOrEqualTo(x => x.ValidFrom).When(x => x.ValidFrom.HasValue && x.ValidTo.HasValue);
+        RuleFor(x => x.ImageUrl).MaximumLength(500).When(x => !string.IsNullOrWhiteSpace(x.ImageUrl));
         RuleFor(x => x).Custom((dto, ctx) =>
         {
             var hasLines = dto.Lines != null && dto.Lines.Count > 0;

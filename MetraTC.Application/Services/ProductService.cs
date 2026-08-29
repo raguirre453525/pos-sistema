@@ -51,6 +51,21 @@ public class ProductService : IProductService
         var oldPrice = product.Price;
 
         product.Update(updateProductDto.Name, updateProductDto.Price, updateProductDto.Description);
+        // Only change ImageUrl/Unit/MinStock if explicitly provided with non-empty value; preserve existing if null/whitespace (spec: no sobrescribir con default si viene vacía al editar)
+        if (updateProductDto.ImageUrl != null)
+        {
+            if (!string.IsNullOrWhiteSpace(updateProductDto.ImageUrl))
+                product.SetImageUrl(updateProductDto.ImageUrl);
+            // else preserve existing — do nothing
+        }
+        if (updateProductDto.Unit != null)
+        {
+            if (!string.IsNullOrWhiteSpace(updateProductDto.Unit))
+                product.SetUnit(updateProductDto.Unit);
+            // else preserve
+        }
+        if (updateProductDto.MinStock.HasValue)
+            product.SetMinStock(updateProductDto.MinStock);
 
         if (oldPrice != updateProductDto.Price)
         {

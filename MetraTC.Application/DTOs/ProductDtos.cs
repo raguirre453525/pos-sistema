@@ -13,7 +13,10 @@ namespace MetraTC.Application.DTOs
             string Name,
             string? Description,
             decimal Price,
-            int Stock
+            int Stock,
+            string? ImageUrl,
+            string? Unit,
+            int? MinStock
         );
 
         public record StockAdjustmentDto(
@@ -34,13 +37,19 @@ namespace MetraTC.Application.DTOs
             string Name,
             decimal Price,
             string? Barcode,
-            string? Description
+            string? Description,
+            string? ImageUrl,
+            string? Unit,
+            int? MinStock
         );
 
         public record UpdateProductDto(
             string Name,
             decimal Price,
-            string? Description
+            string? Description,
+            string? ImageUrl,
+            string? Unit,
+            int? MinStock
         );
 
         public record ProductPriceHistoryDto(

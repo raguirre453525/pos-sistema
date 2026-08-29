@@ -13,6 +13,7 @@ public class Promotion : BaseEntity
     public DateTime? ValidTo { get; private set; }
     public decimal? ComboPrice { get; private set; }
     public decimal? DiscountPercentage { get; private set; }
+    public string? ImageUrl { get; private set; }
     // Join explícita con cantidad (soporta 3x2 mismo producto con Quantity>1)
     public ICollection<PromotionProduct> Lines { get; private set; } = new List<PromotionProduct>();
     // Compat: Products derivado de Lines (no mapeado por EF) - para código legacy
@@ -182,6 +183,19 @@ public class Promotion : BaseEntity
         var mapped = productLines.Select(pl => (pl.product.Id, pl.quantity));
         Update(name, description, type, isActive, validFrom, validTo, comboPrice, discountPercentage, mapped);
         // Reemplazar con entidades con navegación si hace falta: limpiar y recrear con ctor que no necesita navegación
+    }
+
+    public void SetImageUrl(string? url)
+    {
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            ImageUrl = null;
+            return;
+        }
+        var trimmed = url.Trim();
+        if (trimmed.Length > 500)
+            throw new ArgumentException("La URL de imagen no puede exceder 500 caracteres", nameof(url));
+        ImageUrl = trimmed;
     }
 
     public void SetActive(bool v)

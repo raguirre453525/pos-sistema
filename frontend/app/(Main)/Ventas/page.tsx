@@ -15,6 +15,7 @@ import {
   getCustomers,
   createCustomer,
   getActivePromotions,
+  API_URL,
   ProductDto,
   CategoryDto,
   CustomerDto,
@@ -433,6 +434,9 @@ export default function VentasPage() {
                   const linesDesc = pr.lines?.map(l => `${l.productName} x${l.quantity}`).join(", ") ?? pr.products.map(x=>x.name).join(", ");
                   return (
                     <div key={pr.id} className="min-w-[260px] bg-card border border-amber-200 rounded-xl p-3 shrink-0">
+                      {pr.imageUrl ? (
+                        <img src={pr.imageUrl.startsWith("/") ? `${API_URL}${pr.imageUrl}` : pr.imageUrl} alt={pr.name} className="w-full h-20 object-cover rounded-lg mb-2 border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                      ) : null}
                       <div className="font-semibold text-sm">{pr.name}</div>
                       <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{linesDesc}</div>
                       <div className="text-xs mt-2"><span className="line-through text-muted-foreground">${totalOrig.toLocaleString("es-AR")}</span><span className="mx-1">→</span><span className="font-bold text-amber-700">Combo ${Number(pr.comboPrice).toLocaleString("es-AR")}</span><span className="ml-2 bg-emerald-600 text-white px-1.5 py-0.5 rounded text-xs">Ahorrás {pct.toFixed(0)}%</span></div>

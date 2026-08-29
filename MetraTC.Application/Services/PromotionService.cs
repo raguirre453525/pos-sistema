@@ -21,6 +21,7 @@ public class PromotionService : IPromotionService
         var normalizedTo = NormalizeTo(dto.ValidTo);
         var lines = await ResolveLinesAsync(dto.Lines, dto.ProductIds);
         var promo = new Promotion(dto.Name, dto.Type, dto.Description, dto.IsActive, normalizedFrom, normalizedTo, dto.ComboPrice, dto.DiscountPercentage, lines.Select(l => (l.ProductId, l.Quantity)));
+        promo.SetImageUrl(dto.ImageUrl);
         // Adjuntar Products navegado para preview antes de Save
         foreach (var line in promo.Lines)
         {
@@ -48,6 +49,12 @@ public class PromotionService : IPromotionService
         var toRemove = promo.Lines.Where(l => !incomingIds.Contains(l.ProductId)).ToList();
         foreach (var r in toRemove) _context.PromotionProducts.Remove(r);
         promo.Update(dto.Name, dto.Description, dto.Type, dto.IsActive, normalizedFrom, normalizedTo, dto.ComboPrice, dto.DiscountPercentage, lines.Select(l => (l.ProductId, l.Quantity)));
+        if (dto.ImageUrl != null)
+        {
+            if (!string.IsNullOrWhiteSpace(dto.ImageUrl))
+                promo.SetImageUrl(dto.ImageUrl);
+            // else preserve existing
+        }
         // Actualizar Product navigation no necesario: EF los insertará como nuevas PromotionProduct
         await _context.SaveChangesAsync();
         promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstAsync(p => p.Id == id);
@@ -144,7 +151,7 @@ public class PromotionService : IPromotionService
             return new PromotionProductDto(l.ProductId, name, sku, price, l.Quantity, price * l.Quantity);
         }).ToList() ?? new List<PromotionProductDto>();
 
-        var productDtos = lines.Select(l => new ProductDto(l.ProductId, l.Sku, null, l.ProductName, null, l.UnitPrice, 0)).ToList();
+        var productDtos = lines.Select(l => new ProductDto(l.ProductId, l.Sku, null, l.ProductName, null, l.UnitPrice, 0, null, null, null)).ToList();
         // Para compat, Products son los productos distintos (sin multiplicar)
         var total = lines.Sum(x => x.LineTotal);
         decimal? savingAmount = null;
@@ -159,7 +166,7 @@ public class PromotionService : IPromotionService
             savingAmount = total * p.DiscountPercentage.Value / 100;
             savingPercent = p.DiscountPercentage.Value;
         }
-        return new PromotionDto(p.Id, p.Name, p.Description, p.Type, p.IsActive, p.ValidFrom, p.ValidTo, p.ComboPrice, p.DiscountPercentage, lines, productDtos, total, savingAmount, savingPercent, p.IsCurrentlyActive(DateTime.UtcNow));
+        return new PromotionDto(p.Id, p.Name, p.Description, p.Type, p.IsActive, p.ValidFrom, p.ValidTo, p.ComboPrice, p.DiscountPercentage, lines, productDtos, total, savingAmount, savingPercent, p.IsCurrentlyActive(DateTime.UtcNow), p.ImageUrl);
     }
 
     private static DateTime? NormalizeFrom(DateTime? d)

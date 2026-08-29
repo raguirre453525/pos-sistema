@@ -486,7 +486,10 @@ public class AssistantProposalService
                         Name: p.Name,
                         Price: p.Price!.Value,
                         Barcode: p.Barcode,
-                        Description: p.Description
+                        Description: p.Description,
+                        ImageUrl: null,
+                        Unit: null,
+                        MinStock: null
                     ));
                     // Adjust stock if delta >0
                     if (p.StockDelta.HasValue && p.StockDelta.Value > 0)
@@ -515,7 +518,7 @@ public class AssistantProposalService
                         var desc = p.Description ?? existingProd?.Description;
                         // Use raw name if provided otherwise existing name
                         var nameForUpdate = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : existingProd!.Name;
-                        await _productService.UpdateAsync(id, new UpdateProductDto(nameForUpdate, p.Price.Value, desc));
+                        await _productService.UpdateAsync(id, new UpdateProductDto(nameForUpdate, p.Price.Value, desc, null, null, null));
                         sb.AppendLine($"- ✅ Precio actualizado {p.Name}: {p.CurrentPrice} → {p.Price}");
                     }
                     if (p.StockDelta.HasValue && p.StockDelta.Value != 0)

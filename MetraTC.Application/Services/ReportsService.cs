@@ -26,19 +26,30 @@ public class ReportsService : IReportsService
 
         var products = await _context.Products
             .AsNoTracking()
-            .Where(p => p.IsActive && p.Stock <= threshold)
-            .OrderBy(p => p.Stock)
-            .ThenBy(p => p.Name)
+            .Where(p => p.IsActive)
             .ToListAsync();
 
-        return products.Select(p => new LowStockDto
+        var low = products.Where(p => p.IsLowStock() || p.Stock <= threshold)
+            .OrderBy(p => p.Stock)
+            .ThenBy(p => p.Name)
+            .ToList();
+
+        // If caller passes explicit threshold !=5, also include those <=threshold (legacy). Default 5 matches IsLowStock fallback.
+        // To avoid duplicate logic, we filter using IsLowStock when MinStock set, otherwise threshold.
+        // Simpler: filter where (p.MinStock.HasValue ? p.Stock <= p.MinStock.Value : p.Stock <= threshold)
+        low = products.Where(p => p.MinStock.HasValue ? p.Stock <= p.MinStock.Value : p.Stock <= threshold)
+            .OrderBy(p => p.Stock)
+            .ThenBy(p => p.Name)
+            .ToList();
+
+        return low.Select(p => new LowStockDto
         {
             Id = p.Id,
             Sku = p.Sku,
             Name = p.Name,
             Price = p.Price,
             Stock = p.Stock,
-            Threshold = threshold
+            Threshold = p.MinStock ?? threshold
         }).ToList();
     }
 
@@ -201,7 +212,8 @@ public class ReportsService : IReportsService
         var productsSoldQuantity = sales.SelectMany(s => s.Items).Sum(i => i.Quantity);
         var ticketAverage = salesCount > 0 ? totalRevenue / salesCount : 0;
 
-        var lowStockCount = await _context.Products.CountAsync(p => p.IsActive && p.Stock <= 5);
+        var allProducts = await _context.Products.AsNoTracking().Where(p => p.IsActive).ToListAsync();
+        var lowStockCount = allProducts.Count(p => p.IsLowStock());
 
         // DailySales: buckets por cada día del rango, o últimos 7 días si sin filtro
         DateTime startDate;

@@ -24,6 +24,8 @@ import {
   removeCategory,
   deleteCategory,
   bulkAdjustPrices,
+  uploadProductImage,
+  API_URL,
   ProductDto,
   ApiError,
   CategoryDto,
@@ -104,6 +106,12 @@ function InventarioPageContent() {
   const [quickName, setQuickName] = useState("");
   const [quickPrice, setQuickPrice] = useState("");
   const [quickDesc, setQuickDesc] = useState("");
+  const [quickUnit, setQuickUnit] = useState("");
+  const [quickUnitCustom, setQuickUnitCustom] = useState("");
+  const [quickMinStock, setQuickMinStock] = useState("");
+  const [quickImageUrl, setQuickImageUrl] = useState("");
+  const [quickSelectedFile, setQuickSelectedFile] = useState<File | null>(null);
+  const [quickPreviewUrl, setQuickPreviewUrl] = useState<string | null>(null);
   const [quickLoading, setQuickLoading] = useState(false);
   const [quickError, setQuickError] = useState<string | null>(null);
   const [quickSuccess, setQuickSuccess] = useState<string | null>(null);
@@ -375,6 +383,20 @@ function InventarioPageContent() {
     setQuickName(selectedProduct.name);
     setQuickPrice(String(selectedProduct.price));
     setQuickDesc(selectedProduct.description ?? "");
+    setQuickUnit(selectedProduct.unit ?? "");
+    // if unit is custom not in list, treat as Otro
+    const knownUnits = ["un", "kg", "lt", "pack", "caja"];
+    if (selectedProduct.unit && !knownUnits.includes(selectedProduct.unit) && selectedProduct.unit !== "") {
+      setQuickUnit("Otro");
+      setQuickUnitCustom(selectedProduct.unit);
+    } else {
+      setQuickUnitCustom("");
+    }
+    setQuickMinStock(selectedProduct.minStock != null ? String(selectedProduct.minStock) : "");
+    setQuickImageUrl(selectedProduct.imageUrl ?? "");
+    setQuickSelectedFile(null);
+    if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl);
+    setQuickPreviewUrl(null);
     setQuickError(null);
     setQuickSuccess(null);
     setAssignCatId("");
@@ -395,7 +417,10 @@ function InventarioPageContent() {
       result = result.filter((p) => (productCategories[p.id] ?? []).some((c) => c.id === selectedCategoryId));
     }
     if (stockFilter === "low") {
-      result = result.filter((p) => p.stock <= 5 && p.stock > 0);
+      result = result.filter((p) => {
+        const isLow = p.minStock != null ? p.stock <= p.minStock : p.stock <= 5;
+        return isLow && p.stock > 0;
+      });
     } else if (stockFilter === "out") {
       result = result.filter((p) => p.stock === 0);
     }
@@ -531,14 +556,63 @@ function InventarioPageContent() {
       setQuickError("Descripción no puede exceder 500 caracteres");
       return;
     }
+    const resolvedUnit = quickUnit === "Otro" ? quickUnitCustom.trim() : quickUnit.trim();
+    if (resolvedUnit && (resolvedUnit.length < 1 || resolvedUnit.length > 20)) {
+      setQuickError("Unidad debe tener entre 1 y 20 caracteres");
+      return;
+    }
+    let minStockNum: number | null | undefined = undefined;
+    if (quickMinStock.trim() !== "") {
+      const v = parseInt(quickMinStock, 10);
+      if (isNaN(v) || v < 0 || v > 99999) {
+        setQuickError("Stock mínimo debe estar entre 0 y 99999");
+        return;
+      }
+      minStockNum = v;
+    } else {
+      minStockNum = null;
+    }
     setQuickLoading(true);
     try {
-      await updateProduct(selectedProduct.id, { name, price: priceNum, description: desc });
+      // For image: if file selected, prioritize file upload after update. Send imageUrl only if no file.
+      const imageUrlToSend = quickSelectedFile ? undefined : (quickImageUrl.trim() || null);
+      // Build DTO: include unit/minStock/imageUrl only if changed? Backend preserves if null so we send accordingly
+      const dto: any = { name, price: priceNum, description: desc };
+      if (resolvedUnit !== (selectedProduct.unit ?? "")) dto.unit = resolvedUnit || null;
+      else dto.unit = selectedProduct.unit ?? null;
+      if (minStockNum !== undefined) dto.minStock = minStockNum;
+      if (imageUrlToSend !== undefined) dto.imageUrl = imageUrlToSend;
+      else dto.imageUrl = selectedProduct.imageUrl ?? null;
+      // If file selected, we still send current imageUrl preserved, upload will override
+      if (quickSelectedFile) dto.imageUrl = selectedProduct.imageUrl ?? null;
+
+      await updateProduct(selectedProduct.id, dto);
+      if (quickSelectedFile) {
+        try {
+          const res = await uploadProductImage(selectedProduct.id, quickSelectedFile);
+          dto.imageUrl = res.imageUrl;
+        } catch (upErr) {
+          const msg = upErr instanceof ApiError ? upErr.message : upErr instanceof Error ? upErr.message : "Error al subir imagen";
+          setQuickError(`Producto actualizado, pero falló subir imagen: ${msg}`);
+        }
+      }
       setQuickSuccess("Producto actualizado");
       await fetchProducts();
-      // update selectedProduct locally
-      setSelectedProduct((prev) => (prev ? { ...prev, name, price: priceNum, description: desc } : prev));
-      // refresh price history if price changed
+      const updatedDto: ProductDto = {
+        ...selectedProduct,
+        name,
+        price: priceNum,
+        description: desc,
+        unit: resolvedUnit || null,
+        minStock: minStockNum,
+        imageUrl: dto.imageUrl ?? selectedProduct.imageUrl ?? null,
+      };
+      setSelectedProduct(updatedDto);
+      if (quickSelectedFile && quickPreviewUrl) {
+        URL.revokeObjectURL(quickPreviewUrl);
+        setQuickPreviewUrl(null);
+        setQuickSelectedFile(null);
+      }
       if (priceNum !== selectedProduct.price) {
         try {
           const res = await getProductPriceHistory(selectedProduct.id, { pageSize: 20 });
@@ -977,19 +1051,25 @@ function InventarioPageContent() {
                 </p>
                 <div className="mt-2 flex items-center gap-2">
                   <span className="font-medium">${Number(selectedProduct.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
-                      selectedProduct.stock === 0
-                        ? "bg-zinc-100 text-zinc-600 border-zinc-300"
-                        : selectedProduct.stock <= 5
-                          ? "bg-red-100 text-red-700 border-red-200"
-                          : "bg-green-100 text-green-700 border-green-200"
-                    }`}
-                  >
-                    Stock: {selectedProduct.stock}
-                    {selectedProduct.stock > 0 && selectedProduct.stock <= 5 && " · ¡Stock bajo!"}
-                    {selectedProduct.stock === 0 && " · Sin stock"}
-                  </span>
+                  {(() => {
+                    const isLow = selectedProduct.minStock != null ? selectedProduct.stock <= selectedProduct.minStock : selectedProduct.stock <= 5;
+                    return (
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                          selectedProduct.stock === 0
+                            ? "bg-zinc-100 text-zinc-600 border-zinc-300"
+                            : isLow
+                              ? "bg-red-100 text-red-700 border-red-200"
+                              : "bg-green-100 text-green-700 border-green-200"
+                        }`}
+                      >
+                        Stock: {selectedProduct.stock}
+                        {selectedProduct.minStock != null ? ` (mín: ${selectedProduct.minStock})` : ""}
+                        {isLow && selectedProduct.stock > 0 ? " · ¡Poco stock!" : isLow && selectedProduct.stock <= 5 && selectedProduct.stock > 0 ? " · ¡Stock bajo!" : ""}
+                        {selectedProduct.stock === 0 && " · Sin stock"}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
               <Button variant="ghost" size="icon" onClick={() => setSelectedProduct(null)} aria-label="Cerrar">
@@ -1153,6 +1233,59 @@ function InventarioPageContent() {
                     placeholder="0.00"
                     className="bg-card border-input mt-1"
                   />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Unidad</label>
+                  <div className="flex gap-2 mt-1">
+                    <Select value={quickUnit || "__none"} onValueChange={(v) => setQuickUnit(v === "__none" ? "" : v)}>
+                      <SelectTrigger className="flex-1 bg-card border-input">
+                        <SelectValue placeholder="Unidad" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none">Sin unidad</SelectItem>
+                        <SelectItem value="un">Unidad</SelectItem>
+                        <SelectItem value="kg">Kg</SelectItem>
+                        <SelectItem value="lt">Litro</SelectItem>
+                        <SelectItem value="pack">Pack</SelectItem>
+                        <SelectItem value="caja">Caja</SelectItem>
+                        <SelectItem value="Otro">Otro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {quickUnit === "Otro" && <Input placeholder="Ej: metro" value={quickUnitCustom} onChange={(e) => setQuickUnitCustom(e.target.value)} maxLength={20} className="flex-1 bg-card border-input" />}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Stock mínimo</label>
+                  <Input type="number" min="0" max="99999" value={quickMinStock} onChange={(e) => setQuickMinStock(e.target.value)} placeholder="Ej: 5 — vacío = 5 por defecto" className="bg-card border-input mt-1" />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">URL de imagen</label>
+                  <div className="flex gap-2 items-center mt-1">
+                    <Input type="url" value={quickImageUrl} onChange={(e) => setQuickImageUrl(e.target.value)} placeholder="https://..." className="flex-1 bg-card border-input" />
+                    {quickImageUrl.trim() && !quickSelectedFile && (
+                      <img src={quickImageUrl.trim().startsWith("/") ? `${API_URL}${quickImageUrl.trim()}` : quickImageUrl.trim()} alt="preview" className="h-10 w-10 object-cover rounded border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                    )}
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium">o Subir archivo</label>
+                  <Input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; setQuickSelectedFile(f); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); if (f) setQuickPreviewUrl(URL.createObjectURL(f)); else setQuickPreviewUrl(null); }} className="bg-card border-input mt-1" />
+                  {quickSelectedFile && quickPreviewUrl && (
+                    <div className="flex items-center gap-2 mt-2">
+                      <img src={quickPreviewUrl} alt="preview file" className="h-12 w-12 object-cover rounded border" />
+                      <Button type="button" variant="ghost" size="sm" onClick={() => { setQuickSelectedFile(null); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); setQuickPreviewUrl(null); }}>
+                        Quitar
+                      </Button>
+                      <span className="text-xs text-muted-foreground truncate">{quickSelectedFile.name}</span>
+                    </div>
+                  )}
+                  {selectedProduct.imageUrl && !quickSelectedFile && !quickImageUrl && (
+                    <div className="mt-2 flex items-center gap-2">
+                      <img src={selectedProduct.imageUrl.startsWith("/") ? `${API_URL}${selectedProduct.imageUrl}` : selectedProduct.imageUrl} alt="actual" className="h-12 w-12 object-cover rounded border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                      <span className="text-xs text-muted-foreground">Imagen actual</span>
+                    </div>
+                  )}
+                  {quickSelectedFile && quickImageUrl.trim() && <p className="text-xs text-amber-600 mt-1">Se priorizará el archivo sobre la URL.</p>}
                 </div>
                 <div>
                   <label className="text-xs font-medium">Descripción</label>

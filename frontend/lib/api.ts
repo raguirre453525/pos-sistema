@@ -55,6 +55,9 @@ export type ProductDto = {
   description: string | null;
   price: number;
   stock: number;
+  imageUrl?: string | null;
+  unit?: string | null;
+  minStock?: number | null;
 };
 
 export type CreateProductDto = {
@@ -63,6 +66,9 @@ export type CreateProductDto = {
   price: number;
   barcode?: string | null;
   description?: string | null;
+  imageUrl?: string | null;
+  unit?: string | null;
+  minStock?: number | null;
 };
 
 export type StockAdjustmentDto = {
@@ -185,6 +191,9 @@ export type UpdateProductDto = {
   name: string;
   price: number;
   description?: string | null;
+  imageUrl?: string | null;
+  unit?: string | null;
+  minStock?: number | null;
 };
 
 export type ProductPriceHistoryDto = {
@@ -491,6 +500,7 @@ export type PromotionDto = {
   savingAmount: number | null;
   savingPercent: number | null;
   isCurrentlyActive: boolean;
+  imageUrl?: string | null;
 };
 
 export type CreatePromotionDto = {
@@ -504,6 +514,7 @@ export type CreatePromotionDto = {
   discountPercentage?: number | null;
   lines?: PromotionLineDto[];
   productIds?: string[]; // compat
+  imageUrl?: string | null;
 };
 
 export type UpdatePromotionDto = CreatePromotionDto;
@@ -528,4 +539,24 @@ export function deletePromotion(id: string) {
 }
 export function togglePromotion(id: string) {
   return apiFetch<PromotionDto>(`/api/Promotions/${id}/toggle`, { method: "PATCH" });
+}
+
+export async function uploadProductImage(id: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_URL}/api/Products/${id}/image`, { method: "POST", body: form });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new ApiError((data?.title ?? data?.detail ?? text) || `HTTP ${res.status}`, res.status, data);
+  return data as { imageUrl: string };
+}
+
+export async function uploadPromotionImage(id: string, file: File) {
+  const form = new FormData();
+  form.append("file", file);
+  const res = await fetch(`${API_URL}/api/Promotions/${id}/image`, { method: "POST", body: form });
+  const text = await res.text();
+  const data = text ? JSON.parse(text) : null;
+  if (!res.ok) throw new ApiError((data?.title ?? data?.detail ?? text) || `HTTP ${res.status}`, res.status, data);
+  return data as { imageUrl: string };
 }

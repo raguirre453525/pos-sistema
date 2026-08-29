@@ -18,7 +18,8 @@ public static class PromotionDtos
         decimal? ComboPrice,
         decimal? DiscountPercentage,
         List<PromotionLineDto>? Lines,
-        List<Guid>? ProductIds // compat: si viene lista vieja de Guids, se convierte a qty 1
+        List<Guid>? ProductIds, // compat: si viene lista vieja de Guids, se convierte a qty 1
+        string? ImageUrl
     );
 
     public record UpdatePromotionDto(
@@ -31,7 +32,8 @@ public static class PromotionDtos
         decimal? ComboPrice,
         decimal? DiscountPercentage,
         List<PromotionLineDto>? Lines,
-        List<Guid>? ProductIds
+        List<Guid>? ProductIds,
+        string? ImageUrl
     );
 
     public record PromotionDto(
@@ -49,6 +51,7 @@ public static class PromotionDtos
         decimal? TotalOriginalPrice,
         decimal? SavingAmount,
         decimal? SavingPercent,
-        bool IsCurrentlyActive
+        bool IsCurrentlyActive,
+        string? ImageUrl
     );
 }
