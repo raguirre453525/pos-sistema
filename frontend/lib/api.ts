@@ -166,6 +166,19 @@ export type ProductPriceHistoryDto = {
   changePercent: number;
 };
 
+export type BulkPriceAdjustmentDto = {
+  categoryId?: string | null;
+  productIds?: string[];
+  percentage?: number | null;
+  fixedAmount?: number | null;
+  reason: string;
+};
+
+export type BulkPriceAdjustmentResultDto = {
+  affectedCount: number;
+  histories: ProductPriceHistoryDto[];
+};
+
 // ---------- Products ----------
 export function getProducts() {
   return apiFetch<ProductDto[]>("/api/Products");
@@ -366,5 +379,12 @@ export function assignCategory(productId: string, categoryId: string) {
 export function removeCategory(productId: string, categoryId: string) {
   return apiFetch<void>(`/api/Products/${productId}/categories/${categoryId}`, {
     method: "DELETE",
+  });
+}
+
+export function bulkAdjustPrices(dto: BulkPriceAdjustmentDto) {
+  return apiFetch<BulkPriceAdjustmentResultDto>("/api/Products/bulk-price-adjustment", {
+    method: "POST",
+    body: JSON.stringify(dto),
   });
 }

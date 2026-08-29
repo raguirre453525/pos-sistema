@@ -88,4 +88,11 @@ public class ProductsController : ControllerBase
         var result = await _priceHistoryService.GetPriceHistoryAsync(id, from, to, page, pageSize);
         return Ok(result);
     }
+
+    [HttpPost("bulk-price-adjustment")]
+    public async Task<IActionResult> BulkAdjust([FromBody] BulkPriceAdjustmentDto dto)
+    {
+        var result = await _productService.BulkAdjustPricesAsync(dto);
+        return Ok(result);
+    }
 }

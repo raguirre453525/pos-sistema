@@ -23,6 +23,7 @@ import {
   assignCategory,
   removeCategory,
   deleteCategory,
+  bulkAdjustPrices,
   ProductDto,
   ApiError,
   CategoryDto,
@@ -108,6 +109,17 @@ function InventarioPageContent() {
   const [quickSuccess, setQuickSuccess] = useState<string | null>(null);
   const [assignCatId, setAssignCatId] = useState<string>("");
 
+  // Bulk price adjustment state
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkCategoryId, setBulkCategoryId] = useState<string>("all");
+  const [bulkPercentage, setBulkPercentage] = useState<string>("");
+  const [bulkFixed, setBulkFixed] = useState<string>("");
+  const [bulkReason, setBulkReason] = useState<string>("");
+  const [bulkSelected, setBulkSelected] = useState<Record<string, boolean>>({});
+  const [bulkLoading, setBulkLoading] = useState(false);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const [bulkSuccess, setBulkSuccess] = useState<string | null>(null);
+
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -182,6 +194,131 @@ function InventarioPageContent() {
     await rebuildProductCategories(cats);
     return cats;
   }, [fetchCategoriesInternal, rebuildProductCategories]);
+
+  // Bulk helpers
+  const bulkFilteredByCategory = useMemo(() => {
+    if (bulkCategoryId === "all") return products.filter((p) => true);
+    return products.filter((p) => (productCategories[p.id] ?? []).some((c) => c.id === bulkCategoryId));
+  }, [products, productCategories, bulkCategoryId]);
+
+  const round2Away = (v: number) => Math.sign(v) * Math.round(Math.abs(v) * 100) / 100;
+
+  const bulkPreview = useMemo(() => {
+    const pct = parseFloat(bulkPercentage);
+    const hasPct = !isNaN(pct) && pct !== 0;
+    const fx = parseFloat(bulkFixed);
+    const hasFx = !isNaN(fx) && fx !== 0;
+    return bulkFilteredByCategory.map((p) => {
+      const oldPrice = p.price;
+      let newPrice = oldPrice;
+      if (hasPct || hasFx) {
+        const pctVal = hasPct ? pct : 0;
+        const fxVal = hasFx ? fx : 0;
+        newPrice = round2Away(oldPrice * (1 + pctVal / 100) + fxVal);
+        if (newPrice < 0) newPrice = 0;
+      }
+      const changePercent = oldPrice === 0 ? 0 : ((newPrice - oldPrice) / oldPrice) * 100;
+      return { id: p.id, sku: p.sku, name: p.name, oldPrice, newPrice, changePercent };
+    });
+  }, [bulkFilteredByCategory, bulkPercentage, bulkFixed]);
+
+  const bulkPreviewFiltered = useMemo(() => {
+    // only selected
+    return bulkPreview.filter((b) => bulkSelected[b.id] !== false);
+  }, [bulkPreview, bulkSelected]);
+
+  const bulkAllChecked = bulkPreview.length > 0 && bulkPreview.every((b) => bulkSelected[b.id] !== false);
+  const bulkHasAdjustment = (() => {
+    const pct = parseFloat(bulkPercentage);
+    const fx = parseFloat(bulkFixed);
+    return (!isNaN(pct) && pct !== 0) || (!isNaN(fx) && fx !== 0);
+  })();
+
+  const openBulk = () => {
+    // init selected to all true for current category
+    const init: Record<string, boolean> = {};
+    const filtered = bulkCategoryId === "all" ? products : products.filter((p) => (productCategories[p.id] ?? []).some((c) => c.id === bulkCategoryId));
+    // but we will recompute in effect; just open
+    filtered.forEach((p) => (init[p.id] = true));
+    setBulkSelected(init);
+    setBulkError(null);
+    setBulkSuccess(null);
+    setShowBulk(true);
+  };
+
+  useEffect(() => {
+    if (!showBulk) return;
+    const filtered = bulkFilteredByCategory;
+    setBulkSelected((prev) => {
+      // when category changes, reset to all true, but keep existing selections if same ids
+      const next: Record<string, boolean> = {};
+      filtered.forEach((p) => {
+        next[p.id] = prev[p.id] ?? true;
+      });
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bulkCategoryId, showBulk, bulkFilteredByCategory.length]);
+
+  const handleBulkConfirm = async () => {
+    const pct = parseFloat(bulkPercentage);
+    const fx = parseFloat(bulkFixed);
+    const percentage = !isNaN(pct) && pct !== 0 ? pct : null;
+    const fixedAmount = !isNaN(fx) && fx !== 0 ? fx : null;
+    const reasonTrim = bulkReason.trim();
+    if (reasonTrim.length < 3 || reasonTrim.length > 500) {
+      setBulkError("Motivo requerido (3..500 caracteres)");
+      return;
+    }
+    if (percentage === null && fixedAmount === null) {
+      setBulkError("Al menos uno de % o monto fijo debe ser distinto de 0");
+      return;
+    }
+    if (percentage !== null && (percentage < -90 || percentage > 500)) {
+      setBulkError("Porcentaje debe estar entre -90 y 500");
+      return;
+    }
+    if (fixedAmount !== null && (fixedAmount < -1_000_000 || fixedAmount > 1_000_000)) {
+      setBulkError("Monto fijo debe estar entre -1000000 y 1000000");
+      return;
+    }
+    const selectedIds = bulkPreviewFiltered.map((b) => b.id);
+    if (selectedIds.length === 0) {
+      setBulkError("No hay productos seleccionados");
+      return;
+    }
+    setBulkLoading(true);
+    setBulkError(null);
+    setBulkSuccess(null);
+    try {
+      const result = await bulkAdjustPrices({
+        categoryId: null,
+        productIds: selectedIds,
+        percentage,
+        fixedAmount,
+        reason: reasonTrim,
+      });
+      setBulkSuccess(`Ajuste aplicado a ${result.affectedCount} productos`);
+      await fetchProducts();
+      await refreshCategoriesAndMap();
+      if (selectedProduct) {
+        try {
+          const res = await getProductPriceHistory(selectedProduct.id, { pageSize: 20 });
+          setPriceHistory(res.items);
+          setPriceHistoryTab("precios");
+        } catch {}
+      }
+      setTimeout(() => {
+        setShowBulk(false);
+        setBulkSuccess(null);
+      }, 1200);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al ajustar precios";
+      setBulkError(msg);
+    } finally {
+      setBulkLoading(false);
+    }
+  };
 
   // auto-dismiss banner success
   useEffect(() => {
@@ -546,7 +683,7 @@ function InventarioPageContent() {
       </div>
 
       {/* Tabs header */}
-      <div className="flex gap-2 border-b border-border pb-2">
+      <div className="flex gap-2 border-b border-border pb-2 items-center">
         <Button variant={activeTab === "productos" ? "default" : "ghost"} onClick={() => handleTabChange("productos")} className="gap-2">
           <Package className="h-4 w-4" />
           Productos
@@ -561,6 +698,12 @@ function InventarioPageContent() {
             {categories.length}
           </span>
         </Button>
+        <div className="ml-auto">
+          <Button variant="outline" onClick={openBulk} className="gap-2">
+            <TrendingUp className="h-4 w-4" />
+            Ajuste masivo
+          </Button>
+        </div>
       </div>
 
       {activeTab === "productos" ? (
@@ -1170,6 +1313,150 @@ function InventarioPageContent() {
         editingCategory={editingCategory}
         categories={categories}
       />
+
+      {/* Bulk price adjustment dialog */}
+      {showBulk && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-4xl max-h-[85vh] overflow-y-auto flex flex-col gap-4 p-6">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <TrendingUp className="h-5 w-5" /> Ajuste masivo de precios
+              </h3>
+              <button onClick={() => setShowBulk(false)} className="rounded-full p-1 hover:bg-muted">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Scope */}
+            <div className="flex flex-col gap-2">
+              <label className="text-sm font-medium">Categoría</label>
+              <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+                <SelectTrigger className="w-full max-w-sm border-input bg-card">
+                  <SelectValue placeholder="Seleccionar categoría" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todas</SelectItem>
+                  {categories
+                    .filter((c) => c.isActive)
+                    .map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Adjustment inputs */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">Porcentaje %</label>
+                <Input type="number" step="0.01" value={bulkPercentage} onChange={(e) => setBulkPercentage(e.target.value)} placeholder="ej: 15" />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-medium">Monto fijo $</label>
+                <Input type="number" step="0.01" value={bulkFixed} onChange={(e) => setBulkFixed(e.target.value)} placeholder="ej: 500" />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">Al menos uno debe ser distinto de 0. Negativo para rebaja.</p>
+
+            {/* Reason */}
+            <div className="flex flex-col gap-1">
+              <label className="text-sm font-medium">Motivo (3..500)</label>
+              <Input value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} maxLength={500} placeholder="Ej: Inflación agosto 2026" />
+              <span className="text-xs text-muted-foreground text-right">{bulkReason.trim().length}/500</span>
+            </div>
+
+            {/* Preview table */}
+            <div className="border rounded-xl overflow-hidden bg-card">
+              <div className="max-h-[320px] overflow-y-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 sticky top-0">
+                    <tr>
+                      <th className="p-2 text-left w-10">
+                        <input
+                          type="checkbox"
+                          checked={bulkAllChecked}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            const next: Record<string, boolean> = {};
+                            bulkPreview.forEach((b) => (next[b.id] = checked));
+                            setBulkSelected(next);
+                          }}
+                        />
+                      </th>
+                      <th className="p-2 text-left">SKU</th>
+                      <th className="p-2 text-left">Producto</th>
+                      <th className="p-2 text-right">Anterior</th>
+                      <th className="p-2 text-right">Nuevo</th>
+                      <th className="p-2 text-center">Variación</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bulkPreview.length === 0 ? (
+                      <tr>
+                        <td colSpan={6} className="p-6 text-center text-muted-foreground">
+                          Sin productos
+                        </td>
+                      </tr>
+                    ) : (
+                      bulkPreview.map((b) => {
+                        const checked = bulkSelected[b.id] !== false;
+                        const isIncrease = b.newPrice > b.oldPrice;
+                        const isDecrease = b.newPrice < b.oldPrice;
+                        return (
+                          <tr key={b.id} className={`border-t border-border ${!checked ? "opacity-50" : ""}`}>
+                            <td className="p-2">
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => setBulkSelected((prev) => ({ ...prev, [b.id]: e.target.checked }))}
+                              />
+                            </td>
+                            <td className="p-2 font-mono text-xs">{b.sku}</td>
+                            <td className="p-2 truncate max-w-[180px]" title={b.name}>
+                              {b.name}
+                            </td>
+                            <td className="p-2 text-right">${b.oldPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right font-bold">${b.newPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-center">
+                              <span
+                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium border ${
+                                  isIncrease ? "bg-green-50 text-green-700 border-green-200" : isDecrease ? "bg-red-50 text-red-700 border-red-200" : "bg-muted text-muted-foreground"
+                                }`}
+                              >
+                                {b.changePercent === 0 ? "0%" : `${b.changePercent > 0 ? "+" : ""}${b.changePercent.toFixed(2)}%`}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="flex flex-col gap-2">
+              <div className="text-sm font-medium">Afectados: {bulkPreviewFiltered.length}</div>
+              {bulkError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 text-sm">{bulkError}</div>}
+              {bulkSuccess && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-2 text-sm">{bulkSuccess}</div>}
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowBulk(false)} disabled={bulkLoading}>
+                  Cerrar
+                </Button>
+                <Button
+                  onClick={handleBulkConfirm}
+                  disabled={bulkLoading || bulkPreviewFiltered.length === 0 || !bulkHasAdjustment || bulkReason.trim().length < 3}
+                >
+                  {bulkLoading ? "Aplicando..." : `Confirmar ajuste (${bulkPreviewFiltered.length})`}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

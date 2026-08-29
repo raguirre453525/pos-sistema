@@ -52,5 +52,18 @@ namespace MetraTC.Application.DTOs
             string? Reason,
             decimal ChangePercent
         );
+
+        public record BulkPriceAdjustmentDto(
+            Guid? CategoryId,
+            List<Guid>? ProductIds,
+            decimal? Percentage,
+            decimal? FixedAmount,
+            string Reason
+        );
+
+        public record BulkPriceAdjustmentResultDto(
+            int AffectedCount,
+            List<ProductPriceHistoryDto> Histories
+        );
     };
 }

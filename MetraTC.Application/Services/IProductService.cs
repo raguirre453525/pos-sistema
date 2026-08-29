@@ -16,4 +16,6 @@ public interface IProductService
     Task UpdateAsync(Guid id, UpdateProductDto updateProductDto);
 
     Task DeleteAsync(Guid id);
+
+    Task<BulkPriceAdjustmentResultDto> BulkAdjustPricesAsync(BulkPriceAdjustmentDto dto);
 }
