@@ -86,6 +86,8 @@ export type CreateSaleItemDto = {
 export type CreateSaleDto = {
   items: CreateSaleItemDto[];
   paymentMethod: 0 | 1; // Cash=0, MercadoPago=1
+  customerId?: string | null;
+  isCredit?: boolean;
 };
 
 export type SaleDto = {
@@ -94,6 +96,9 @@ export type SaleDto = {
   paymentMethod: string; // "Cash" / "MercadoPago" serialized as string via backend
   total: number;
   items: SaleItemDto[];
+  customerId?: string | null;
+  isCredit?: boolean;
+  paidAmount?: number;
 };
 
 export type SaleItemDto = {
@@ -387,4 +392,55 @@ export function bulkAdjustPrices(dto: BulkPriceAdjustmentDto) {
     method: "POST",
     body: JSON.stringify(dto),
   });
+}
+
+// ---------- Customers ----------
+export type CustomerDto = {
+  id: string;
+  name: string;
+  phone: string | null;
+  note: string | null;
+  isActive: boolean;
+  balance: number;
+  lastPurchaseAt: string | null;
+  daysSinceDebt: number | null;
+  pendingSalesCount: number;
+  createdAt: string;
+};
+
+export type CustomerPaymentDto = {
+  id: string;
+  customerId: string;
+  amount: number;
+  paidAt: string;
+  note: string | null;
+  saleId: string | null;
+};
+
+export type CustomerDetailDto = {
+  customer: CustomerDto;
+  pendingSales: SaleDto[];
+  payments: CustomerPaymentDto[];
+};
+
+export type CreateCustomerDto = { name: string; phone?: string | null; note?: string | null };
+export type CreatePaymentDto = { amount: number; note?: string | null; saleId?: string | null };
+
+export function getCustomers() {
+  return apiFetch<CustomerDto[]>("/api/Customers");
+}
+export function getCustomerDetail(id: string) {
+  return apiFetch<CustomerDetailDto>(`/api/Customers/${id}/detail`);
+}
+export function createCustomer(dto: CreateCustomerDto) {
+  return apiFetch<CustomerDto>("/api/Customers", { method: "POST", body: JSON.stringify(dto) });
+}
+export function updateCustomer(id: string, dto: CreateCustomerDto) {
+  return apiFetch<CustomerDto>(`/api/Customers/${id}`, { method: "PUT", body: JSON.stringify(dto) });
+}
+export function deleteCustomer(id: string) {
+  return apiFetch<void>(`/api/Customers/${id}`, { method: "DELETE" });
+}
+export function registerCustomerPayment(customerId: string, dto: CreatePaymentDto) {
+  return apiFetch<CustomerPaymentDto>(`/api/Customers/${customerId}/payments`, { method: "POST", body: JSON.stringify(dto) });
 }

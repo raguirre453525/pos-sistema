@@ -17,8 +17,10 @@ public class SalesService : ISalesService
 
     public async Task<SaleDto> CreateAsync(CreateSaleDto dto)
     {
+        if (dto.IsCredit && (dto.CustomerId == null || dto.CustomerId == Guid.Empty))
+            throw new ArgumentException("Cliente requerido para venta fiada", nameof(dto.CustomerId));
         var items = dto.Items.Select(i => (i.ProductId, i.Quantity)).ToList();
-        var sale = await _repository.CreateAsync(items, dto.PaymentMethod);
+        var sale = await _repository.CreateAsync(items, dto.PaymentMethod, null, dto.CustomerId, dto.IsCredit);
 
         return _mapper.Map<SaleDto>(sale);
     }

@@ -5,7 +5,7 @@ namespace MetraTC.Domain.Interfaces;
 
 public interface ISalesRepository
 {
-    Task<Sale> CreateAsync(List<(Guid productId, int quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null);
+    Task<Sale> CreateAsync(List<(Guid productId, int quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null, Guid? customerId = null, bool isCredit = false);
 
     Task<Sale?> GetByIdAsync(Guid id);
 

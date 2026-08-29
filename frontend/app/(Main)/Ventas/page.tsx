@@ -6,16 +6,19 @@ import CartBox from "@/components/Ventas/CartBox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Trash2, Search } from "lucide-react";
+import { Trash2, Search, X } from "lucide-react";
 import {
   getProducts,
   getCategories,
   getCategoryProducts,
   createSale,
+  getCustomers,
   ProductDto,
   CategoryDto,
+  CustomerDto,
   ApiError,
 } from "@/lib/api";
+import { Label } from "@/components/ui/label";
 
 type CartItem = {
   product: ProductDto;
@@ -41,6 +44,10 @@ export default function VentasPage() {
   const [discountValue, setDiscountValue] = useState("0");
   const [showCheckout, setShowCheckout] = useState(false);
   const [cashPaid, setCashPaid] = useState("");
+  const [isCredit, setIsCredit] = useState(false);
+  const [creditCustomerId, setCreditCustomerId] = useState<string>("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customers, setCustomers] = useState<CustomerDto[]>([]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -68,6 +75,7 @@ export default function VentasPage() {
   useEffect(() => {
     fetchProducts();
     fetchCats();
+    getCustomers().then(setCustomers).catch(() => {});
   }, [fetchProducts, fetchCats]);
 
   // Fetch product ids for selected category to enable real filtering.
@@ -170,12 +178,24 @@ export default function VentasPage() {
   const vuelto = Math.max(0, cashNum - total);
   const falta = Math.max(0, total - cashNum);
 
+  const customerSearchResults = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase();
+    if (!q) return customers.slice(0, 8);
+    return customers.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q)).slice(0, 8);
+  }, [customers, customerSearch]);
+
+  const selectedCustomer = useMemo(() => customers.find((c) => c.id === creditCustomerId) ?? null, [customers, creditCustomerId]);
+
   const handleConfirmSale = async () => {
     if (cart.length === 0) {
       setSaleError("Carrito vacío");
       return;
     }
-    if (paymentMethod === 0 && cashNum < total) {
+    if (isCredit && !creditCustomerId) {
+      setSaleError("Seleccioná un cliente para fiado");
+      return;
+    }
+    if (!isCredit && paymentMethod === 0 && cashNum < total) {
       setSaleError(`Falta $${(total - cashNum).toLocaleString("es-AR")}`);
       return;
     }
@@ -186,16 +206,25 @@ export default function VentasPage() {
       const sale = await createSale({
         items: cart.map((c) => ({ productId: c.product.id, quantity: c.quantity })),
         paymentMethod,
+        customerId: isCredit ? creditCustomerId : null,
+        isCredit,
       });
-      // Discount is visual only — backend recalculates total from DB prices. Show both if they differ.
       const backendTotal = Number(sale.total);
       const discountNote = discountAmount > 0 ? ` (visual con dto: $${total.toLocaleString("es-AR")})` : "";
-      setSaleMsg(`Venta OK #${sale.id.slice(0, 8)} — Total $${backendTotal.toLocaleString("es-AR")}${discountNote}`);
+      if (isCredit) {
+        setSaleMsg(`Venta fiada registrada #${sale.id.slice(0, 8)} — ${selectedCustomer?.name ?? ""} — Total $${backendTotal.toLocaleString("es-AR")}${discountNote}`);
+      } else {
+        setSaleMsg(`Venta OK #${sale.id.slice(0, 8)} — Total $${backendTotal.toLocaleString("es-AR")}${discountNote}`);
+      }
       setCart([]);
       setDiscountValue("0");
       setCashPaid("");
       setShowCheckout(false);
+      setIsCredit(false);
+      setCreditCustomerId("");
+      setCustomerSearch("");
       await fetchProducts();
+      getCustomers().then(setCustomers).catch(() => {});
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al cobrar";
       setSaleError(msg);
@@ -402,24 +431,81 @@ export default function VentasPage() {
               </p>
             )}
 
-            <div className="flex gap-2">
-              <Button
-                variant={paymentMethod === 0 ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => setPaymentMethod(0)}
-              >
-                Efectivo
-              </Button>
-              <Button
-                variant={paymentMethod === 1 ? "default" : "outline"}
-                className="flex-1"
-                onClick={() => setPaymentMethod(1)}
-              >
-                MercadoPago
-              </Button>
+            <div className="flex items-center gap-2 p-2 rounded-lg border bg-amber-50 border-amber-200">
+              <input
+                id="fiado-switch"
+                type="checkbox"
+                checked={isCredit}
+                onChange={(e) => setIsCredit(e.target.checked)}
+                className="h-4 w-4"
+              />
+              <Label htmlFor="fiado-switch" className="text-sm font-semibold cursor-pointer">
+                Fiado
+              </Label>
+              <span className="text-xs text-muted-foreground">Venta pendiente</span>
             </div>
 
-            {paymentMethod === 0 ? (
+            {isCredit && (
+              <div className="flex flex-col gap-2 p-3 rounded-xl border bg-muted/50">
+                {!selectedCustomer ? (
+                  <>
+                    <Label className="text-sm">Buscar cliente *</Label>
+                    <Input placeholder="Buscar cliente..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
+                    <div className="max-h-32 overflow-auto border rounded-lg bg-card divide-y">
+                      {customerSearchResults.length === 0 ? (
+                        <p className="text-xs text-muted-foreground p-2 text-center">Sin resultados</p>
+                      ) : (
+                        customerSearchResults.map((c) => (
+                          <button
+                            key={c.id}
+                            onClick={() => {
+                              setCreditCustomerId(c.id);
+                              setCustomerSearch("");
+                            }}
+                            className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
+                          >
+                            <span className="font-medium">{c.name}</span>
+                            <span className="text-xs text-muted-foreground ml-2">{c.phone ?? ""}</span>
+                            {c.balance > 0 && <span className="ml-2 text-xs text-red-600">Debe ${Number(c.balance).toLocaleString("es-AR")}</span>}
+                          </button>
+                        ))
+                      )}
+                    </div>
+                    <p className="text-xs text-amber-700">Seleccioná un cliente para confirmar fiado.</p>
+                  </>
+                ) : (
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm">
+                      Cliente: <span className="font-semibold">{selectedCustomer.name}</span> {selectedCustomer.phone ? `(${selectedCustomer.phone})` : ""}
+                    </span>
+                    <Button variant="ghost" size="sm" onClick={() => setCreditCustomerId("")}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isCredit && (
+              <div className="flex gap-2">
+                <Button
+                  variant={paymentMethod === 0 ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setPaymentMethod(0)}
+                >
+                  Efectivo
+                </Button>
+                <Button
+                  variant={paymentMethod === 1 ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setPaymentMethod(1)}
+                >
+                  MercadoPago
+                </Button>
+              </div>
+            )}
+
+            {!isCredit && paymentMethod === 0 ? (
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">Pagó con $</label>
                 <Input
@@ -440,12 +526,14 @@ export default function VentasPage() {
                   </div>
                 )}
               </div>
-            ) : (
+            ) : !isCredit ? (
               <div className="rounded-lg border border-border bg-muted p-3 text-sm">
                 <p className="font-medium">Total: ${total.toLocaleString("es-AR")}</p>
                 <p className="text-muted-foreground text-xs mt-1">Se registrará como MercadoPago.</p>
               </div>
-            )}
+            ) : null}
+
+            {isCredit && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">Venta fiada — no hay vuelto. Quedará pendiente para {selectedCustomer?.name ?? "cliente"}.</p>}
 
             {saleError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">{saleError}</div>
@@ -457,7 +545,7 @@ export default function VentasPage() {
               </Button>
               <Button
                 onClick={handleConfirmSale}
-                disabled={saleLoading || (paymentMethod === 0 && cashPaid !== "" && cashNum < total)}
+                disabled={saleLoading || (isCredit ? !creditCustomerId : paymentMethod === 0 && cashPaid !== "" && cashNum < total)}
                 className="bg-red-600 hover:bg-red-700 text-white min-w-[140px]"
               >
                 {saleLoading ? "Procesando…" : "Confirmar venta"}

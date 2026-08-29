@@ -10,11 +10,16 @@ public class Sale : BaseEntity
     public decimal Total { get; private set; }
     public ICollection<SaleItem> Items { get; private set; } = new List<SaleItem>();
 
+    public Guid? CustomerId { get; private set; }
+    public Customer? Customer { get; private set; }
+    public bool IsCredit { get; private set; }
+    public decimal PaidAmount { get; private set; }
+
     private Sale()
     {
     }
 
-    public Sale(PaymentMethod paymentMethod, IEnumerable<SaleItem> items)
+    public Sale(PaymentMethod paymentMethod, IEnumerable<SaleItem> items, Guid? customerId = null, bool isCredit = false)
     {
         if (items == null || !items.Any())
             throw new ArgumentException("La venta debe tener al menos un item", nameof(items));
@@ -33,6 +38,21 @@ public class Sale : BaseEntity
 
         Items = itemList;
         Total = itemList.Sum(i => i.Subtotal);
+
+        if (isCredit)
+        {
+            if (customerId == null || customerId == Guid.Empty)
+                throw new ArgumentException("Cliente requerido para venta fiada", nameof(customerId));
+            CustomerId = customerId;
+            IsCredit = true;
+            PaidAmount = 0;
+        }
+        else
+        {
+            CustomerId = customerId;
+            IsCredit = false;
+            PaidAmount = Total;
+        }
     }
 
     internal void AddItem(SaleItem item)
@@ -41,5 +61,28 @@ public class Sale : BaseEntity
         item.SetSale(this);
         ((List<SaleItem>)Items).Add(item);
         Total = Items.Sum(i => i.Subtotal);
+    }
+
+    public void MarkAsCredit(Guid customerId)
+    {
+        if (customerId == Guid.Empty) throw new ArgumentException("Cliente requerido", nameof(customerId));
+        CustomerId = customerId;
+        IsCredit = true;
+        PaidAmount = 0;
+    }
+
+    public void RegisterPayment(decimal amount)
+    {
+        if (amount <= 0) throw new ArgumentException("El monto debe ser mayor a 0", nameof(amount));
+        if (!IsCredit) throw new InvalidOperationException("La venta no es fiada");
+        var remaining = Total - PaidAmount;
+        if (amount > remaining)
+            throw new ArgumentException($"El monto excede el saldo pendiente (${remaining})", nameof(amount));
+        PaidAmount += amount;
+        if (PaidAmount >= Total)
+        {
+            PaidAmount = Total;
+            IsCredit = false;
+        }
     }
 }

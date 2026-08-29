@@ -20,5 +20,11 @@ public class CreateSaleDtoValidator : AbstractValidator<CreateSaleDto>
 
         RuleFor(x => x.PaymentMethod)
             .IsInEnum().WithMessage("Método de pago inválido");
+
+        RuleFor(x => x).Custom((dto, ctx) =>
+        {
+            if (dto.IsCredit && (dto.CustomerId == null || dto.CustomerId == Guid.Empty))
+                ctx.AddFailure("CustomerId", "Cliente requerido para venta fiada");
+        });
     }
 }

@@ -21,6 +21,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductPriceHistory> ProductPriceHistories { get; set; }
     public DbSet<Sale> Sales { get; set; }
     public DbSet<SaleItem> SaleItems { get; set; }
+    public DbSet<Customer> Customers { get; set; }
+    public DbSet<CustomerPayment> CustomerPayments { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

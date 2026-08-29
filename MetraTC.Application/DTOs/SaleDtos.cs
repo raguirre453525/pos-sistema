@@ -6,7 +6,9 @@ public static class SaleDtos
 {
     public record CreateSaleDto(
         List<CreateSaleItemDto> Items,
-        PaymentMethod PaymentMethod
+        PaymentMethod PaymentMethod,
+        Guid? CustomerId = null,
+        bool IsCredit = false
     );
 
     public record CreateSaleItemDto(
@@ -21,6 +23,9 @@ public static class SaleDtos
         public string PaymentMethod { get; init; } = string.Empty;
         public decimal Total { get; init; }
         public List<SaleItemDto> Items { get; init; } = new();
+        public Guid? CustomerId { get; init; }
+        public bool IsCredit { get; init; }
+        public decimal PaidAmount { get; init; }
     }
 
     public record SaleItemDto
