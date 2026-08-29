@@ -296,20 +296,66 @@ export default function ClientesPage() {
                   </section>
 
                   <section className="flex flex-col gap-2">
-                    <h3 className="text-sm font-semibold">Ventas pendientes ({detail.pendingSales.length})</h3>
-                    {detail.pendingSales.length === 0 ? <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin ventas pendientes</p> : (
-                      <div className="border rounded-lg divide-y max-h-[220px] overflow-auto">
-                        {detail.pendingSales.map((s) => (
-                          <div key={s.id} className="p-3 flex justify-between items-center text-sm">
-                            <div className="flex flex-col">
-                              <span className="text-xs text-muted-foreground">{new Date(s.date).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</span>
-                              <span className="font-medium">${Number(s.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                    {(() => {
+                      const history = detail.allCreditSales && detail.allCreditSales.length > 0 ? detail.allCreditSales : detail.pendingSales;
+                      const getStatus = (s: typeof history[number]): "Pagada" | "Vencida" | "Pendiente" => {
+                        if (s.creditStatus) {
+                          if (s.creditStatus === "Pagada" || s.creditStatus === "Vencida" || s.creditStatus === "Pendiente") return s.creditStatus as "Pagada" | "Vencida" | "Pendiente";
+                        }
+                        const paid = s.paidAmount ?? 0;
+                        const total = Number(s.total);
+                        if (paid >= total) return "Pagada";
+                        if (s.dueDate && s.isCredit && new Date(s.dueDate) < new Date()) return "Vencida";
+                        return "Pendiente";
+                      };
+                      const badgeFor = (status: string) => {
+                        if (status === "Pagada") return <Badge className="bg-green-100 text-green-700 border-green-200 border">Pagada</Badge>;
+                        if (status === "Vencida") return <Badge className="bg-red-100 text-red-700 border-red-200 border">Vencida</Badge>;
+                        return <Badge className="bg-amber-100 text-amber-700 border-amber-200 border">Pendiente</Badge>;
+                      };
+                      return (
+                        <>
+                          <h3 className="text-sm font-semibold">Historial fiado ({history.length})</h3>
+                          {history.length === 0 ? (
+                            <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin compras fiadas</p>
+                          ) : (
+                            <div className="border rounded-lg overflow-hidden">
+                              <div className="overflow-x-auto max-h-[320px] overflow-auto">
+                                <table className="w-full text-xs">
+                                  <thead className="bg-muted/50 text-muted-foreground sticky top-0">
+                                    <tr>
+                                      <th className="text-left px-2 py-2 font-semibold">Fecha</th>
+                                      <th className="text-right px-2 py-2 font-semibold">Total</th>
+                                      <th className="text-left px-2 py-2 font-semibold">Vencimiento</th>
+                                      <th className="text-center px-2 py-2 font-semibold">Estado</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-border">
+                                    {history.map((s) => {
+                                      const status = getStatus(s);
+                                      const due = s.dueDate ? new Date(s.dueDate).toLocaleDateString("es-AR") : "—";
+                                      const isVencida = status === "Vencida" && s.dueDate;
+                                      const daysOver = isVencida ? Math.floor((Date.now() - new Date(s.dueDate as string).getTime()) / 86400000) : 0;
+                                      return (
+                                        <tr key={s.id} className="hover:bg-muted/20">
+                                          <td className="px-2 py-2">{new Date(s.date).toLocaleDateString("es-AR")}</td>
+                                          <td className="px-2 py-2 text-right font-medium">${Number(s.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                                          <td className="px-2 py-2">
+                                            <span>{due}</span>
+                                            {isVencida && daysOver > 0 && <span className="ml-1 text-red-600 font-semibold">Debe hace {daysOver} días</span>}
+                                          </td>
+                                          <td className="px-2 py-2 text-center">{badgeFor(status)}</td>
+                                        </tr>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
                             </div>
-                            <Badge variant="destructive">Pendiente</Badge>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                          )}
+                        </>
+                      );
+                    })()}
                   </section>
 
                   <section className="flex flex-col gap-2">

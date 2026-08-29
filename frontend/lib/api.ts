@@ -88,6 +88,8 @@ export type CreateSaleDto = {
   paymentMethod: 0 | 1; // Cash=0, MercadoPago=1
   customerId?: string | null;
   isCredit?: boolean;
+  dueDate?: string | null;
+  dueDays?: number | null;
 };
 
 export type SaleDto = {
@@ -99,6 +101,9 @@ export type SaleDto = {
   customerId?: string | null;
   isCredit?: boolean;
   paidAmount?: number;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  creditStatus?: string | null;
 };
 
 export type SaleItemDto = {
@@ -421,6 +426,7 @@ export type CustomerDetailDto = {
   customer: CustomerDto;
   pendingSales: SaleDto[];
   payments: CustomerPaymentDto[];
+  allCreditSales: SaleDto[];
 };
 
 export type CreateCustomerDto = { name: string; phone?: string | null; note?: string | null };

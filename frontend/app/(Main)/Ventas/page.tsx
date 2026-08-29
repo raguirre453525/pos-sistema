@@ -13,6 +13,7 @@ import {
   getCategoryProducts,
   createSale,
   getCustomers,
+  createCustomer,
   ProductDto,
   CategoryDto,
   CustomerDto,
@@ -48,6 +49,12 @@ export default function VentasPage() {
   const [creditCustomerId, setCreditCustomerId] = useState<string>("");
   const [customerSearch, setCustomerSearch] = useState("");
   const [customers, setCustomers] = useState<CustomerDto[]>([]);
+  const [creditDueDays, setCreditDueDays] = useState("14");
+  const [showInlineCreate, setShowInlineCreate] = useState(false);
+  const [inlineName, setInlineName] = useState("");
+  const [inlinePhone, setInlinePhone] = useState("");
+  const [inlineLoading, setInlineLoading] = useState(false);
+  const [inlineError, setInlineError] = useState<string | null>(null);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -186,6 +193,43 @@ export default function VentasPage() {
 
   const selectedCustomer = useMemo(() => customers.find((c) => c.id === creditCustomerId) ?? null, [customers, creditCustomerId]);
 
+  const exactMatch = useMemo(() => {
+    const q = customerSearch.trim().toLowerCase();
+    if (!q) return false;
+    return customers.some((c) => c.name.toLowerCase() === q);
+  }, [customers, customerSearch]);
+
+  const dueDateHint = useMemo(() => {
+    const days = parseInt(creditDueDays, 10);
+    if (!days || days < 1 || days > 365) return null;
+    const d = new Date(Date.now() + days * 86400000);
+    return d.toLocaleDateString("es-AR");
+  }, [creditDueDays]);
+
+  const handleInlineCreate = async () => {
+    const name = inlineName.trim();
+    if (name.length < 2) {
+      setInlineError("Nombre mínimo 2 caracteres");
+      return;
+    }
+    setInlineLoading(true);
+    setInlineError(null);
+    try {
+      const newCustomer = await createCustomer({ name, phone: inlinePhone.trim() || null });
+      setCustomers((prev) => [...prev, newCustomer]);
+      setCreditCustomerId(newCustomer.id);
+      setShowInlineCreate(false);
+      setInlineName("");
+      setInlinePhone("");
+      setCustomerSearch("");
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al crear cliente";
+      setInlineError(msg);
+    } finally {
+      setInlineLoading(false);
+    }
+  };
+
   const handleConfirmSale = async () => {
     if (cart.length === 0) {
       setSaleError("Carrito vacío");
@@ -199,15 +243,24 @@ export default function VentasPage() {
       setSaleError(`Falta $${(total - cashNum).toLocaleString("es-AR")}`);
       return;
     }
+    if (isCredit && selectedCustomer) {
+      const days = parseInt(creditDueDays, 10);
+      if (!days || days < 1 || days > 365) {
+        setSaleError("Plazo debe ser entre 1 y 365 días");
+        return;
+      }
+    }
     setSaleLoading(true);
     setSaleError(null);
     setSaleMsg(null);
     try {
+      const dueDaysNum = isCredit ? parseInt(creditDueDays, 10) : undefined;
       const sale = await createSale({
         items: cart.map((c) => ({ productId: c.product.id, quantity: c.quantity })),
         paymentMethod,
         customerId: isCredit ? creditCustomerId : null,
         isCredit,
+        dueDays: isCredit && dueDaysNum && dueDaysNum >= 1 && dueDaysNum <= 365 ? dueDaysNum : undefined,
       });
       const backendTotal = Number(sale.total);
       const discountNote = discountAmount > 0 ? ` (visual con dto: $${total.toLocaleString("es-AR")})` : "";
@@ -223,6 +276,11 @@ export default function VentasPage() {
       setIsCredit(false);
       setCreditCustomerId("");
       setCustomerSearch("");
+      setCreditDueDays("14");
+      setShowInlineCreate(false);
+      setInlineName("");
+      setInlinePhone("");
+      setInlineError(null);
       await fetchProducts();
       getCustomers().then(setCustomers).catch(() => {});
     } catch (e) {
@@ -431,18 +489,18 @@ export default function VentasPage() {
               </p>
             )}
 
-            <div className="flex items-center gap-2 p-2 rounded-lg border bg-amber-50 border-amber-200">
+            <div className={`bg-card border rounded-xl p-3 flex items-center gap-3 ${isCredit ? "border-primary bg-primary/10" : "border-border"}`}>
               <input
                 id="fiado-switch"
                 type="checkbox"
                 checked={isCredit}
                 onChange={(e) => setIsCredit(e.target.checked)}
-                className="h-4 w-4"
+                className="h-4 w-4 rounded accent-primary"
               />
-              <Label htmlFor="fiado-switch" className="text-sm font-semibold cursor-pointer">
+              <Label htmlFor="fiado-switch" className="text-sm font-semibold text-foreground cursor-pointer">
                 Fiado
               </Label>
-              <span className="text-xs text-muted-foreground">Venta pendiente</span>
+              <span className="text-sm text-muted-foreground">Venta pendiente</span>
             </div>
 
             {isCredit && (
@@ -461,6 +519,7 @@ export default function VentasPage() {
                             onClick={() => {
                               setCreditCustomerId(c.id);
                               setCustomerSearch("");
+                              setShowInlineCreate(false);
                             }}
                             className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
                           >
@@ -471,17 +530,52 @@ export default function VentasPage() {
                         ))
                       )}
                     </div>
-                    <p className="text-xs text-amber-700">Seleccioná un cliente para confirmar fiado.</p>
+                    {customerSearch.trim().length >= 2 && !exactMatch && customerSearchResults.length === 0 && !showInlineCreate && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => {
+                          setInlineName(customerSearch.trim());
+                          setInlinePhone("");
+                          setShowInlineCreate(true);
+                        }}
+                      >
+                        + Crear &quot;{customerSearch.trim()}&quot;
+                      </Button>
+                    )}
+                    {showInlineCreate && (
+                      <div className="flex flex-col gap-2 p-2 rounded-lg border bg-card">
+                        <Label className="text-xs">Nuevo cliente</Label>
+                        <Input placeholder="Nombre" value={inlineName} onChange={(e) => setInlineName(e.target.value)} />
+                        <Input placeholder="Teléfono (opcional)" value={inlinePhone} onChange={(e) => setInlinePhone(e.target.value)} />
+                        {inlineError && <p className="text-xs text-red-600 border border-red-200 bg-red-50 rounded p-1">{inlineError}</p>}
+                        <div className="flex gap-2">
+                          <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowInlineCreate(false)}>Cancelar</Button>
+                          <Button size="sm" className="flex-1" onClick={handleInlineCreate} disabled={inlineLoading}>
+                            {inlineLoading ? "Creando…" : "Crear y seleccionar"}
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                    <p className="text-xs text-muted-foreground">Seleccioná un cliente para confirmar fiado.</p>
                   </>
                 ) : (
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm">
-                      Cliente: <span className="font-semibold">{selectedCustomer.name}</span> {selectedCustomer.phone ? `(${selectedCustomer.phone})` : ""}
-                    </span>
-                    <Button variant="ghost" size="sm" onClick={() => setCreditCustomerId("")}>
-                      <X className="h-4 w-4" />
-                    </Button>
-                  </div>
+                  <>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">
+                        Cliente: <span className="font-semibold">{selectedCustomer.name}</span> {selectedCustomer.phone ? `(${selectedCustomer.phone})` : ""}
+                      </span>
+                      <Button variant="ghost" size="sm" onClick={() => setCreditCustomerId("")}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <div className="flex flex-col gap-1 pt-2">
+                      <Label className="text-sm">Plazo (días)</Label>
+                      <Input type="number" min={1} max={365} value={creditDueDays} onChange={(e) => setCreditDueDays(e.target.value)} className="bg-background" />
+                      {dueDateHint && <span className="text-xs text-muted-foreground">Vence: {dueDateHint}</span>}
+                    </div>
+                  </>
                 )}
               </div>
             )}
@@ -533,7 +627,7 @@ export default function VentasPage() {
               </div>
             ) : null}
 
-            {isCredit && <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded p-2">Venta fiada — no hay vuelto. Quedará pendiente para {selectedCustomer?.name ?? "cliente"}.</p>}
+            {isCredit && <p className="text-xs text-muted-foreground bg-muted border border-border rounded p-2">Venta fiada — no hay vuelto. Quedará pendiente para {selectedCustomer?.name ?? "cliente"}. {dueDateHint ? `Vence ${dueDateHint}.` : ""}</p>}
 
             {saleError && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">{saleError}</div>

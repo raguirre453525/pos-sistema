@@ -120,15 +120,23 @@ public class CustomerService : ICustomerService
             .OrderByDescending(s => s.Date)
             .ToListAsync();
 
+        // Historial completo de compras fiadas: todas donde CustomerId == id (incluye pagadas donde IsCredit ya es false, y con DueDate)
+        var allCreditSales = await _context.Sales
+            .Include(s => s.Items).ThenInclude(i => i.Product)
+            .Where(s => s.CustomerId == id)
+            .OrderByDescending(s => s.Date)
+            .ToListAsync();
+
         var payments = await _context.CustomerPayments
             .Where(p => p.CustomerId == id)
             .OrderByDescending(p => p.PaidAt)
             .ToListAsync();
 
         var saleDtos = _mapper.Map<List<SaleDto>>(pendingSales);
+        var allCreditDtos = _mapper.Map<List<SaleDto>>(allCreditSales);
         var paymentDtos = payments.Select(p => new CustomerPaymentDto(p.Id, p.CustomerId, p.Amount, p.PaidAt, p.Note, p.SaleId)).ToList();
 
-        return new CustomerDetailDto(dto, saleDtos, paymentDtos);
+        return new CustomerDetailDto(dto, saleDtos, paymentDtos, allCreditDtos);
     }
 
     public async Task DeleteAsync(Guid id)

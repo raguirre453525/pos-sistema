@@ -19,8 +19,33 @@ public class SalesService : ISalesService
     {
         if (dto.IsCredit && (dto.CustomerId == null || dto.CustomerId == Guid.Empty))
             throw new ArgumentException("Cliente requerido para venta fiada", nameof(dto.CustomerId));
+
+        DateTime? dueDate = null;
+        if (dto.IsCredit)
+        {
+            if (dto.DueDate.HasValue)
+            {
+                dueDate = dto.DueDate.Value;
+                var days = (dueDate.Value.Date - DateTime.UtcNow.Date).TotalDays;
+                // Validate range 1..365 days from now (inclusive)
+                if (days < 1 || days > 365)
+                    throw new ArgumentException("Plazo debe ser entre 1 y 365 días", nameof(dto.DueDate));
+            }
+            else if (dto.DueDays.HasValue)
+            {
+                if (dto.DueDays.Value < 1 || dto.DueDays.Value > 365)
+                    throw new ArgumentException("Plazo debe ser entre 1 y 365 días", nameof(dto.DueDays));
+                dueDate = DateTime.UtcNow.Date.AddDays(dto.DueDays.Value);
+            }
+            else
+            {
+                // default 14 days as per frontend spec
+                dueDate = DateTime.UtcNow.Date.AddDays(14);
+            }
+        }
+
         var items = dto.Items.Select(i => (i.ProductId, i.Quantity)).ToList();
-        var sale = await _repository.CreateAsync(items, dto.PaymentMethod, null, dto.CustomerId, dto.IsCredit);
+        var sale = await _repository.CreateAsync(items, dto.PaymentMethod, null, dto.CustomerId, dto.IsCredit, dueDate);
 
         return _mapper.Map<SaleDto>(sale);
     }

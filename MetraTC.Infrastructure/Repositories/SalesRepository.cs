@@ -16,7 +16,7 @@ public class SalesRepository : ISalesRepository
         _context = context;
     }
 
-    public async Task<Sale> CreateAsync(List<(Guid productId, int quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null, Guid? customerId = null, bool isCredit = false)
+    public async Task<Sale> CreateAsync(List<(Guid productId, int quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null)
     {
         if (items == null || !items.Any())
             throw new ArgumentException("La venta debe tener al menos un item", nameof(items));
@@ -88,7 +88,7 @@ public class SalesRepository : ISalesRepository
             if (!customerExists) throw new KeyNotFoundException($"No se encontró cliente con ID: {customerId}");
         }
 
-        var sale = new Sale(paymentMethod, saleItems, customerId, isCredit);
+        var sale = new Sale(paymentMethod, saleItems, customerId, isCredit, dueDate);
 
         _context.Sales.Add(sale);
 

@@ -25,6 +25,8 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
 
         builder.Property(s => s.IsCredit).IsRequired().HasDefaultValue(false);
         builder.Property(s => s.PaidAmount).HasColumnType("decimal(18,2)").IsRequired().HasDefaultValue(0m);
+        builder.Property(s => s.DueDate).IsRequired(false);
+        builder.Property(s => s.PaidAt).IsRequired(false);
         builder.Property(s => s.CustomerId).IsRequired(false);
         builder.HasOne(s => s.Customer).WithMany().HasForeignKey(s => s.CustomerId).OnDelete(DeleteBehavior.SetNull);
         builder.HasIndex(s => s.CustomerId);

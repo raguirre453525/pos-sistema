@@ -21,7 +21,8 @@ public static class CustomerDtos
     public record CustomerDetailDto(
         CustomerDto Customer,
         List<SaleDtos.SaleDto> PendingSales,
-        List<CustomerPaymentDto> Payments
+        List<CustomerPaymentDto> Payments,
+        List<SaleDtos.SaleDto> AllCreditSales
     );
 
     public record CustomerPaymentDto(

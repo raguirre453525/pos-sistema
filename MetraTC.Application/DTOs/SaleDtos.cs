@@ -8,7 +8,9 @@ public static class SaleDtos
         List<CreateSaleItemDto> Items,
         PaymentMethod PaymentMethod,
         Guid? CustomerId = null,
-        bool IsCredit = false
+        bool IsCredit = false,
+        DateTime? DueDate = null,
+        int? DueDays = null
     );
 
     public record CreateSaleItemDto(
@@ -26,6 +28,9 @@ public static class SaleDtos
         public Guid? CustomerId { get; init; }
         public bool IsCredit { get; init; }
         public decimal PaidAmount { get; init; }
+        public DateTime? DueDate { get; init; }
+        public DateTime? PaidAt { get; init; }
+        public string CreditStatus { get; init; } = string.Empty;
     }
 
     public record SaleItemDto

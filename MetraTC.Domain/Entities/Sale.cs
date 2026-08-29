@@ -14,12 +14,14 @@ public class Sale : BaseEntity
     public Customer? Customer { get; private set; }
     public bool IsCredit { get; private set; }
     public decimal PaidAmount { get; private set; }
+    public DateTime? DueDate { get; private set; }
+    public DateTime? PaidAt { get; private set; }
 
     private Sale()
     {
     }
 
-    public Sale(PaymentMethod paymentMethod, IEnumerable<SaleItem> items, Guid? customerId = null, bool isCredit = false)
+    public Sale(PaymentMethod paymentMethod, IEnumerable<SaleItem> items, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null)
     {
         if (items == null || !items.Any())
             throw new ArgumentException("La venta debe tener al menos un item", nameof(items));
@@ -46,12 +48,37 @@ public class Sale : BaseEntity
             CustomerId = customerId;
             IsCredit = true;
             PaidAmount = 0;
+            if (dueDate.HasValue)
+            {
+                SetDueDate(dueDate);
+            }
         }
         else
         {
             CustomerId = customerId;
             IsCredit = false;
             PaidAmount = Total;
+            DueDate = null;
+            PaidAt = DateTime.UtcNow;
+        }
+    }
+
+    public void SetDueDate(DateTime? dueDate)
+    {
+        if (!IsCredit)
+            throw new InvalidOperationException("Solo ventas fiadas pueden tener vencimiento");
+        if (dueDate.HasValue)
+        {
+            var days = (dueDate.Value - DateTime.UtcNow).TotalDays;
+            if (days < 0 || dueDate.Value < Date) // allow past? but validate range elsewhere
+            {
+                // allow but don't throw for past due; range validation done in service
+            }
+            DueDate = dueDate.Value;
+        }
+        else
+        {
+            DueDate = null;
         }
     }
 
@@ -83,6 +110,7 @@ public class Sale : BaseEntity
         {
             PaidAmount = Total;
             IsCredit = false;
+            PaidAt = DateTime.UtcNow;
         }
     }
 }
