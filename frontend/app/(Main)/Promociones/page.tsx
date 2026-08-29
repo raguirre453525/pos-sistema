@@ -78,8 +78,8 @@ export default function PromocionesPage() {
   const totalUnits = useMemo(() => selectedLines.reduce((s, l) => s + l.qty, 0), [selectedLines]);
   const comboPriceNum = parseFloat(form.comboPrice) || 0;
   const discountNum = parseFloat(form.discountPercentage) || 0;
-  const savingAmount = form.type === 0 ? (total - comboPriceNum) : (total * discountNum / 100);
-  const savingPercent = form.type === 0 ? (total > 0 ? savingAmount / total * 100 : 0) : discountNum;
+  const hasComboPrice = form.comboPrice.trim() !== "" && !isNaN(comboPriceNum) && comboPriceNum > 0;
+  const hasDiscount = form.discountPercentage.trim() !== "" && !isNaN(discountNum) && discountNum > 0;
   const filteredProducts = useMemo(() => {
     const q = searchProd.toLowerCase();
     return products.filter(p => p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q));
@@ -243,52 +243,42 @@ export default function PromocionesPage() {
 
       {open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-background rounded-xl border w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
-            <div className="p-5 border-b flex items-center justify-between">
+          <div className="bg-background rounded-xl border w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+            <div className="p-5 border-b flex items-center justify-between shrink-0">
               <h2 className="font-semibold text-lg">{editing ? "Editar" : "Nuevo"} combo / promo {form.type===0 && <span className="text-xs font-normal text-muted-foreground ml-2">3x2: mismo producto con cantidad &gt;1</span>}</h2>
               <Button variant="ghost" size="icon" onClick={() => setOpen(false)}><X className="size-4" /></Button>
             </div>
-            <div className="overflow-auto p-5 space-y-4">
+            <div className="overflow-auto p-5 space-y-6 max-h-[85vh]">
               {formErr && <div className="bg-destructive/10 text-destructive p-2 rounded text-sm">{formErr}</div>}
 
-              <div className="grid gap-3">
-                <div><Label>Nombre *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Combo Desayuno / -20% Lacteos / Gaseosa 3x2" maxLength={80} /><div className="text-xs text-muted-foreground text-right">{form.name.length}/80</div></div>
-                <div><Label>Descripción</Label><textarea className="w-full rounded-md border p-2 text-sm min-h-[60px]" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} maxLength={500} placeholder="Opcional — ej: Gaseosa Seven Up x3 a precio de 2" /><div className="text-xs text-muted-foreground text-right">{form.description.length}/500</div></div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <Label>Tipo</Label>
-                    <select value={form.type} onChange={e => setForm({ ...form, type: parseInt(e.target.value) as 0|1 })} className="w-full rounded-md border h-9 px-2 bg-background">
-                      <option value={0}>Combo (precio fijo)</option>
-                      <option value={1}>Porcentaje (%)</option>
-                    </select>
-                    {form.type===1 && <p className="text-xs text-muted-foreground mt-1">Cantidad siempre 1 para %</p>}
-                  </div>
-                  <div className="flex items-end gap-2 pb-1">
-                    <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} className="size-4" /> Activo</label>
-                  </div>
+              {/* Paso 1 – Tipo (compacto, arriba) */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
+                  <span className="font-semibold text-sm">Tipo</span>
+                  <span className="text-xs text-muted-foreground">Elegí el tipo antes de armar el combo</span>
                 </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div><Label>Desde</Label><Input type="date" value={form.validFrom} onChange={e => setForm({ ...form, validFrom: e.target.value })} /></div>
-                  <div><Label>Hasta (inclusive)</Label><Input type="date" value={form.validTo} onChange={e => setForm({ ...form, validTo: e.target.value })} /></div>
+                <div className="grid grid-cols-2 gap-2">
+                  <label className={`flex items-center gap-2 rounded-lg border p-3 cursor-pointer text-sm ${form.type===0 ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}>
+                    <input type="radio" name="promo-type" checked={form.type===0} onChange={() => setForm(f => ({ ...f, type: 0, discountPercentage: "" }))} className="size-4" />
+                    <PackageCheck className="size-4" /> Combo (precio fijo bundle)
+                  </label>
+                  <label className={`flex items-center gap-2 rounded-lg border p-3 cursor-pointer text-sm ${form.type===1 ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}>
+                    <input type="radio" name="promo-type" checked={form.type===1} onChange={() => setForm(f => ({ ...f, type: 1, comboPrice: "", lines: f.lines.map(l => ({ ...l, qty: 1 })) }))} className="size-4" />
+                    <BadgePercent className="size-4" /> Promoción % (descuento)
+                  </label>
                 </div>
-                {form.type === 0 ? (
-                  <div><Label>Precio combo $ *</Label><Input type="number" min={0} step={0.01} value={form.comboPrice} onChange={e => setForm({ ...form, comboPrice: e.target.value })} placeholder="5500" />
-                    {comboPriceNum > total && total>0 && <div className="text-xs text-amber-600 mt-1">⚠ Precio combo mayor a la suma ({fmtMoney(total)}) — no hay ahorro</div>}
-                    {total===0 && <div className="text-xs text-muted-foreground mt-1">Agregá productos con cantidad para ver total original</div>}
-                  </div>
-                ) : (
-                  <div><Label>Descuento % (1..90) *</Label>
-                    <div className="flex gap-2 items-center">
-                      <Input type="range" min={1} max={90} value={discountNum || 10} onChange={e => setForm({ ...form, discountPercentage: e.target.value })} className="flex-1" />
-                      <Input type="number" min={1} max={90} className="w-20" value={form.discountPercentage} onChange={e => setForm({ ...form, discountPercentage: e.target.value })} />
-                      <span className="text-sm">%</span>
-                    </div>
-                  </div>
-                )}
+                {form.type===0 && <p className="text-xs text-muted-foreground">Combo permite mismo producto con cantidad &gt;1 (ej: 3×2).</p>}
+                {form.type===1 && <p className="text-xs text-muted-foreground">Descuento %: cantidad siempre 1 por producto.</p>}
               </div>
 
-              <div className="space-y-2">
-                <Label>Productos {form.type===0 ? `(mín 2 unidades — ${totalUnits} actual)` : "(mín 1)"} — {selectedLines.length} líneas</Label>
+              {/* Paso 2 – Selección productos */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">2</span>
+                  <span className="font-semibold text-sm">Productos</span>
+                  <span className="text-xs text-muted-foreground">{form.type===0 ? `(mín 2 unidades — ${totalUnits} actual)` : "(mín 1)"} — {selectedLines.length} líneas</span>
+                </div>
                 <div className="relative"><Search className="absolute left-2 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" /><Input className="pl-8" placeholder="Buscar por nombre o SKU..." value={searchProd} onChange={e => setSearchProd(e.target.value)} /></div>
                 <div className="border rounded-md max-h-48 overflow-auto divide-y">
                   {filteredProducts.map(p => {
@@ -304,48 +294,103 @@ export default function PromocionesPage() {
                   })}
                   {filteredProducts.length===0 && <div className="p-3 text-sm text-muted-foreground text-center">Sin resultados</div>}
                 </div>
+
+                {selectedLines.length>0 && (
+                  <div className="border rounded-md overflow-hidden">
+                    <div className="bg-muted px-3 py-2 text-sm font-medium">Productos elegidos — cantidad por línea {form.type===0 ? "(3×2: subí a ×3)" : ""}</div>
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="text-right">$ Unitario</TableHead><TableHead className="text-center">Cantidad</TableHead><TableHead className="text-right">Subtotal</TableHead><TableHead></TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {selectedLines.map(l => {
+                          if (!l.product) return null;
+                          const subtotal = l.product.price * l.qty;
+                          const isPercent = form.type===1;
+                          return (
+                            <TableRow key={l.id}>
+                              <TableCell className="text-sm">{l.product.name} <span className="text-xs text-muted-foreground">({l.product.sku})</span></TableCell>
+                              <TableCell className="text-right">{fmtMoney(l.product.price)}</TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex items-center justify-center gap-1">
+                                  <Button size="icon" variant="outline" className="size-7" onClick={() => updateQty(l.id, -1)} disabled={isPercent}><Minus className="size-3" /></Button>
+                                  {isPercent ? (
+                                    <span className="w-12 text-center text-sm">1</span>
+                                  ) : (
+                                    <Input type="number" min={1} max={99} value={l.qty} onChange={e => setQty(l.id, parseInt(e.target.value))} className="w-14 h-7 text-center" />
+                                  )}
+                                  <Button size="icon" variant="outline" className="size-7" onClick={() => updateQty(l.id, 1)} disabled={isPercent}><Plus className="size-3" /></Button>
+                                </div>
+                              </TableCell>
+                              <TableCell className="text-right">{fmtMoney(subtotal)}</TableCell>
+                              <TableCell><Button size="icon" variant="ghost" onClick={() => removeLine(l.id)}><Trash2 className="size-4 text-destructive" /></Button></TableCell>
+                            </TableRow>
+                          );
+                        })}
+                        <TableRow className="bg-muted/50 font-semibold"><TableCell>Total</TableCell><TableCell></TableCell><TableCell className="text-center">{totalUnits} u.</TableCell><TableCell className="text-right">{fmtMoney(total)}</TableCell><TableCell></TableCell></TableRow>
+                      </TableBody>
+                    </Table>
+                    {form.type===0 && totalUnits>=2 && <p className="px-3 py-2 text-xs text-muted-foreground border-t">Ejemplo 3×2: seleccioná 1 producto y subí cantidad a ×3, poné precio combo = precio de 2.</p>}
+                    {form.type===0 && total===0 && <p className="px-3 py-2 text-xs text-muted-foreground border-t">Agregá productos con cantidad para ver total original.</p>}
+                  </div>
+                )}
+                {selectedLines.length===0 && <p className="text-xs text-muted-foreground">Elegí productos para ver el total Σ (precio × qty) destacado arriba del detalle del combo.</p>}
               </div>
 
-              {selectedLines.length>0 && (
-                <div className="border rounded-md overflow-hidden">
-                  <div className="bg-muted px-3 py-2 text-sm font-medium">Productos elegidos — cantidad por línea (3x2: subir a ×3)</div>
-                  <Table>
-                    <TableHeader><TableRow><TableHead>Producto</TableHead><TableHead className="text-right">$ Unitario</TableHead><TableHead className="text-center">Cantidad</TableHead><TableHead className="text-right">Subtotal</TableHead><TableHead></TableHead></TableRow></TableHeader>
-                    <TableBody>
-                      {selectedLines.map(l => {
-                        if (!l.product) return null;
-                        const subtotal = l.product.price * l.qty;
-                        const isPercent = form.type===1;
-                        return (
-                          <TableRow key={l.id}>
-                            <TableCell className="text-sm">{l.product.name} <span className="text-xs text-muted-foreground">({l.product.sku})</span></TableCell>
-                            <TableCell className="text-right">{fmtMoney(l.product.price)}</TableCell>
-                            <TableCell className="text-center">
-                              <div className="flex items-center justify-center gap-1">
-                                <Button size="icon" variant="outline" className="size-7" onClick={() => updateQty(l.id, -1)} disabled={isPercent}><Minus className="size-3" /></Button>
-                                {isPercent ? (
-                                  <span className="w-12 text-center text-sm">1</span>
-                                ) : (
-                                  <Input type="number" min={1} max={99} value={l.qty} onChange={e => setQty(l.id, parseInt(e.target.value))} className="w-14 h-7 text-center" />
-                                )}
-                                <Button size="icon" variant="outline" className="size-7" onClick={() => updateQty(l.id, 1)} disabled={isPercent}><Plus className="size-3" /></Button>
-                              </div>
-                            </TableCell>
-                            <TableCell className="text-right">{fmtMoney(subtotal)}</TableCell>
-                            <TableCell><Button size="icon" variant="ghost" onClick={() => removeLine(l.id)}><Trash2 className="size-4 text-destructive" /></Button></TableCell>
-                          </TableRow>
-                        );
-                      })}
-                      <TableRow className="bg-muted/50 font-semibold"><TableCell>Total</TableCell><TableCell></TableCell><TableCell className="text-center">{totalUnits} u.</TableCell><TableCell className="text-right">{fmtMoney(total)}</TableCell><TableCell></TableCell></TableRow>
-                    </TableBody>
-                  </Table>
-                  <div className="p-3 flex items-center justify-between bg-amber-50 dark:bg-amber-950/20 border-t">
-                    <span className="text-sm">{form.type===0 ? `Combo ${fmtMoney(comboPriceNum || 0)}` : `Descuento ${discountNum}%`}</span>
-                    <Badge className={savingAmount>0?"bg-emerald-600":"bg-zinc-500"}>Ahorrás {fmtMoney(savingAmount)} ({savingPercent.toFixed(1)}%)</Badge>
-                  </div>
-                  {form.type===0 && totalUnits>=2 && <p className="px-3 py-2 text-xs text-muted-foreground">Ejemplo 3x2: seleccioná 1 producto y subí cantidad a ×3, poné precio combo = precio de 2.</p>}
+              {/* Paso 3 – Detalles del combo/promo (debajo del total, no arriba) */}
+              <div className="border-t pt-4 space-y-4">
+                <div className="flex items-center gap-2">
+                  <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">3</span>
+                  <span className="font-semibold text-sm">Detalles del {form.type===0 ? "combo" : "descuento"}</span>
                 </div>
-              )}
+
+                <div><Label>Nombre *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Ej: Combo verano 3x2" maxLength={80} /><div className="text-xs text-muted-foreground text-right">{form.name.length}/80</div></div>
+                <div><Label>Descripción</Label><textarea className="w-full rounded-md border p-2 text-sm min-h-[60px]" value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} maxLength={500} placeholder="Opcional — ej: Gaseosa Seven Up x3 a precio de 2" /><div className="text-xs text-muted-foreground text-right">{form.description.length}/500</div></div>
+
+                {form.type===0 ? (
+                  <div className="space-y-2">
+                    <Label>Precio del combo *</Label>
+                    <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+                      <div className="relative flex-1">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">$</span>
+                        <Input type="number" min={0} step={0.01} className="pl-7" value={form.comboPrice} onChange={e => setForm({ ...form, comboPrice: e.target.value })} placeholder="5500" />
+                      </div>
+                      <div className="sm:min-w-[280px] flex justify-start sm:justify-end">
+                        {!hasComboPrice || total===0 ? (
+                          <span className="text-sm text-muted-foreground italic">Definí el precio del combo para ver el ahorro —</span>
+                        ) : comboPriceNum >= total ? (
+                          <Badge className="bg-amber-500 text-white hover:bg-amber-600 whitespace-normal text-center">Sin ahorro — el combo cuesta igual o más que la suma ({fmtMoney(total)})</Badge>
+                        ) : (
+                          <Badge className="bg-emerald-600 hover:bg-emerald-700">Ahorrás {fmtMoney(total - comboPriceNum)} ({((total - comboPriceNum)/total*100).toFixed(1)}%)</Badge>
+                        )}
+                      </div>
+                    </div>
+                    {hasComboPrice && comboPriceNum > 0 && total>0 && comboPriceNum > total && <div className="text-xs text-amber-600">⚠ Precio combo mayor a la suma — no hay ahorro</div>}
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <Label>Descuento % * (1..90)</Label>
+                    <div className="flex gap-2 items-center">
+                      <Input type="range" min={1} max={90} value={discountNum || 10} onChange={e => setForm({ ...form, discountPercentage: e.target.value })} className="flex-1" />
+                      <Input type="number" min={1} max={90} className="w-20" value={form.discountPercentage} onChange={e => setForm({ ...form, discountPercentage: e.target.value })} />
+                      <span className="text-sm">%</span>
+                    </div>
+                    <div className="flex justify-end">
+                      {!hasDiscount ? (
+                        <span className="text-sm text-muted-foreground italic">Elegí % para ver ahorro</span>
+                      ) : total===0 ? (
+                        <span className="text-sm text-muted-foreground italic">Agregá productos para ver ahorro</span>
+                      ) : (
+                        <Badge className="bg-emerald-600 hover:bg-emerald-700">Ahorrás {fmtMoney(total * discountNum / 100)} ({discountNum.toFixed(1)}%)</Badge>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div><Label>Desde</Label><Input type="date" value={form.validFrom} onChange={e => setForm({ ...form, validFrom: e.target.value })} /></div>
+                  <div><Label>Hasta (inclusive)</Label><Input type="date" value={form.validTo} onChange={e => setForm({ ...form, validTo: e.target.value })} /></div>
+                </div>
+                <label className="flex items-center gap-2 text-sm cursor-pointer"><input type="checkbox" checked={form.isActive} onChange={e => setForm({ ...form, isActive: e.target.checked })} className="size-4" /> Activo</label>
+              </div>
             </div>
             <div className="p-4 border-t flex justify-end gap-2">
               <Button variant="outline" onClick={() => setOpen(false)}>Cancelar</Button>
