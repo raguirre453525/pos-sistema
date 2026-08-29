@@ -43,16 +43,12 @@ public class CustomerService : ICustomerService
 
         var customerIds = customers.Select(c => c.Id).ToList();
 
+        // Balance correcto = suma de remanentes (Total - PaidAmount) de ventas no saldadas.
+        // Los pagos ya están reflejados en PaidAmount; no restar CustomerPayments para evitar doble contabilidad.
         var pendingSales = await _context.Sales
-            .Where(s => s.CustomerId != null && s.IsCredit && customerIds.Contains(s.CustomerId!.Value))
+            .Where(s => s.CustomerId != null && s.PaidAmount < s.Total && customerIds.Contains(s.CustomerId!.Value))
             .GroupBy(s => s.CustomerId!.Value)
-            .Select(g => new { CustomerId = g.Key, Total = g.Sum(x => x.Total), Count = g.Count(), MinDate = g.Min(x => x.Date), MaxDate = g.Max(x => x.Date) })
-            .ToListAsync();
-
-        var payments = await _context.CustomerPayments
-            .Where(p => customerIds.Contains(p.CustomerId))
-            .GroupBy(p => p.CustomerId)
-            .Select(g => new { CustomerId = g.Key, Total = g.Sum(x => x.Amount) })
+            .Select(g => new { CustomerId = g.Key, Remaining = g.Sum(x => x.Total - x.PaidAmount), Count = g.Count(), MinDate = g.Min(x => x.Date), MaxDate = g.Max(x => x.Date) })
             .ToListAsync();
 
         // For LastPurchaseAt we need max date of ANY sale for that customer (not only pending)
@@ -63,19 +59,15 @@ public class CustomerService : ICustomerService
             .ToListAsync();
 
         var pendingDict = pendingSales.ToDictionary(x => x.CustomerId);
-        var paymentsDict = payments.ToDictionary(x => x.CustomerId);
         var lastDict = lastPurchases.ToDictionary(x => x.CustomerId);
 
         var result = new List<CustomerDto>();
         foreach (var c in customers)
         {
             pendingDict.TryGetValue(c.Id, out var pend);
-            paymentsDict.TryGetValue(c.Id, out var pay);
             lastDict.TryGetValue(c.Id, out var last);
 
-            var pendingTotal = pend?.Total ?? 0m;
-            var paidTotal = pay?.Total ?? 0m;
-            var balance = pendingTotal - paidTotal;
+            var balance = pend?.Remaining ?? 0m;
             if (balance < 0) balance = 0;
 
             int? daysSinceDebt = null;
@@ -116,7 +108,7 @@ public class CustomerService : ICustomerService
 
         var pendingSales = await _context.Sales
             .Include(s => s.Items).ThenInclude(i => i.Product)
-            .Where(s => s.CustomerId == id && s.IsCredit)
+            .Where(s => s.CustomerId == id && s.PaidAmount < s.Total)
             .OrderByDescending(s => s.Date)
             .ToListAsync();
 
@@ -155,10 +147,10 @@ public class CustomerService : ICustomerService
             ?? throw new KeyNotFoundException($"No se encontró cliente con ID: {customerId}");
         if (!customer.IsActive) throw new KeyNotFoundException($"No se encontró cliente con ID: {customerId}");
 
-        // Compute balance for validation
-        var pendingTotal = await _context.Sales.Where(s => s.CustomerId == customerId && s.IsCredit).SumAsync(s => (decimal?)s.Total) ?? 0m;
-        var paidTotal = await _context.CustomerPayments.Where(p => p.CustomerId == customerId).SumAsync(p => (decimal?)p.Amount) ?? 0m;
-        var balance = pendingTotal - paidTotal;
+        // Balance correcto = suma de remanentes; CustomerPayment es solo auditoría, no se resta.
+        var balance = await _context.Sales
+            .Where(s => s.CustomerId == customerId && s.PaidAmount < s.Total)
+            .SumAsync(s => (decimal?)(s.Total - s.PaidAmount)) ?? 0m;
         if (balance < 0) balance = 0;
         if (dto.Amount > balance) throw new ArgumentException($"El monto excede el saldo pendiente (${balance})", nameof(dto.Amount));
 
@@ -168,8 +160,8 @@ public class CustomerService : ICustomerService
             targetSale = await _context.Sales.FirstOrDefaultAsync(s => s.Id == dto.SaleId.Value);
             if (targetSale == null) throw new KeyNotFoundException($"No se encontró venta con ID: {dto.SaleId}");
             if (targetSale.CustomerId != customerId) throw new ArgumentException("La venta no pertenece al cliente", nameof(dto.SaleId));
-            if (!targetSale.IsCredit) throw new ArgumentException("La venta no está pendiente", nameof(dto.SaleId));
             var remaining = targetSale.Total - targetSale.PaidAmount;
+            if (remaining <= 0) throw new ArgumentException("La venta no está pendiente", nameof(dto.SaleId));
             if (dto.Amount > remaining) throw new ArgumentException($"El monto excede el saldo de la venta (${remaining})", nameof(dto.Amount));
         }
 
@@ -182,8 +174,13 @@ public class CustomerService : ICustomerService
         }
         else
         {
-            // Auto-apply FIFO to oldest pending sales
-            var pendingSales = await _context.Sales.Where(s => s.CustomerId == customerId && s.IsCredit).OrderBy(s => s.Date).ToListAsync();
+            // Auto-apply FIFO a pendientes ordenados por DueDate/CreatedAt.
+            // Imputa el monto a las ventas más antiguas hasta agotarlo.
+            // Se crea un único CustomerPayment para historial; las Sales actualizan PaidAmount/IsCredit.
+            var pendingSales = await _context.Sales
+                .Where(s => s.CustomerId == customerId && s.PaidAmount < s.Total)
+                .OrderBy(s => s.DueDate ?? DateTime.MaxValue).ThenBy(s => s.Date)
+                .ToListAsync();
             var remainingAmount = dto.Amount;
             foreach (var sale in pendingSales)
             {
@@ -201,13 +198,13 @@ public class CustomerService : ICustomerService
 
     private async Task<CustomerDto> ToDtoAsync(Customer c)
     {
-        var pendingTotal = await _context.Sales.Where(s => s.CustomerId == c.Id && s.IsCredit).SumAsync(s => (decimal?)s.Total) ?? 0m;
-        var paidTotal = await _context.CustomerPayments.Where(p => p.CustomerId == c.Id).SumAsync(p => (decimal?)p.Amount) ?? 0m;
-        var pendingCount = await _context.Sales.CountAsync(s => s.CustomerId == c.Id && s.IsCredit);
-        var lastPurchase = await _context.Sales.Where(s => s.CustomerId == c.Id).MaxAsync(s => (DateTime?)s.Date);
-        var oldestPending = await _context.Sales.Where(s => s.CustomerId == c.Id && s.IsCredit).MinAsync(s => (DateTime?)s.Date);
-        var balance = pendingTotal - paidTotal;
+        var balance = await _context.Sales
+            .Where(s => s.CustomerId == c.Id && s.PaidAmount < s.Total)
+            .SumAsync(s => (decimal?)(s.Total - s.PaidAmount)) ?? 0m;
         if (balance < 0) balance = 0;
+        var pendingCount = await _context.Sales.CountAsync(s => s.CustomerId == c.Id && s.PaidAmount < s.Total);
+        var lastPurchase = await _context.Sales.Where(s => s.CustomerId == c.Id).MaxAsync(s => (DateTime?)s.Date);
+        var oldestPending = await _context.Sales.Where(s => s.CustomerId == c.Id && s.PaidAmount < s.Total).MinAsync(s => (DateTime?)s.Date);
         int? daysSinceDebt = null;
         if (oldestPending.HasValue && balance > 0)
             daysSinceDebt = (int)(DateTime.UtcNow - oldestPending.Value).TotalDays;

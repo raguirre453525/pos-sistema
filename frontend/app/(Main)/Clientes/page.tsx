@@ -111,8 +111,14 @@ export default function ClientesPage() {
       setPaymentError("Monto > 0");
       return;
     }
-    if (amount > detail.customer.balance) {
-      setPaymentError(`Monto excede saldo $${detail.customer.balance.toLocaleString("es-AR")}`);
+    const selectedSale = paymentSaleId ? detail.pendingSales.find((s) => s.id === paymentSaleId) : null;
+    const saleRemaining = selectedSale ? Number(selectedSale.total) - Number(selectedSale.paidAmount ?? 0) : null;
+    const maxAllowed = saleRemaining != null ? saleRemaining : detail.customer.balance;
+    if (amount > maxAllowed) {
+      const msg = saleRemaining != null
+        ? `No podés pagar más de lo que debe esa venta ($${saleRemaining.toLocaleString("es-AR")})`
+        : `No podés pagar más de lo que debe ($${maxAllowed.toLocaleString("es-AR")})`;
+      setPaymentError(msg);
       return;
     }
     setPaymentLoading(true);
@@ -269,7 +275,7 @@ export default function ClientesPage() {
                     <h3 className="text-sm font-semibold flex items-center gap-2"><DollarSign className="h-4 w-4"/> Registrar pago</h3>
                     <div>
                       <Label>Monto $ *</Label>
-                      <Input type="number" min={0} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="0.00" className="mt-1" />
+                      <Input type="number" min={0} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="Ej: 5000" className="mt-1" />
                       {detail.customer.balance > 0 && <p className="text-xs text-muted-foreground mt-1">Saldo: ${Number(detail.customer.balance).toLocaleString("es-AR")}</p>}
                     </div>
                     <div>
@@ -290,7 +296,7 @@ export default function ClientesPage() {
                     )}
                     {paymentError && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{paymentError}</p>}
                     {paymentSuccess && <p className="text-sm text-green-700 border border-green-200 bg-green-50 rounded p-2">{paymentSuccess}</p>}
-                    <Button onClick={handlePayment} disabled={paymentLoading || !paymentAmount || Number(paymentAmount) <= 0 || Number(paymentAmount) > detail.customer.balance}>
+                    <Button onClick={handlePayment} disabled={paymentLoading || !paymentAmount || Number(paymentAmount) <= 0}>
                       {paymentLoading ? "Registrando…" : "Confirmar pago"}
                     </Button>
                   </section>
