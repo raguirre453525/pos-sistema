@@ -1,4 +1,4 @@
-import { LucideIcon, LayoutDashboard, ShoppingCart, Package, BarChart3, Settings, Bot, Users } from "lucide-react";
+import { LucideIcon, LayoutDashboard, ShoppingCart, Package, BarChart3, Settings, Bot, Users, Tag } from "lucide-react";
 
 export interface NavigationItem {
     name: string;
@@ -12,6 +12,7 @@ export const NAV_ITEMS: NavigationItem[] = [
     { name: "VENTAS", icon: ShoppingCart, path: "/Ventas" },
     { name: "CLIENTES", icon: Users, path: "/Clientes" },
     { name: "INVENTARIO", icon: Package, path: "/Inventario" },
+    { name: "PROMOS", icon: Tag, path: "/Promociones" },
     { name: "REPORTES", icon: BarChart3, path: "/Reportes" },
     { name: "CONFIGURACION", icon: Settings, path: "/Configuracion" },
 

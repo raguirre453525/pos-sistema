@@ -450,3 +450,57 @@ export function deleteCustomer(id: string) {
 export function registerCustomerPayment(customerId: string, dto: CreatePaymentDto) {
   return apiFetch<CustomerPaymentDto>(`/api/Customers/${customerId}/payments`, { method: "POST", body: JSON.stringify(dto) });
 }
+
+// ---------- Promotions ----------
+export type PromotionDto = {
+  id: string;
+  name: string;
+  description: string | null;
+  type: 0 | 1;
+  isActive: boolean;
+  validFrom: string | null;
+  validTo: string | null;
+  comboPrice: number | null;
+  discountPercentage: number | null;
+  products: ProductDto[];
+  totalOriginalPrice: number | null;
+  savingAmount: number | null;
+  savingPercent: number | null;
+  isCurrentlyActive: boolean;
+};
+
+export type CreatePromotionDto = {
+  name: string;
+  description?: string | null;
+  type: 0 | 1;
+  isActive: boolean;
+  validFrom?: string | null;
+  validTo?: string | null;
+  comboPrice?: number | null;
+  discountPercentage?: number | null;
+  productIds: string[];
+};
+
+export type UpdatePromotionDto = CreatePromotionDto;
+
+export function getPromotions() {
+  return apiFetch<PromotionDto[]>("/api/Promotions");
+}
+export function getActivePromotions() {
+  return apiFetch<PromotionDto[]>("/api/Promotions/active");
+}
+export function getPromotion(id: string) {
+  return apiFetch<PromotionDto>(`/api/Promotions/${id}`);
+}
+export function createPromotion(dto: CreatePromotionDto) {
+  return apiFetch<PromotionDto>("/api/Promotions", { method: "POST", body: JSON.stringify(dto) });
+}
+export function updatePromotion(id: string, dto: UpdatePromotionDto) {
+  return apiFetch<PromotionDto>(`/api/Promotions/${id}`, { method: "PUT", body: JSON.stringify(dto) });
+}
+export function deletePromotion(id: string) {
+  return apiFetch<void>(`/api/Promotions/${id}`, { method: "DELETE" });
+}
+export function togglePromotion(id: string) {
+  return apiFetch<PromotionDto>(`/api/Promotions/${id}/toggle`, { method: "PATCH" });
+}

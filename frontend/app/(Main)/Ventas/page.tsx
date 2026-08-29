@@ -14,9 +14,11 @@ import {
   createSale,
   getCustomers,
   createCustomer,
+  getActivePromotions,
   ProductDto,
   CategoryDto,
   CustomerDto,
+  PromotionDto,
   ApiError,
 } from "@/lib/api";
 import { Label } from "@/components/ui/label";
@@ -55,6 +57,7 @@ export default function VentasPage() {
   const [inlinePhone, setInlinePhone] = useState("");
   const [inlineLoading, setInlineLoading] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
+  const [activePromos, setActivePromos] = useState<PromotionDto[]>([]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -83,6 +86,7 @@ export default function VentasPage() {
     fetchProducts();
     fetchCats();
     getCustomers().then(setCustomers).catch(() => {});
+    getActivePromotions().then(setActivePromos).catch(() => {});
   }, [fetchProducts, fetchCats]);
 
   // Fetch product ids for selected category to enable real filtering.
@@ -160,6 +164,29 @@ export default function VentasPage() {
       setCart([]);
       setSaleError(null);
     }
+  };
+
+  const comboPromos = useMemo(() => activePromos.filter(p => p.type === 0), [activePromos]);
+  const discountMap = useMemo(() => {
+    const m = new Map<string, number>();
+    activePromos.filter(p => p.type === 1).forEach(pr => {
+      pr.products.forEach(prod => {
+        const cur = m.get(prod.id) ?? 0;
+        const disc = pr.discountPercentage ?? 0;
+        if (disc > cur) m.set(prod.id, disc);
+      });
+    });
+    return m;
+  }, [activePromos]);
+
+  const addComboToCart = (promo: PromotionDto) => {
+    // TODO fase 2: endpoint dedicado para venta de combo con stock bundle y precio ComboPrice.
+    // Fase 1: agrega productos sueltos; cada uno descuenta 1 de stock y se cobra a precio individual.
+    // El ahorro se muestra visualmente; el backend cobra suma original.
+    promo.products.forEach(prod => {
+      const full = products.find(x => x.id === prod.id);
+      if (full) addToCart(full);
+    });
   };
 
   const filteredProducts = useMemo(() => {
@@ -349,6 +376,29 @@ export default function VentasPage() {
             ))}
           </div>
 
+          {/* Combos activos */}
+          {comboPromos.length > 0 && (
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 rounded-2xl p-3">
+              <h3 className="text-sm font-bold text-amber-800 dark:text-amber-200 mb-2">Combos activos</h3>
+              <div className="flex gap-3 overflow-x-auto pb-1">
+                {comboPromos.map(pr => {
+                  const totalOrig = pr.totalOriginalPrice ?? pr.products.reduce((s,x)=>s+x.price,0);
+                  const saving = pr.savingAmount ?? 0;
+                  const pct = pr.savingPercent ?? 0;
+                  return (
+                    <div key={pr.id} className="min-w-[260px] bg-card border border-amber-200 rounded-xl p-3 shrink-0">
+                      <div className="font-semibold text-sm">{pr.name}</div>
+                      <div className="flex flex-wrap gap-1 mt-1">{pr.products.map(x=><span key={x.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">{x.name}</span>)}</div>
+                      <div className="text-xs mt-2"><span className="line-through text-muted-foreground">${totalOrig.toLocaleString("es-AR")}</span><span className="mx-1">→</span><span className="font-bold text-amber-700">Combo ${Number(pr.comboPrice).toLocaleString("es-AR")}</span><span className="ml-2 bg-emerald-600 text-white px-1.5 py-0.5 rounded text-xs">Ahorrás {pct.toFixed(0)}%</span></div>
+                      <div className="text-xs text-emerald-700">Ahorrás ${saving.toLocaleString("es-AR")}</div>
+                      <Button size="sm" className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>addComboToCart(pr)}>Agregar combo</Button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Grid */}
           <div className="bg-card rounded-2xl border border-border p-4">
             {loading || catLoading ? (
@@ -359,18 +409,26 @@ export default function VentasPage() {
               </p>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredProducts.map((p) => (
-                  <ProdCard
-                    key={p.id}
-                    name={p.name}
-                    image="/img-prod.webp"
-                    category={p.description ?? "—"}
-                    stock={p.stock}
-                    price={p.price}
-                    disabled={p.stock === 0}
-                    onAdd={() => addToCart(p)}
-                  />
-                ))}
+                {filteredProducts.map((p) => {
+                  const disc = discountMap.get(p.id);
+                  const hasDisc = disc != null && disc > 0;
+                  const discPrice = hasDisc ? p.price * (1 - disc! / 100) : p.price;
+                  return (
+                    <div key={p.id} className="relative">
+                      {hasDisc && <span className="absolute -top-2 -right-2 z-10 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">-{disc}%</span>}
+                      <ProdCard
+                        name={p.name}
+                        image="/img-prod.webp"
+                        category={p.description ?? "—"}
+                        stock={p.stock}
+                        price={hasDisc ? discPrice : p.price}
+                        disabled={p.stock === 0}
+                        onAdd={() => addToCart(p)}
+                      />
+                      {hasDisc && <div className="text-xs text-center mt-1"><span className="line-through text-muted-foreground">${p.price.toLocaleString("es-AR")}</span><span className="text-red-600 font-semibold ml-1">Ahora ${discPrice.toLocaleString("es-AR")}</span></div>}
+                    </div>
+                  );
+                })}
               </div>
             )}
           </div>

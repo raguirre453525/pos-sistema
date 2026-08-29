@@ -23,6 +23,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<SaleItem> SaleItems { get; set; }
     public DbSet<Customer> Customers { get; set; }
     public DbSet<CustomerPayment> CustomerPayments { get; set; }
+    public DbSet<Promotion> Promotions { get; set; }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
