@@ -9,6 +9,8 @@ public class Sale : BaseEntity
     public PaymentMethod PaymentMethod { get; private set; }
     public decimal Total { get; private set; }
     public ICollection<SaleItem> Items { get; private set; } = new List<SaleItem>();
+    // Historial combo: resumen por promoción vendida (visible como combo, no productos sueltos aislados)
+    public ICollection<SalePromotion> SalePromotions { get; private set; } = new List<SalePromotion>();
 
     public Guid? CustomerId { get; private set; }
     public Customer? Customer { get; private set; }
@@ -21,7 +23,7 @@ public class Sale : BaseEntity
     {
     }
 
-    public Sale(PaymentMethod paymentMethod, IEnumerable<SaleItem> items, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null)
+    public Sale(PaymentMethod paymentMethod, IEnumerable<SaleItem> items, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null, IEnumerable<SalePromotion>? salePromotions = null, decimal? forcedTotal = null)
     {
         if (items == null || !items.Any())
             throw new ArgumentException("La venta debe tener al menos un item", nameof(items));
@@ -39,7 +41,14 @@ public class Sale : BaseEntity
         }
 
         Items = itemList;
-        Total = itemList.Sum(i => i.Subtotal);
+        if (salePromotions != null)
+        {
+            var spList = salePromotions.ToList();
+            foreach (var sp in spList) sp.SetSale(this);
+            SalePromotions = spList;
+        }
+        // Si hay promos combo, el total real es forcedTotal (suma normal + comboPrice*qty), no suma de Items sueltos a precio 0
+        Total = forcedTotal ?? itemList.Sum(i => i.Subtotal);
 
         if (isCredit)
         {
@@ -87,7 +96,22 @@ public class Sale : BaseEntity
         if (item == null) throw new ArgumentNullException(nameof(item));
         item.SetSale(this);
         ((List<SaleItem>)Items).Add(item);
-        Total = Items.Sum(i => i.Subtotal);
+        // No recalcular Total si hay SalePromotions (total incluye ComboPrice), caller debe ajustar
+        if (!SalePromotions.Any())
+            Total = Items.Sum(i => i.Subtotal);
+    }
+
+    internal void AddSalePromotion(SalePromotion sp)
+    {
+        if (sp == null) throw new ArgumentNullException(nameof(sp));
+        sp.SetSale(this);
+        ((List<SalePromotion>)SalePromotions).Add(sp);
+    }
+
+    public void RecalculateTotal(decimal comboTotal, decimal itemsTotal)
+    {
+        Total = comboTotal + itemsTotal;
+        if (!IsCredit) PaidAmount = Total;
     }
 
     public void MarkAsCredit(Guid customerId)

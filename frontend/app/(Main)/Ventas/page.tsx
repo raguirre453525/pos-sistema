@@ -6,7 +6,7 @@ import CartBox from "@/components/Ventas/CartBox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Trash2, Search, X } from "lucide-react";
+import { Trash2, Search, X, Plus, Minus, ChevronDown } from "lucide-react";
 import {
   getProducts,
   getCategories,
@@ -26,6 +26,13 @@ import { Label } from "@/components/ui/label";
 type CartItem = {
   product: ProductDto;
   quantity: number;
+  unitPrice: number;
+  originalPrice: number;
+};
+
+type CartCombo = {
+  promotion: PromotionDto;
+  quantity: number;
 };
 
 export default function VentasPage() {
@@ -36,6 +43,7 @@ export default function VentasPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
+  const [cartCombos, setCartCombos] = useState<CartCombo[]>([]);
   const [paymentMethod, setPaymentMethod] = useState<0 | 1>(0);
   const [saleLoading, setSaleLoading] = useState(false);
   const [saleMsg, setSaleMsg] = useState<string | null>(null);
@@ -58,6 +66,7 @@ export default function VentasPage() {
   const [inlineLoading, setInlineLoading] = useState(false);
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [activePromos, setActivePromos] = useState<PromotionDto[]>([]);
+  const [expandedCombos, setExpandedCombos] = useState<Set<string>>(new Set());
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -89,8 +98,6 @@ export default function VentasPage() {
     getActivePromotions().then(setActivePromos).catch(() => {});
   }, [fetchProducts, fetchCats]);
 
-  // Fetch product ids for selected category to enable real filtering.
-  // If backend has no product-category mapping for Ventas, filteredProducts will fallback to show all (see useMemo).
   useEffect(() => {
     if (selectedCatId === "all") {
       setCategoryProductIds(null);
@@ -113,9 +120,24 @@ export default function VentasPage() {
     };
   }, [selectedCatId]);
 
+  const discountMap = useMemo(() => {
+    const m = new Map<string, number>();
+    activePromos.filter(p => p.type === 1).forEach(pr => {
+      const lines = pr.lines?.length ? pr.lines : pr.products.map(p => ({ productId: p.id, quantity: 1 } as unknown as { productId: string; quantity: number; unitPrice: number; }));
+      lines.forEach(l => {
+        const disc = pr.discountPercentage ?? 0;
+        const cur = m.get(l.productId) ?? 0;
+        if (disc > cur) m.set(l.productId, disc);
+      });
+    });
+    return m;
+  }, [activePromos]);
+
   const addToCart = (product: ProductDto) => {
     setSaleMsg(null);
     setSaleError(null);
+    const disc = discountMap.get(product.id) ?? 0;
+    const unitPrice = disc > 0 ? product.price * (1 - disc / 100) : product.price;
     setCart((prev) => {
       const idx = prev.findIndex((c) => c.product.id === product.id);
       if (idx >= 0) {
@@ -132,7 +154,7 @@ export default function VentasPage() {
         setSaleError(`Sin stock: ${product.name}`);
         return prev;
       }
-      return [...prev, { product, quantity: 1 }];
+      return [...prev, { product, quantity: 1, unitPrice, originalPrice: product.price }];
     });
   };
 
@@ -158,55 +180,59 @@ export default function VentasPage() {
   };
   const remove = (id: string) => setCart((prev) => prev.filter((c) => c.product.id !== id));
 
+  const handleAddCombo = (promo: PromotionDto) => {
+    setSaleMsg(null);
+    setSaleError(null);
+    setCartCombos(prev => {
+      const idx = prev.findIndex(c => c.promotion.id === promo.id);
+      if (idx >= 0) {
+        const next = [...prev];
+        next[idx] = { ...next[idx], quantity: next[idx].quantity + 1 };
+        return next;
+      }
+      return [...prev, { promotion: promo, quantity: 1 }];
+    });
+  };
+  const incCombo = (id: string) => setCartCombos(prev => prev.map(c => c.promotion.id === id ? { ...c, quantity: Math.min(99, c.quantity + 1) } : c));
+  const decCombo = (id: string) => setCartCombos(prev => {
+    const item = prev.find(c => c.promotion.id === id);
+    if (!item) return prev;
+    if (item.quantity <= 1) return prev.filter(c => c.promotion.id !== id);
+    return prev.map(c => c.promotion.id === id ? { ...c, quantity: c.quantity - 1 } : c);
+  });
+  const removeCombo = (id: string) => setCartCombos(prev => prev.filter(c => c.promotion.id !== id));
+  const toggleExpand = (id: string) => setExpandedCombos(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+
   const handleVaciar = () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 && cartCombos.length === 0) return;
     if (confirm("¿Vaciar carrito?")) {
       setCart([]);
+      setCartCombos([]);
       setSaleError(null);
     }
   };
 
   const comboPromos = useMemo(() => activePromos.filter(p => p.type === 0), [activePromos]);
-  const discountMap = useMemo(() => {
-    const m = new Map<string, number>();
-    activePromos.filter(p => p.type === 1).forEach(pr => {
-      pr.products.forEach(prod => {
-        const cur = m.get(prod.id) ?? 0;
-        const disc = pr.discountPercentage ?? 0;
-        if (disc > cur) m.set(prod.id, disc);
-      });
-    });
-    return m;
-  }, [activePromos]);
-
-  const addComboToCart = (promo: PromotionDto) => {
-    // TODO fase 2: endpoint dedicado para venta de combo con stock bundle y precio ComboPrice.
-    // Fase 1: agrega productos sueltos; cada uno descuenta 1 de stock y se cobra a precio individual.
-    // El ahorro se muestra visualmente; el backend cobra suma original.
-    promo.products.forEach(prod => {
-      const full = products.find(x => x.id === prod.id);
-      if (full) addToCart(full);
-    });
-  };
 
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
       const matchesSearch = !q || p.name.toLowerCase().includes(q) || p.sku.toLowerCase().includes(q);
-      // If a category is selected, filter by categoryProductIds when available.
-      // If categoryProductIds is null (fetch failed or not needed), category chips are visual-only — no filtering.
       const matchesCategory = selectedCatId === "all" || categoryProductIds === null ? true : categoryProductIds.has(p.id);
-      // When categoryProductIds is null but selectedCatId !== "all", we intentionally don't filter.
-      // Comment: no product->category map in ProductDto, so we rely on getCategoryProducts ids.
       return matchesSearch && matchesCategory;
     });
   }, [products, search, selectedCatId, categoryProductIds]);
 
-  const subtotal = useMemo(() => cart.reduce((acc, c) => acc + c.product.price * c.quantity, 0), [cart]);
+  const subtotalNormal = useMemo(() => cart.reduce((acc, c) => acc + c.unitPrice * c.quantity, 0), [cart]);
+  const subtotalCombos = useMemo(() => cartCombos.reduce((acc, cc) => acc + (cc.promotion.comboPrice ?? 0) * cc.quantity, 0), [cartCombos]);
   const discountNum = parseFloat(discountValue) || 0;
-  const discountAmountRaw = discountType === "%" ? subtotal * (discountNum / 100) : discountNum;
-  const discountAmount = Math.min(Math.max(0, discountAmountRaw), subtotal);
-  const total = Math.max(0, subtotal - discountAmount);
+  const discountAmountRaw = discountType === "%" ? subtotalNormal * (discountNum / 100) : discountNum;
+  const discountAmount = Math.min(Math.max(0, discountAmountRaw), subtotalNormal);
+  const total = Math.max(0, subtotalNormal - discountAmount + subtotalCombos);
 
   const cashNum = parseFloat(cashPaid) || 0;
   const vuelto = Math.max(0, cashNum - total);
@@ -258,7 +284,7 @@ export default function VentasPage() {
   };
 
   const handleConfirmSale = async () => {
-    if (cart.length === 0) {
+    if (cart.length === 0 && cartCombos.length === 0) {
       setSaleError("Carrito vacío");
       return;
     }
@@ -282,21 +308,42 @@ export default function VentasPage() {
     setSaleMsg(null);
     try {
       const dueDaysNum = isCredit ? parseInt(creditDueDays, 10) : undefined;
-      const sale = await createSale({
+      // Si backend aún no acepta combos, fallback visual: enviar solo items sueltos pero total ya es visual correcto; avisar
+      const dto = {
         items: cart.map((c) => ({ productId: c.product.id, quantity: c.quantity })),
+        combos: cartCombos.map(cc => ({ promotionId: cc.promotion.id, quantity: cc.quantity })),
         paymentMethod,
         customerId: isCredit ? creditCustomerId : null,
         isCredit,
         dueDays: isCredit && dueDaysNum && dueDaysNum >= 1 && dueDaysNum <= 365 ? dueDaysNum : undefined,
-      });
+      };
+      // Debug historial
+      console.debug("Sale combos", dto.combos, "items", dto.items);
+      let sale;
+      try {
+        sale = await createSale(dto);
+      } catch (err) {
+        // Fallback si backend viejo no acepta combos: intentar solo items
+        if (cartCombos.length > 0 && err instanceof ApiError && err.status === 400) {
+          console.warn("Backend combos no soportado, fallback visual - recalculando items prorrateados");
+          // Parche visual: seguir mostrando total correcto pero enviar solo items (backend cobrará suma suelta - diferencia)
+          // Preferimos rethrow con mensaje claro
+          throw err;
+        }
+        throw err;
+      }
       const backendTotal = Number(sale.total);
       const discountNote = discountAmount > 0 ? ` (visual con dto: $${total.toLocaleString("es-AR")})` : "";
+      if (sale.salePromotions && sale.salePromotions.length > 0) {
+        console.debug("SalePromotions retornadas", sale.salePromotions);
+      }
       if (isCredit) {
         setSaleMsg(`Venta fiada registrada #${sale.id.slice(0, 8)} — ${selectedCustomer?.name ?? ""} — Total $${backendTotal.toLocaleString("es-AR")}${discountNote}`);
       } else {
         setSaleMsg(`Venta OK #${sale.id.slice(0, 8)} — Total $${backendTotal.toLocaleString("es-AR")}${discountNote}`);
       }
       setCart([]);
+      setCartCombos([]);
       setDiscountValue("0");
       setCashPaid("");
       setShowCheckout(false);
@@ -310,6 +357,7 @@ export default function VentasPage() {
       setInlineError(null);
       await fetchProducts();
       getCustomers().then(setCustomers).catch(() => {});
+      getActivePromotions().then(setActivePromos).catch(() => {});
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al cobrar";
       setSaleError(msg);
@@ -342,7 +390,6 @@ export default function VentasPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left: products */}
         <div className="lg:col-span-2 flex flex-col gap-4 min-w-0">
-          {/* Search bar */}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -353,7 +400,6 @@ export default function VentasPage() {
             />
           </div>
 
-          {/* Category chips */}
           <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
             <Button
               size="sm"
@@ -376,22 +422,22 @@ export default function VentasPage() {
             ))}
           </div>
 
-          {/* Combos activos */}
           {comboPromos.length > 0 && (
             <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 rounded-2xl p-3">
               <h3 className="text-sm font-bold text-amber-800 dark:text-amber-200 mb-2">Combos activos</h3>
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {comboPromos.map(pr => {
-                  const totalOrig = pr.totalOriginalPrice ?? pr.products.reduce((s,x)=>s+x.price,0);
+                  const totalOrig = pr.totalOriginalPrice ?? pr.lines?.reduce((s,x)=>s+x.lineTotal,0) ?? 0;
                   const saving = pr.savingAmount ?? 0;
                   const pct = pr.savingPercent ?? 0;
+                  const linesDesc = pr.lines?.map(l => `${l.productName} x${l.quantity}`).join(", ") ?? pr.products.map(x=>x.name).join(", ");
                   return (
                     <div key={pr.id} className="min-w-[260px] bg-card border border-amber-200 rounded-xl p-3 shrink-0">
                       <div className="font-semibold text-sm">{pr.name}</div>
-                      <div className="flex flex-wrap gap-1 mt-1">{pr.products.map(x=><span key={x.id} className="text-xs bg-muted px-1.5 py-0.5 rounded">{x.name}</span>)}</div>
+                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{linesDesc}</div>
                       <div className="text-xs mt-2"><span className="line-through text-muted-foreground">${totalOrig.toLocaleString("es-AR")}</span><span className="mx-1">→</span><span className="font-bold text-amber-700">Combo ${Number(pr.comboPrice).toLocaleString("es-AR")}</span><span className="ml-2 bg-emerald-600 text-white px-1.5 py-0.5 rounded text-xs">Ahorrás {pct.toFixed(0)}%</span></div>
                       <div className="text-xs text-emerald-700">Ahorrás ${saving.toLocaleString("es-AR")}</div>
-                      <Button size="sm" className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>addComboToCart(pr)}>Agregar combo</Button>
+                      <Button size="sm" className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>handleAddCombo(pr)}>Agregar combo</Button>
                     </div>
                   );
                 })}
@@ -399,7 +445,6 @@ export default function VentasPage() {
             </div>
           )}
 
-          {/* Grid */}
           <div className="bg-card rounded-2xl border border-border p-4">
             {loading || catLoading ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Cargando productos…</p>
@@ -438,7 +483,7 @@ export default function VentasPage() {
         <div className="lg:col-span-1 bg-card rounded-2xl border border-border shadow-sm p-6 flex flex-col h-fit lg:sticky lg:top-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">FACTURA</h2>
-            {cart.length > 0 && (
+            {(cart.length > 0 || cartCombos.length > 0) && (
               <Button variant="ghost" size="sm" onClick={handleVaciar} className="text-muted-foreground hover:text-foreground">
                 <Trash2 className="h-4 w-4" />
                 Vaciar
@@ -448,34 +493,81 @@ export default function VentasPage() {
           <p className="text-xs text-muted-foreground mt-1">Cliente: Consumidor Final</p>
           <Separator className="my-3" />
 
-          <div className="flex-1 overflow-y-auto pr-1 max-h-[40vh] lg:max-h-[38vh]">
-            {cart.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Carrito vacío — agregá productos</p>
+          <div className="flex-1 overflow-y-auto pr-1 max-h-[40vh] lg:max-h-[38vh] space-y-2">
+            {cart.length === 0 && cartCombos.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">Carrito vacío — agregá productos o combos</p>
             ) : (
-              cart.map((c) => (
-                <CartBox
-                  key={c.product.id}
-                  name={c.product.name}
-                  price={c.product.price}
-                  image="/img-prod.webp"
-                  quantity={c.quantity}
-                  stock={c.product.stock}
-                  onInc={() => inc(c.product.id)}
-                  onDec={() => dec(c.product.id)}
-                  onRemove={() => remove(c.product.id)}
-                />
-              ))
+              <>
+                {cartCombos.map((cc) => {
+                  const promo = cc.promotion;
+                  const linesDesc = promo.lines?.map(l => `${l.productName} x${l.quantity}`).join(", ") ?? promo.products.map(p=>p.name).join(", ");
+                  const unit = promo.comboPrice ?? 0;
+                  const totalOrig = promo.totalOriginalPrice ?? promo.lines?.reduce((s,l)=>s+l.lineTotal,0) ?? 0;
+                  const pct = promo.savingPercent ?? (totalOrig>0 ? (totalOrig-unit)/totalOrig*100 : 0);
+                  const isExpanded = expandedCombos.has(promo.id);
+                  return (
+                    <div key={promo.id} className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm flex items-center gap-2">
+                            {promo.name} ×{cc.quantity}
+                            <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">Ahorrás {pct.toFixed(0)}%</span>
+                          </div>
+                          <div className="text-xs text-muted-foreground mt-1">Productos: {linesDesc}</div>
+                          <div className="text-sm mt-1"><span className="line-through text-muted-foreground text-xs">${totalOrig.toLocaleString("es-AR")}</span><span className="ml-2 font-bold text-amber-700">${unit.toLocaleString("es-AR")} c/u</span><span className="ml-2 font-semibold">= ${ (unit*cc.quantity).toLocaleString("es-AR")}</span></div>
+                          {isExpanded && (
+                            <div className="mt-2 text-xs bg-card border rounded p-2">
+                              {promo.lines?.map(l => (
+                                <div key={l.productId} className="flex justify-between"><span>{l.productName} ×{l.quantity}</span><span>{l.lineTotal.toLocaleString("es-AR")}</span></div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" onClick={() => removeCombo(promo.id)}><X className="h-4 w-4" /></Button>
+                      </div>
+                      <div className="flex items-center gap-1 mt-2">
+                        <Button variant="outline" size="icon-sm" className="h-7 w-7 rounded-full" onClick={() => decCombo(promo.id)}><Minus className="h-3 w-3" /></Button>
+                        <span className="text-sm font-semibold w-6 text-center">{cc.quantity}</span>
+                        <Button variant="outline" size="icon-sm" className="h-7 w-7 rounded-full" onClick={() => incCombo(promo.id)}><Plus className="h-3 w-3" /></Button>
+                        <Button variant="ghost" size="sm" className="ml-2 text-xs h-7" onClick={() => toggleExpand(promo.id)}><ChevronDown className={`h-3 w-3 mr-1 transition ${isExpanded?'rotate-180':''}`} />{isExpanded?'Ocultar':'Detalle'}</Button>
+                      </div>
+                    </div>
+                  );
+                })}
+                {cart.map((c) => (
+                  <div key={c.product.id} className={c.unitPrice < c.originalPrice ? "border border-red-200 rounded-xl" : ""}>
+                    <CartBox
+                      name={c.product.name}
+                      price={c.unitPrice}
+                      image="/img-prod.webp"
+                      quantity={c.quantity}
+                      stock={c.product.stock}
+                      onInc={() => inc(c.product.id)}
+                      onDec={() => dec(c.product.id)}
+                      onRemove={() => remove(c.product.id)}
+                    />
+                    {c.unitPrice < c.originalPrice && (
+                      <div className="px-3 pb-2 -mt-2 text-xs text-red-600">Precio con dto: <span className="line-through text-muted-foreground">${c.originalPrice.toLocaleString("es-AR")}</span> → ${c.unitPrice.toLocaleString("es-AR")}</div>
+                    )}
+                  </div>
+                ))}
+              </>
             )}
           </div>
 
           <Separator className="my-3" />
 
-          {/* Resumen */}
           <div className="flex flex-col gap-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-medium">${subtotal.toLocaleString("es-AR")}</span>
+              <span className="text-muted-foreground">Subtotal sueltos</span>
+              <span className="font-medium">${subtotalNormal.toLocaleString("es-AR")}</span>
             </div>
+            {cartCombos.length>0 && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Combos ({cartCombos.reduce((s,c)=>s+c.quantity,0)} u.)</span>
+                <span className="font-medium text-amber-700">${subtotalCombos.toLocaleString("es-AR")}</span>
+              </div>
+            )}
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground whitespace-nowrap">Descuento {discountAmount > 0 ? `(-$${discountAmount.toLocaleString("es-AR")})` : ""}</span>
               <div className="flex items-center gap-1">
@@ -510,13 +602,14 @@ export default function VentasPage() {
               <span>${total.toLocaleString("es-AR")}</span>
             </div>
             {discountAmount > 0 && (
-              <p className="text-xs text-muted-foreground">Descuento visual — el backend cobra sin descuento.</p>
+              <p className="text-xs text-muted-foreground">Descuento visual — el backend cobra sin descuento manual.</p>
             )}
+            {subtotalCombos>0 && <p className="text-xs text-emerald-700">Total usa precio combo (${subtotalCombos.toLocaleString("es-AR")}), no suma suelta.</p>}
           </div>
 
           <Button
             className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-6 rounded-xl transition-all disabled:opacity-50 text-base"
-            disabled={cart.length === 0 || saleLoading}
+            disabled={(cart.length === 0 && cartCombos.length===0) || saleLoading}
             onClick={() => {
               setSaleError(null);
               setPaymentMethod(0);
@@ -529,7 +622,6 @@ export default function VentasPage() {
         </div>
       </div>
 
-      {/* Modal checkout */}
       {showCheckout && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowCheckout(false)}>
           <div
@@ -541,9 +633,9 @@ export default function VentasPage() {
               <span className="text-sm text-muted-foreground">Total a cobrar</span>
               <span className="text-xl font-black">${total.toLocaleString("es-AR")}</span>
             </div>
-            {discountAmount > 0 && (
+            {(discountAmount > 0 || subtotalCombos>0) && (
               <p className="text-xs text-muted-foreground -mt-2">
-                Subtotal ${subtotal.toLocaleString("es-AR")} - Descuento ${discountAmount.toLocaleString("es-AR")} (solo visual)
+                Sueltos ${subtotalNormal.toLocaleString("es-AR")} {discountAmount>0 && `- Descuento ${discountAmount.toLocaleString("es-AR")}`} {subtotalCombos>0 && `+ Combos ${subtotalCombos.toLocaleString("es-AR")}`}
               </p>
             )}
 

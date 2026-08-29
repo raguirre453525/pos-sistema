@@ -11,12 +11,16 @@ public class SaleItem : BaseEntity
     public int Quantity { get; private set; }
     public decimal UnitPrice { get; private set; }
     public decimal Subtotal { get; private set; }
+    // Trazabilidad combo: nullable para historial. Ver ADR: SalePromotion + SaleItem.PromotionId permite ver "qué combos se vendieron" y descontar stock por componente.
+    public Guid? PromotionId { get; private set; }
+    public string? PromotionName { get; private set; }
+    public bool IsFromCombo => PromotionId.HasValue;
 
     private SaleItem()
     {
     }
 
-    public SaleItem(Guid productId, int quantity, decimal unitPrice)
+    public SaleItem(Guid productId, int quantity, decimal unitPrice, Guid? promotionId = null, string? promotionName = null)
     {
         if (productId == Guid.Empty)
             throw new ArgumentException("El ProductId es obligatorio", nameof(productId));
@@ -29,6 +33,8 @@ public class SaleItem : BaseEntity
         Quantity = quantity;
         UnitPrice = unitPrice;
         Subtotal = quantity * unitPrice;
+        PromotionId = promotionId;
+        PromotionName = string.IsNullOrWhiteSpace(promotionName) ? null : promotionName.Trim();
     }
 
     internal void SetSale(Sale sale)

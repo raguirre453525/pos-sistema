@@ -35,7 +35,26 @@ const salesColumns: ColumnDef<SaleDto>[] = [
   {
     id: "items",
     header: "Items",
-    cell: ({ row }) => <span>{row.original.items.map((i) => `${i.name} x${i.quantity}`).join(", ")}</span>,
+    cell: ({ row }) => {
+      const s = row.original;
+      const combos = s.salePromotions?.map(sp => `${sp.promotionName} x${sp.quantity} ($${sp.unitPrice.toLocaleString("es-AR")})`).join(" | ");
+      const itemsStr = s.items.map((i) => `${i.name} x${i.quantity}${i.isFromCombo ? " (combo)" : ""}`).join(", ");
+      return (
+        <span className="text-xs">
+          {combos && <span className="bg-amber-100 border border-amber-300 rounded px-1.5 py-0.5 mr-1">{combos}</span>}
+          {itemsStr}
+        </span>
+      );
+    },
+  },
+  {
+    id: "combos",
+    header: "Combos",
+    cell: ({ row }) => {
+      const sps = row.original.salePromotions;
+      if (!sps || sps.length===0) return <span className="text-muted-foreground text-xs">—</span>;
+      return <span className="text-xs">{sps.map(sp=>`${sp.promotionName} ×${sp.quantity} — $${sp.totalPaid.toLocaleString("es-AR")} (ahorro $${sp.saving.toLocaleString("es-AR")})`).join("; ")}</span>;
+    }
   },
 ];
 

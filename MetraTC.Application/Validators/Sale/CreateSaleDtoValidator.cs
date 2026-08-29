@@ -7,15 +7,23 @@ public class CreateSaleDtoValidator : AbstractValidator<CreateSaleDto>
 {
     public CreateSaleDtoValidator()
     {
-        RuleFor(x => x.Items)
-            .NotEmpty().WithMessage("La venta debe tener al menos un item");
-
+        RuleFor(x => x).Custom((dto, ctx) =>
+        {
+            var hasItems = dto.Items != null && dto.Items.Count > 0;
+            var hasCombos = dto.Combos != null && dto.Combos.Count > 0;
+            if (!hasItems && !hasCombos) ctx.AddFailure("Items", "La venta debe tener al menos un item o combo");
+        });
         RuleForEach(x => x.Items).ChildRules(item =>
         {
             item.RuleFor(i => i.ProductId)
                 .NotEmpty().WithMessage("El ProductId es obligatorio");
             item.RuleFor(i => i.Quantity)
                 .GreaterThan(0).WithMessage("La cantidad debe ser mayor a cero");
+        });
+        RuleForEach(x => x.Combos).ChildRules(c =>
+        {
+            c.RuleFor(i => i.PromotionId).NotEmpty().WithMessage("PromotionId requerido");
+            c.RuleFor(i => i.Quantity).InclusiveBetween(1, 99).WithMessage("Cantidad combo 1..99");
         });
 
         RuleFor(x => x.PaymentMethod)

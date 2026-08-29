@@ -17,7 +17,8 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
         builder.Property(p => p.ValidTo).HasColumnType("datetime2");
         builder.Property(p => p.ComboPrice).HasColumnType("decimal(18,2)");
         builder.Property(p => p.DiscountPercentage).HasColumnType("decimal(5,2)");
-        builder.HasMany(p => p.Products).WithMany().UsingEntity(j => j.ToTable("PromotionProducts"));
+        builder.Ignore(p => p.Products);
+        builder.HasMany(p => p.Lines).WithOne(l => l.Promotion).HasForeignKey(l => l.PromotionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(p => p.IsActive);
     }
 }

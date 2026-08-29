@@ -33,6 +33,9 @@ public class SaleItemConfiguration : IEntityTypeConfiguration<SaleItem>
             .HasForeignKey(si => si.ProductId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.Property(si => si.PromotionId).HasColumnType("uniqueidentifier");
+        builder.Property(si => si.PromotionName).HasMaxLength(80);
         builder.HasIndex(si => si.SaleId);
+        builder.HasIndex(si => si.PromotionId);
     }
 }

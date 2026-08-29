@@ -5,6 +5,9 @@ namespace MetraTC.Application.DTOs;
 
 public static class PromotionDtos
 {
+    public record PromotionLineDto(Guid ProductId, int Quantity);
+    public record PromotionProductDto(Guid ProductId, string ProductName, string Sku, decimal UnitPrice, int Quantity, decimal LineTotal);
+
     public record CreatePromotionDto(
         string Name,
         string? Description,
@@ -14,7 +17,8 @@ public static class PromotionDtos
         DateTime? ValidTo,
         decimal? ComboPrice,
         decimal? DiscountPercentage,
-        List<Guid> ProductIds
+        List<PromotionLineDto>? Lines,
+        List<Guid>? ProductIds // compat: si viene lista vieja de Guids, se convierte a qty 1
     );
 
     public record UpdatePromotionDto(
@@ -26,7 +30,8 @@ public static class PromotionDtos
         DateTime? ValidTo,
         decimal? ComboPrice,
         decimal? DiscountPercentage,
-        List<Guid> ProductIds
+        List<PromotionLineDto>? Lines,
+        List<Guid>? ProductIds
     );
 
     public record PromotionDto(
@@ -39,7 +44,8 @@ public static class PromotionDtos
         DateTime? ValidTo,
         decimal? ComboPrice,
         decimal? DiscountPercentage,
-        List<ProductDto> Products,
+        List<PromotionProductDto> Lines,
+        List<ProductDto> Products, // compat: productos aplanados
         decimal? TotalOriginalPrice,
         decimal? SavingAmount,
         decimal? SavingPercent,

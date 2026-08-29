@@ -83,6 +83,11 @@ export type CreateSaleItemDto = {
   quantity: number;
 };
 
+export type CreateSaleComboDto = {
+  promotionId: string;
+  quantity: number;
+};
+
 export type CreateSaleDto = {
   items: CreateSaleItemDto[];
   paymentMethod: 0 | 1; // Cash=0, MercadoPago=1
@@ -90,6 +95,18 @@ export type CreateSaleDto = {
   isCredit?: boolean;
   dueDate?: string | null;
   dueDays?: number | null;
+  combos?: CreateSaleComboDto[];
+};
+
+export type SalePromotionDto = {
+  promotionId: string;
+  promotionName: string;
+  type: string;
+  quantity: number;
+  unitPrice: number;
+  totalOriginal: number;
+  totalPaid: number;
+  saving: number;
 };
 
 export type SaleDto = {
@@ -98,6 +115,7 @@ export type SaleDto = {
   paymentMethod: string; // "Cash" / "MercadoPago" serialized as string via backend
   total: number;
   items: SaleItemDto[];
+  salePromotions?: SalePromotionDto[];
   customerId?: string | null;
   isCredit?: boolean;
   paidAmount?: number;
@@ -113,6 +131,9 @@ export type SaleItemDto = {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  promotionId?: string | null;
+  promotionName?: string | null;
+  isFromCombo?: boolean;
 };
 
 export type PagedResult<T> = {
@@ -452,6 +473,8 @@ export function registerCustomerPayment(customerId: string, dto: CreatePaymentDt
 }
 
 // ---------- Promotions ----------
+export type PromotionLineDto = { productId: string; quantity: number };
+export type PromotionProductDto = { productId: string; productName: string; sku: string; unitPrice: number; quantity: number; lineTotal: number };
 export type PromotionDto = {
   id: string;
   name: string;
@@ -462,7 +485,8 @@ export type PromotionDto = {
   validTo: string | null;
   comboPrice: number | null;
   discountPercentage: number | null;
-  products: ProductDto[];
+  lines: PromotionProductDto[];
+  products: ProductDto[]; // compat
   totalOriginalPrice: number | null;
   savingAmount: number | null;
   savingPercent: number | null;
@@ -478,7 +502,8 @@ export type CreatePromotionDto = {
   validTo?: string | null;
   comboPrice?: number | null;
   discountPercentage?: number | null;
-  productIds: string[];
+  lines?: PromotionLineDto[];
+  productIds?: string[]; // compat
 };
 
 export type UpdatePromotionDto = CreatePromotionDto;

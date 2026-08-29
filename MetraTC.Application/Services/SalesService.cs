@@ -45,7 +45,8 @@ public class SalesService : ISalesService
         }
 
         var items = dto.Items.Select(i => (i.ProductId, i.Quantity)).ToList();
-        var sale = await _repository.CreateAsync(items, dto.PaymentMethod, null, dto.CustomerId, dto.IsCredit, dueDate);
+        var combos = dto.Combos?.Select(c => (c.PromotionId, c.Quantity)).ToList();
+        var sale = await _repository.CreateAsync(items, dto.PaymentMethod, null, dto.CustomerId, dto.IsCredit, dueDate, combos);
 
         return _mapper.Map<SaleDto>(sale);
     }
