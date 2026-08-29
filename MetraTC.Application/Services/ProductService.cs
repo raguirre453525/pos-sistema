@@ -1,6 +1,8 @@
 ﻿using AutoMapper;
 using MetraTC.Domain.Entities;
 using MetraTC.Domain.Interfaces; // Asumiendo que tienes IRepository<T> igual que el sistema médico
+using MetraTC.Infrastructure.Persistence;
+using Microsoft.EntityFrameworkCore;
 using static MetraTC.Application.DTOs.ProductDtos;
 
 namespace MetraTC.Application.Services;
@@ -9,12 +11,14 @@ public class ProductService : IProductService
 {
     private readonly IRepository<Product> _repository;
     private readonly IInventoryRepository _inventoryRepository;
+    private readonly ApplicationDbContext _context;
     private readonly IMapper _mapper;
 
-    public ProductService(IRepository<Product> repository, IInventoryRepository inventoryRepository, IMapper mapper)
+    public ProductService(IRepository<Product> repository, IInventoryRepository inventoryRepository, ApplicationDbContext context, IMapper mapper)
     {
         _repository = repository;
         _inventoryRepository = inventoryRepository;
+        _context = context;
         _mapper = mapper;
     }
 
@@ -44,7 +48,21 @@ public class ProductService : IProductService
     {
         var product = await GetProductOrThrowAsync(id);
 
+        var oldPrice = product.Price;
+
         product.Update(updateProductDto.Name, updateProductDto.Price, updateProductDto.Description);
+
+        if (oldPrice != updateProductDto.Price)
+        {
+            // Transacción atómica: update producto + historial
+            await using var transaction = await _context.Database.BeginTransactionAsync();
+            _context.Products.Update(product);
+            var history = new ProductPriceHistory(product.Id, oldPrice, updateProductDto.Price, null);
+            _context.ProductPriceHistories.Add(history);
+            await _context.SaveChangesAsync();
+            await transaction.CommitAsync();
+            return;
+        }
 
         await _repository.UpdateAsync(product);
     }

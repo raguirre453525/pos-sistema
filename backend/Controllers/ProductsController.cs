@@ -11,11 +11,13 @@ public class ProductsController : ControllerBase
 {
     private readonly IProductService _productService;
     private readonly ICategoryService _categoryService;
+    private readonly IProductPriceHistoryService _priceHistoryService;
 
-    public ProductsController(IProductService productService, ICategoryService categoryService)
+    public ProductsController(IProductService productService, ICategoryService categoryService, IProductPriceHistoryService priceHistoryService)
     {
         _productService = productService;
         _categoryService = categoryService;
+        _priceHistoryService = priceHistoryService;
     }
 
     [HttpPost]
@@ -78,5 +80,12 @@ public class ProductsController : ControllerBase
     {
         await _categoryService.UnassignProductAsync(categoryId, productId);
         return NoContent();
+    }
+
+    [HttpGet("{id:guid}/price-history")]
+    public async Task<IActionResult> GetPriceHistory(Guid id, [FromQuery] DateTime? from, [FromQuery] DateTime? to, [FromQuery] int page = 1, [FromQuery] int pageSize = 20)
+    {
+        var result = await _priceHistoryService.GetPriceHistoryAsync(id, from, to, page, pageSize);
+        return Ok(result);
     }
 }

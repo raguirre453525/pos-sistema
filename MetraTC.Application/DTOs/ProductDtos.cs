@@ -42,5 +42,15 @@ namespace MetraTC.Application.DTOs
             decimal Price,
             string? Description
         );
+
+        public record ProductPriceHistoryDto(
+            Guid Id,
+            Guid ProductId,
+            decimal OldPrice,
+            decimal NewPrice,
+            DateTime ChangedAt,
+            string? Reason,
+            decimal ChangePercent
+        );
     };
 }

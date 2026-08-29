@@ -18,6 +18,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<Product> Products { get; set; }
     public DbSet<Category> Categories { get; set; }
     public DbSet<StockAdjustmentAudit> StockAdjustmentAudits { get; set; }
+    public DbSet<ProductPriceHistory> ProductPriceHistories { get; set; }
     public DbSet<Sale> Sales { get; set; }
     public DbSet<SaleItem> SaleItems { get; set; }
 

@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import Link from "next/link";
-import { Package, PackagePlus, Tag, Pencil, Search, X, History, AlertTriangle, Plus, Trash2 } from "lucide-react";
+import { Package, PackagePlus, Tag, Pencil, Search, X, History, AlertTriangle, Plus, Trash2, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import CategoryFormModal from "@/components/Categorias/CategoryFormModal";
 import {
   getProducts,
@@ -17,6 +17,7 @@ import {
   deleteProduct,
   updateProduct,
   getStockAudits,
+  getProductPriceHistory,
   getCategories,
   getCategoryProducts,
   assignCategory,
@@ -26,6 +27,7 @@ import {
   ApiError,
   CategoryDto,
   StockAuditDto,
+  ProductPriceHistoryDto,
 } from "@/lib/api";
 
 function InventarioPageContent() {
@@ -89,6 +91,12 @@ function InventarioPageContent() {
   const [audits, setAudits] = useState<StockAuditDto[]>([]);
   const [auditsLoading, setAuditsLoading] = useState(false);
   const [auditsError, setAuditsError] = useState<string | null>(null);
+
+  // Price history tab
+  const [priceHistoryTab, setPriceHistoryTab] = useState<"stock" | "precios">("stock");
+  const [priceHistory, setPriceHistory] = useState<ProductPriceHistoryDto[]>([]);
+  const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
+  const [priceHistoryError, setPriceHistoryError] = useState<string | null>(null);
 
   // quick edit inside drawer
   const [editProduct, setEditProduct] = useState<ProductDto | null>(null);
@@ -182,11 +190,13 @@ function InventarioPageContent() {
     return () => clearTimeout(t);
   }, [catBannerSuccess]);
 
-  // fetch audits when drawer opens
+  // fetch audits & price history when drawer opens
   useEffect(() => {
     if (!selectedProduct) {
       setAudits([]);
       setAuditsError(null);
+      setPriceHistory([]);
+      setPriceHistoryError(null);
       return;
     }
     let cancelled = false;
@@ -205,8 +215,25 @@ function InventarioPageContent() {
         if (!cancelled) setAuditsLoading(false);
       }
     };
+    const fetchPriceHistory = async () => {
+      setPriceHistoryLoading(true);
+      setPriceHistoryError(null);
+      try {
+        const res = await getProductPriceHistory(selectedProduct.id, { pageSize: 20 });
+        if (!cancelled) setPriceHistory(res.items);
+      } catch (e) {
+        if (!cancelled) {
+          const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al cargar historial de precios";
+          setPriceHistoryError(msg);
+        }
+      } finally {
+        if (!cancelled) setPriceHistoryLoading(false);
+      }
+    };
     void fetchAudits();
+    void fetchPriceHistory();
     // init quick edit fields
+    setPriceHistoryTab("stock");
     setEditProduct(null);
     setQuickName(selectedProduct.name);
     setQuickPrice(String(selectedProduct.price));
@@ -374,6 +401,14 @@ function InventarioPageContent() {
       await fetchProducts();
       // update selectedProduct locally
       setSelectedProduct((prev) => (prev ? { ...prev, name, price: priceNum, description: desc } : prev));
+      // refresh price history if price changed
+      if (priceNum !== selectedProduct.price) {
+        try {
+          const res = await getProductPriceHistory(selectedProduct.id, { pageSize: 20 });
+          setPriceHistory(res.items);
+          setPriceHistoryTab("precios");
+        } catch {}
+      }
     } catch (e) {
       const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al guardar";
       setQuickError(msg);
@@ -837,35 +872,116 @@ function InventarioPageContent() {
                 </Button>
               </div>
 
-              {/* Historial */}
+              {/* Historial con tabs Stock | Precios */}
               <section className="flex flex-col gap-2">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <History className="h-4 w-4" /> Historial de movimientos
+                  <History className="h-4 w-4" /> Historial
                 </h3>
-                {auditsLoading ? (
-                  <p className="text-sm text-muted-foreground py-4">Cargando historial…</p>
-                ) : auditsError ? (
-                  <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{auditsError}</p>
-                ) : audits.length === 0 ? (
-                  <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin movimientos</p>
+                <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                  <button
+                    onClick={() => setPriceHistoryTab("stock")}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${priceHistoryTab === "stock" ? "bg-card shadow border" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    Stock
+                  </button>
+                  <button
+                    onClick={async () => {
+                      setPriceHistoryTab("precios");
+                      if (priceHistory.length === 0 && !priceHistoryLoading && selectedProduct) {
+                        setPriceHistoryLoading(true);
+                        setPriceHistoryError(null);
+                        try {
+                          const res = await getProductPriceHistory(selectedProduct.id, { pageSize: 20 });
+                          setPriceHistory(res.items);
+                        } catch (e) {
+                          const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al cargar historial de precios";
+                          setPriceHistoryError(msg);
+                        } finally {
+                          setPriceHistoryLoading(false);
+                        }
+                      }
+                    }}
+                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${priceHistoryTab === "precios" ? "bg-card shadow border" : "text-muted-foreground hover:text-foreground"}`}
+                  >
+                    <DollarSign className="h-3 w-3" /> Precios
+                  </button>
+                </div>
+
+                {priceHistoryTab === "stock" ? (
+                  auditsLoading ? (
+                    <div className="py-4 flex flex-col gap-2">
+                      <div className="h-10 bg-muted rounded animate-pulse" />
+                      <div className="h-10 bg-muted rounded animate-pulse" />
+                      <div className="h-10 bg-muted rounded animate-pulse" />
+                    </div>
+                  ) : auditsError ? (
+                    <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{auditsError}</p>
+                  ) : audits.length === 0 ? (
+                    <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin movimientos</p>
+                  ) : (
+                    <div className="border border-border rounded-lg divide-y divide-border max-h-[260px] overflow-auto">
+                      {audits.map((a) => (
+                        <div key={a.id} className="p-3 flex justify-between items-center text-sm">
+                          <div className="flex flex-col">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(a.adjustedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
+                            </span>
+                            <span className="truncate max-w-[180px]">{a.reason}</span>
+                          </div>
+                          <div className="flex flex-col items-end gap-1">
+                            <span className={`font-bold ${a.delta > 0 ? "text-green-600" : "text-red-600"}`}>
+                              {a.delta > 0 ? `+${a.delta}` : a.delta}
+                            </span>
+                            <span className="text-xs text-muted-foreground">→ {a.resultingStock}</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )
+                ) : priceHistoryLoading ? (
+                  <div className="py-4 flex flex-col gap-2">
+                    <div className="h-10 bg-muted rounded animate-pulse" />
+                    <div className="h-10 bg-muted rounded animate-pulse" />
+                    <div className="h-10 bg-muted rounded animate-pulse" />
+                  </div>
+                ) : priceHistoryError ? (
+                  <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{priceHistoryError}</p>
+                ) : priceHistory.length === 0 ? (
+                  <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin cambios de precio aún</p>
                 ) : (
-                  <div className="border border-border rounded-lg divide-y divide-border max-h-[260px] overflow-auto">
-                    {audits.map((a) => (
-                      <div key={a.id} className="p-3 flex justify-between items-center text-sm">
-                        <div className="flex flex-col">
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(a.adjustedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
-                          </span>
-                          <span className="truncate max-w-[180px]">{a.reason}</span>
+                  <div className="border border-border rounded-lg divide-y divide-border max-h-[320px] overflow-auto">
+                    <div className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-1.5 bg-muted/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0">
+                      <span>Fecha</span>
+                      <span className="text-center">Anterior → Nuevo</span>
+                      <span className="text-right">Variación</span>
+                    </div>
+                    {priceHistory.map((h) => {
+                      const isUp = h.newPrice > h.oldPrice;
+                      const isDown = h.newPrice < h.oldPrice;
+                      return (
+                        <div key={h.id} className="px-3 py-2.5 flex flex-col gap-1 text-sm">
+                          <div className="flex justify-between items-center">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(h.changedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
+                            </span>
+                            <span
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${isUp ? "bg-green-50 text-green-700 border-green-200" : isDown ? "bg-red-50 text-red-700 border-red-200" : "bg-zinc-100 text-zinc-600 border-zinc-200"}`}
+                            >
+                              {isUp ? <TrendingUp className="h-3 w-3" /> : isDown ? <TrendingDown className="h-3 w-3" /> : null}
+                              {h.changePercent === 0 ? "0%" : `${h.changePercent > 0 ? "+" : ""}${h.changePercent.toFixed(1)}%`}
+                            </span>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm">
+                              <span className="text-muted-foreground line-through">${Number(h.oldPrice).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                              <span className="mx-1">→</span>
+                              <span className="font-semibold">${Number(h.newPrice).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                            </span>
+                            {h.reason ? <span className="text-xs text-muted-foreground truncate max-w-[120px]">{h.reason}</span> : null}
+                          </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className={`font-bold ${a.delta > 0 ? "text-green-600" : "text-red-600"}`}>
-                            {a.delta > 0 ? `+${a.delta}` : a.delta}
-                          </span>
-                          <span className="text-xs text-muted-foreground">→ {a.resultingStock}</span>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </section>

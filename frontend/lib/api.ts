@@ -156,6 +156,16 @@ export type UpdateProductDto = {
   description?: string | null;
 };
 
+export type ProductPriceHistoryDto = {
+  id: string;
+  productId: string;
+  oldPrice: number;
+  newPrice: number;
+  changedAt: string;
+  reason: string | null;
+  changePercent: number;
+};
+
 // ---------- Products ----------
 export function getProducts() {
   return apiFetch<ProductDto[]>("/api/Products");
@@ -188,6 +198,20 @@ export function adjustStock(id: string, dto: StockAdjustmentDto) {
     method: "POST",
     body: JSON.stringify(dto),
   });
+}
+
+export function getProductPriceHistory(
+  productId: string,
+  params?: { from?: string; to?: string; page?: number; pageSize?: number }
+) {
+  const qs = new URLSearchParams();
+  if (params?.from) qs.set("from", params.from);
+  if (params?.to) qs.set("to", params.to);
+  qs.set("page", String(params?.page ?? 1));
+  qs.set("pageSize", String(params?.pageSize ?? 20));
+  return apiFetch<PagedResult<ProductPriceHistoryDto>>(
+    `/api/Products/${productId}/price-history?${qs.toString()}`
+  );
 }
 
 // ---------- Sales ----------
