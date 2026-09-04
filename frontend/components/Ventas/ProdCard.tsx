@@ -1,4 +1,4 @@
-import { ShoppingCart, Package } from "lucide-react";
+﻿import { ShoppingCart, Package } from "lucide-react";
 import Image from "next/image";
 import { useState } from "react";
 import { Badge } from "@/components/ui/badge";
@@ -34,7 +34,7 @@ const ProdCard = ({ name, image, category, stock, price, disabled, onAdd, unit, 
       onClick={() => {
         if (!isOut && onAdd) onAdd();
       }}
-      className={`max-w-sm mx-auto rounded-xl border border-border bg-card text-foreground shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden group transform hover:scale-[1.02] flex flex-col ${
+      className={`max-w-sm mx-auto rounded-xl border border-border bg-card text-foreground shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden group transform hover:scale-[1.02] flex flex-col ${
         isOut ? "opacity-50 pointer-events-none" : "cursor-pointer"
       }`}
     >
@@ -52,7 +52,7 @@ const ProdCard = ({ name, image, category, stock, price, disabled, onAdd, unit, 
         {imgError && (
           <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-800 text-zinc-100 gap-2">
             <Package className="h-8 w-8 opacity-60" />
-            <span className="text-lg font-black tracking-widest">{initials}</span>
+            <span className="text-lg font-semibold tracking-tight">{initials}</span>
           </div>
         )}
       </div>
@@ -61,9 +61,9 @@ const ProdCard = ({ name, image, category, stock, price, disabled, onAdd, unit, 
         <Badge variant="secondary" className="w-fit mb-2 text-[10px] uppercase tracking-wider">
           {category}
         </Badge>
-        <h3 className="font-bold text-base mb-2 leading-tight line-clamp-2 min-h-[2.5rem]">{name}</h3>
+        <h3 className="font-semibold text-base mb-2 leading-tight line-clamp-2 min-h-[2.5rem]">{name}</h3>
         <div className="flex items-center justify-between mb-2">
-          <span className="text-xl font-bold text-red-500">${Number(price).toLocaleString("es-AR")}</span>
+          <span className="text-xl font-semibold text-red-500">${Number(price).toLocaleString("es-AR")}</span>
           {isOut ? (
             <Badge variant="outline" className="text-[11px] border-red-200 bg-red-50 text-red-700">
               Sin stock
@@ -83,7 +83,7 @@ const ProdCard = ({ name, image, category, stock, price, disabled, onAdd, unit, 
             e.stopPropagation();
             if (!isOut && onAdd) onAdd();
           }}
-          className={`mt-auto w-full py-2.5 px-4 rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-2 text-sm ${
+          className={`mt-auto w-full py-2.5 px-4 rounded-md font-medium transition-colors flex items-center justify-center gap-2 text-sm ${
             isOut ? "bg-muted text-muted-foreground cursor-not-allowed" : "bg-primary text-primary-foreground hover:opacity-90"
           }`}
         >
@@ -96,3 +96,5 @@ const ProdCard = ({ name, image, category, stock, price, disabled, onAdd, unit, 
 };
 
 export default ProdCard;
+
+

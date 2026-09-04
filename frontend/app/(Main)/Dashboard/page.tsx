@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -121,7 +121,7 @@ export default function Page() {
   return (
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl font-semibold">DASHBOARD</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
         <p className="text-sm text-muted-foreground">Vistazo ejecutivo — usa el filtro para cambiar todo el tablero</p>
       </div>
 
@@ -131,7 +131,7 @@ export default function Page() {
           <button
             key={p.key}
             onClick={() => setRange(p.key)}
-            className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+            className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
               range === p.key ? "bg-red-500 text-white border-red-500" : "bg-card text-foreground border-border hover:bg-muted"
             }`}
           >
@@ -144,15 +144,15 @@ export default function Page() {
         <div className="flex flex-wrap gap-3 items-end bg-card p-4 rounded-xl border border-border">
           <div>
             <label className="text-sm font-medium">Desde</label>
-            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="border border-input rounded-lg px-3 py-2 text-sm bg-card ml-2" />
+            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="border border-input rounded-md px-3 py-2 text-sm bg-card ml-2" />
           </div>
           <div>
             <label className="text-sm font-medium">Hasta</label>
-            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="border border-input rounded-lg px-3 py-2 text-sm bg-card ml-2" />
+            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="border border-input rounded-md px-3 py-2 text-sm bg-card ml-2" />
           </div>
           <button
             onClick={fetchDashboard}
-            className="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-medium hover:bg-red-600"
+            className="px-4 py-2 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600"
           >
             Aplicar
           </button>
@@ -181,7 +181,7 @@ export default function Page() {
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[0, 1, 2, 3].map((i) => (
-            <div key={i} className="bg-card p-6 rounded-2xl border border-border shadow-sm animate-pulse h-28">
+            <div key={i} className="bg-card p-6 rounded-xl border border-border shadow-sm animate-pulse h-28">
               <div className="h-4 bg-muted rounded w-1/2 mb-3" />
               <div className="h-6 bg-muted rounded w-1/3" />
             </div>
@@ -190,23 +190,23 @@ export default function Page() {
       ) : data ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Link href={reportLink} className="block">
-            <StatCard title={salesTitle} value={String(data.salesCount)} icon={ShoppingBag} color="bg-white-100 text-black-600 border border-gray-200" />
+            <StatCard title={salesTitle} value={String(data.salesCount)} icon={ShoppingBag} color="bg-card-100 text-black-600 border border-border" />
           </Link>
           <Link href={reportLink} className="block">
-            <StatCard title="Total facturado" value={`$${Number(data.totalRevenue).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={DollarSign} color="bg-white-100 text-black-600 border border-gray-200" />
+            <StatCard title="Total facturado" value={`$${Number(data.totalRevenue).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={DollarSign} color="bg-card-100 text-black-600 border border-border" />
           </Link>
           <Link href={reportLink} className="block">
-            <StatCard title="Productos vendidos" value={String(data.productsSoldQuantity)} icon={Package} color="bg-white-100 text-black-600 border border-gray-200" />
+            <StatCard title="Productos vendidos" value={String(data.productsSoldQuantity)} icon={Package} color="bg-card-100 text-black-600 border border-border" />
           </Link>
           <Link href={reportLink} className="block">
-            <StatCard title="Ticket promedio" value={`$${Number(data.ticketAverage).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={CreditCard} color="bg-white-100 text-black-600 border border-gray-200" />
+            <StatCard title="Ticket promedio" value={`$${Number(data.ticketAverage).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={CreditCard} color="bg-card-100 text-black-600 border border-border" />
           </Link>
         </div>
       ) : null}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-card rounded-2xl border border-border shadow-sm p-6 min-h-[380px]">
+        <div className="lg:col-span-2 bg-card rounded-xl border border-border shadow-sm p-6 min-h-[380px]">
           <h3 className="text-lg font-semibold mb-4 text-foreground">VENTAS POR DÍA</h3>
           {loading ? (
             <div className="h-[300px] animate-pulse bg-muted rounded-xl" />
@@ -232,7 +232,7 @@ export default function Page() {
           )}
         </div>
 
-        <div className="lg:col-span-1 bg-card rounded-2xl border border-border shadow-sm p-6 min-h-[380px]">
+        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm p-6 min-h-[380px]">
           <h3 className="text-lg font-semibold mb-4 text-foreground text-center">VENTAS POR CATEGORÍA</h3>
           {loading ? (
             <div className="h-[300px] animate-pulse bg-muted rounded-xl" />
@@ -282,7 +282,7 @@ export default function Page() {
 
       {/* Ranking + Recent */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
+        <div className="bg-card rounded-xl border border-border shadow-sm p-6">
           <h3 className="text-lg font-semibold mb-4 text-foreground">RANKING TOP 5 PRODUCTOS</h3>
           {loading ? (
             <div className="h-40 animate-pulse bg-muted rounded-xl" />
@@ -315,7 +315,7 @@ export default function Page() {
           )}
         </div>
 
-        <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
+        <div className="bg-card rounded-xl border border-border shadow-sm p-6">
           <h3 className="text-lg font-semibold mb-4 text-foreground">ÚLTIMAS VENTAS</h3>
           {loading ? (
             <div className="h-40 animate-pulse bg-muted rounded-xl" />
@@ -329,7 +329,7 @@ export default function Page() {
                     <div className="text-sm font-medium">{new Date(s.date).toLocaleDateString("es-AR")} {new Date(s.date).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</div>
                     <div className="text-xs text-muted-foreground font-mono">{s.id.slice(0, 8)} · {s.paymentMethod} · {s.items.reduce((a, i) => a + i.quantity, 0)} items</div>
                   </div>
-                  <div className="text-sm font-bold">${Number(s.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</div>
+                  <div className="text-sm font-semibold">${Number(s.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</div>
                 </div>
               ))}
             </div>
@@ -339,3 +339,7 @@ export default function Page() {
     </main>
   );
 }
+
+
+
+

@@ -1,4 +1,4 @@
-import { Search } from 'lucide-react';
+﻿import { Search } from 'lucide-react';
 
 const NavBar = () => {
   return (
@@ -11,7 +11,7 @@ const NavBar = () => {
           type="text" 
           aria-label='Buscar productos'
           placeholder="Buscar..." 
-          className="block w-full pl-10 pr-3 py-2 border border-border rounded-full bg-muted text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
+          className="block w-full pl-10 pr-3 py-2 border border-border rounded-md bg-muted text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
         />
       </div>
       

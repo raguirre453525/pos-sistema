@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { Button } from "@/components/ui/button";
@@ -39,7 +39,7 @@ export default function ClientesPage() {
       const data = await getCustomers();
       setCustomers(data);
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al cargar clientes";
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al cargar Clientes";
       setError(msg);
     } finally {
       setLoading(false);
@@ -148,13 +148,13 @@ export default function ClientesPage() {
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold flex items-center gap-2"><Users className="h-6 w-6"/>CLIENTES</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2"><Users className="h-6 w-6"/>Clientes</h1>
           <p className="text-sm text-muted-foreground">Gestión de fiado — saldo, pagos y ventas pendientes</p>
         </div>
         <Button onClick={() => { setShowDialog(true); setFormError(null); }} className="gap-1.5"><Plus className="h-4 w-4"/> Nuevo cliente</Button>
       </div>
 
-      <div className="flex items-center gap-2 bg-card border rounded-2xl p-4">
+      <div className="flex items-center gap-2 bg-card border rounded-xl p-4">
         <div className="relative flex-1 max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input placeholder="Buscar por nombre o teléfono..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
@@ -162,18 +162,18 @@ export default function ClientesPage() {
         <span className="text-xs text-muted-foreground hidden sm:inline">{filtered.length} de {customers.length}</span>
       </div>
 
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center"><span>{error}</span><Button variant="outline" size="sm" onClick={fetchCustomers}>Reintentar</Button></div>}
+      {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center"><span>{error}</span><Button variant="outline" size="sm" onClick={fetchCustomers}>Reintentar</Button></div>}
 
       {loading ? (
-        <div className="bg-card border rounded-2xl p-8 text-center text-sm text-muted-foreground">Cargando clientes…</div>
+        <div className="bg-card border rounded-xl p-8 text-center text-sm text-muted-foreground">Cargando Clientes…</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-card border rounded-2xl p-8 text-center flex flex-col items-center gap-2">
+        <div className="bg-card border rounded-xl p-8 text-center flex flex-col items-center gap-2">
           <Users className="h-10 w-10 text-muted-foreground" />
-          <p className="text-sm text-muted-foreground">{customers.length === 0 ? "Sin clientes" : "Sin resultados"}</p>
+          <p className="text-sm text-muted-foreground">{customers.length === 0 ? "Sin Clientes" : "Sin resultados"}</p>
           {customers.length === 0 && <p className="text-xs text-muted-foreground">Creá el primero con + Nuevo cliente</p>}
         </div>
       ) : (
-        <div className="bg-card border rounded-2xl overflow-hidden">
+        <div className="bg-card border rounded-xl overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
@@ -193,7 +193,7 @@ export default function ClientesPage() {
                       <div className="text-xs text-muted-foreground">{c.phone ?? "—"}</div>
                     </td>
                     <td className="px-4 py-3 text-right">
-                      <span className={`font-bold ${c.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(c.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                      <span className={`font-semibold ${c.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(c.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
                     </td>
                     <td className="px-4 py-3 text-center">
                       <Badge variant={c.pendingSalesCount > 0 ? "destructive" : "secondary"}>{c.pendingSalesCount}</Badge>
@@ -201,7 +201,7 @@ export default function ClientesPage() {
                     <td className="px-4 py-3 text-xs">{c.lastPurchaseAt ? new Date(c.lastPurchaseAt).toLocaleDateString("es-AR") : "—"}</td>
                     <td className="px-4 py-3">
                       {c.balance > 0 && c.daysSinceDebt != null ? (
-                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold border ${c.daysSinceDebt > 15 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{c.daysSinceDebt} días</span>
+                        <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold border ${c.daysSinceDebt > 15 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{c.daysSinceDebt} días</span>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -217,7 +217,7 @@ export default function ClientesPage() {
       {/* Dialog nuevo cliente */}
       {showDialog && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowDialog(false)}>
-          <div className="bg-card rounded-2xl border shadow-xl p-6 w-full max-w-md flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+          <div className="bg-card rounded-xl border shadow-xl p-6 w-full max-w-md flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center">
               <h3 className="text-lg font-semibold">Nuevo cliente</h3>
               <Button variant="ghost" size="icon" onClick={() => setShowDialog(false)}><X className="h-4 w-4"/></Button>
@@ -258,7 +258,7 @@ export default function ClientesPage() {
                     <p className="text-sm text-muted-foreground">{detail.customer.phone ?? "Sin teléfono"} {detail.customer.note ? `· ${detail.customer.note}` : ""}</p>
                     <div className="mt-3 flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Saldo</span>
-                      <span className={`text-2xl font-black ${detail.customer.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(detail.customer.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                      <span className={`text-2xl font-semibold tracking-tight text-foreground ${detail.customer.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(detail.customer.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
                       {detail.customer.balance === 0 && <Badge variant="secondary">Sin deuda</Badge>}
                     </div>
                   </>
@@ -285,7 +285,7 @@ export default function ClientesPage() {
                     {detail.pendingSales.length > 0 && (
                       <div>
                         <Label>Venta (opcional)</Label>
-                        <select value={paymentSaleId} onChange={(e) => setPaymentSaleId(e.target.value)} className="mt-1 w-full h-9 rounded-lg border border-input bg-background px-2.5 text-sm">
+                        <select value={paymentSaleId} onChange={(e) => setPaymentSaleId(e.target.value)} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-2.5 text-sm">
                           <option value="">— FIFO automático —</option>
                           {detail.pendingSales.map((s) => (
                             <option key={s.id} value={s.id}>{new Date(s.date).toLocaleDateString("es-AR")} — ${Number(s.total).toLocaleString("es-AR")} {s.isCredit ? "(pendiente)" : ""}</option>
@@ -323,9 +323,9 @@ export default function ClientesPage() {
                         <>
                           <h3 className="text-sm font-semibold">Historial fiado ({history.length})</h3>
                           {history.length === 0 ? (
-                            <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin compras fiadas</p>
+                            <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin compras fiadas</p>
                           ) : (
-                            <div className="border rounded-lg overflow-hidden">
+                            <div className="border rounded-md overflow-hidden">
                               <div className="overflow-x-auto max-h-[320px] overflow-auto">
                                 <table className="w-full text-xs">
                                   <thead className="bg-muted/50 text-muted-foreground sticky top-0">
@@ -366,15 +366,15 @@ export default function ClientesPage() {
 
                   <section className="flex flex-col gap-2">
                     <h3 className="text-sm font-semibold">Pagos ({detail.payments.length})</h3>
-                    {detail.payments.length === 0 ? <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin pagos</p> : (
-                      <div className="border rounded-lg divide-y max-h-[220px] overflow-auto">
+                    {detail.payments.length === 0 ? <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin pagos</p> : (
+                      <div className="border rounded-md divide-y max-h-[220px] overflow-auto">
                         {detail.payments.map((p) => (
                           <div key={p.id} className="p-3 flex justify-between items-center text-sm">
                             <div className="flex flex-col">
                               <span className="text-xs text-muted-foreground">{new Date(p.paidAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</span>
                               <span className="truncate max-w-[180px]">{p.note ?? "—"}</span>
                             </div>
-                            <span className="font-bold text-green-700">${Number(p.amount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                            <span className="font-semibold text-green-700">${Number(p.amount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
                           </div>
                         ))}
                       </div>
@@ -389,3 +389,7 @@ export default function ClientesPage() {
     </main>
   );
 }
+
+
+
+

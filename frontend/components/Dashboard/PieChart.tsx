@@ -1,4 +1,4 @@
-'use client'
+﻿'use client'
 import React from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Label, Tooltip } from 'recharts';
 import { CATEGORY_SALES } from '@/constants/dashboard-data';
@@ -57,7 +57,7 @@ const CategoryPieChart = () => {
                         <tspan
                           x={viewBox.cx}
                           y={(viewBox.cy || 0) + 24}
-                          className={`fill-foreground text-sm font-bold`}
+                          className={`fill-foreground text-sm font-semibold`}
                         >
                           Total
                         </tspan>
@@ -65,7 +65,7 @@ const CategoryPieChart = () => {
                         <tspan
                           x={viewBox.cx}
                           y={viewBox.cy}
-                          className={`fill-foreground text-xl font-bold`}
+                          className={`fill-foreground text-xl font-semibold`}
                         >
                           ${totalSales.toLocaleString()}
                         </tspan>
@@ -83,3 +83,4 @@ const CategoryPieChart = () => {
 };
 
 export default CategoryPieChart;
+

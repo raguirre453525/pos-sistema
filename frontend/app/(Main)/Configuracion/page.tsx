@@ -1,11 +1,11 @@
-import ConfigBtn from "@/components/Config/ConfigBtn";
+﻿import ConfigBtn from "@/components/Config/ConfigBtn";
 import { Users } from "lucide-react";
 
 export default function ConfiguracionPage() {
   return (
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl font-semibold">CONFIGURACIÓN</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Configuración</h1>
         <p className="text-sm text-muted-foreground">Ajustes técnicos y de negocio</p>
       </div>
 
@@ -14,7 +14,7 @@ export default function ConfiguracionPage() {
           link="/Configuracion/Usuarios"
           title="Usuarios"
           icon={Users}
-          color="bg-white text-black border border-gray-200"
+          color="bg-card text-black border border-border"
           disabled
           badge="Próximamente"
         />
@@ -22,3 +22,5 @@ export default function ConfiguracionPage() {
     </main>
   );
 }
+
+

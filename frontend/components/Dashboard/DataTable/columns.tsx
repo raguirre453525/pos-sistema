@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 import { ColumnDef } from "@tanstack/react-table"
 import { Product } from "@/constants/products"
 import Image from "next/image"
@@ -8,7 +8,7 @@ export const columns: ColumnDef<Product>[] = [
         accessorKey: "Position",
         header: "Posicion",
         cell: ({row}) => {
-            return <span className="font-bold">{row.index + 1}</span>
+            return <span className="font-semibold">{row.index + 1}</span>
         },
     },
     {
@@ -51,3 +51,4 @@ export const columns: ColumnDef<Product>[] = [
         },
     },
   ]
+

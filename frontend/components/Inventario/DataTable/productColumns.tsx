@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { ColumnDef } from "@tanstack/react-table";
 import { ProductDto, CategoryDto } from "@/lib/api";
 import Image from "next/image";
@@ -114,7 +114,7 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
         return (
           <span className="inline-flex items-center gap-1.5">
             <span
-              className={`font-medium px-2 py-0.5 rounded-full text-xs border ${
+              className={`font-medium px-2 py-0.5 rounded-md text-xs border ${
                 isOut
                   ? "bg-zinc-100 text-zinc-600 border-zinc-300 dark:bg-zinc-800 dark:text-zinc-300"
                   : isLow
@@ -125,12 +125,12 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
               {stockStr} {unitLabel}
             </span>
             {isLow && (
-              <span className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="inline-flex items-center rounded-full bg-red-600 px-2 py-0.5 text-[10px] font-semibold text-white">
                 ¡Poco stock!
               </span>
             )}
             {isOut && (
-              <span className="inline-flex items-center rounded-full bg-zinc-500 px-2 py-0.5 text-[10px] font-bold text-white">
+              <span className="inline-flex items-center rounded-full bg-zinc-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                 Sin stock
               </span>
             )}
@@ -235,3 +235,4 @@ export function createProductColumns(opts: ProductColumnsOpts = {}): ColumnDef<P
     },
   ];
 }
+

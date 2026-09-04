@@ -1,4 +1,4 @@
-"use client"
+﻿"use client"
 
 import * as React from "react"
 import { Moon, Sun } from "lucide-react"
@@ -24,7 +24,7 @@ export function ModeToggle() {
       variant="ghost"
       size="icon"
       aria-label="Cambiar tema"
-      className="h-9 w-9 rounded-full transition-all border border-border hover:bg-muted"
+      className="h-9 w-9 rounded-md transition-all border border-border hover:bg-muted"
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >
       {isDark ? (

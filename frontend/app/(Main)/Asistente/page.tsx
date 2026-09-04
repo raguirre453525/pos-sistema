@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef, useState } from "react";
 import { SendHorizonal, Sparkles, Trash2 } from "lucide-react";
@@ -7,7 +7,7 @@ import { ApiError, askAssistant, confirmAssistantProposal, getAssistantProviders
 
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; proposal?: ProposalResponse | null };
 
-const STORAGE_KEY = "metratc:asistente:messages";
+const STORAGE_KEY = "metratc:Asistente:messages";
 const MAX_MESSAGES = 10;
 
 function loadStoredMessages(): UiMessage[] {
@@ -102,7 +102,7 @@ export default function AsistentePage() {
       setMessages((prev) => [...prev, assistantMsg].slice(-MAX_MESSAGES));
     } catch (e) {
       const err = e as ApiError;
-      const msg = err?.message || "Error al contactar al asistente.";
+      const msg = err?.message || "Error al contactar al Asistente.";
       setError(msg);
     } finally {
       setLoading(false);
@@ -147,7 +147,7 @@ export default function AsistentePage() {
     if (inputRef.current) {
       inputRef.current.focus();
     } else {
-      (document.querySelector('input[aria-label="Pregunta al asistente"]') as HTMLInputElement | null)?.focus();
+      (document.querySelector('input[aria-label="Pregunta al Asistente"]') as HTMLInputElement | null)?.focus();
     }
   }
 
@@ -161,7 +161,7 @@ export default function AsistentePage() {
   return (
     <main className="h-full p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex items-center justify-between flex-wrap gap-2">
-        <h1 className="text-foreground text-2xl">ASISTENTE</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Asistente</h1>
         <div className="flex items-center gap-2 ml-auto">
           {messages.length > 0 && (
             <button
@@ -178,7 +178,7 @@ export default function AsistentePage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm" role="alert">
+        <div className="rounded-md border border-red-300 bg-red-50 text-red-700 px-3 py-2 text-sm" role="alert">
           {error}
           {error.toLowerCase().includes("apikey") && (
             <span className="block mt-1 text-xs">
@@ -224,7 +224,7 @@ export default function AsistentePage() {
                         <td className={`px-2 py-1 text-center font-mono uppercase text-[11px] ${skuMissing ? "text-red-400" : ""}`}>{p.sku ? p.sku.toUpperCase() : "—"}</td>
                         <td className="px-2 py-1 text-center">{p.exists ? "Sí" : "No"}</td>
                         <td className="px-2 py-1 text-center">
-                          <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${p.exists ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
+                          <span className={`rounded-md px-2 py-0.5 text-[10px] font-medium ${p.exists ? "bg-blue-100 text-blue-700" : "bg-green-100 text-green-700"}`}>
                             {p.action}
                           </span>
                         </td>
@@ -246,7 +246,7 @@ export default function AsistentePage() {
                       onClick={handleConfirm}
                       disabled={loading || !!msg.proposal.hasMissingData}
                       title={msg.proposal.hasMissingData ? "Faltan datos obligatorios" : "Confirmar propuesta"}
-                      className="bg-red-500 hover:bg-red-600 text-white rounded-full px-4 py-1 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="bg-red-500 hover:bg-red-600 text-white rounded-md px-4 py-1 text-xs font-medium disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       Confirmar
                     </button>
@@ -254,7 +254,7 @@ export default function AsistentePage() {
                       type="button"
                       onClick={handleCorrect}
                       disabled={loading}
-                      className="border border-border bg-card hover:bg-muted rounded-full px-4 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                      className="border border-border bg-card hover:bg-muted rounded-md px-4 py-1 text-xs disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                     >
                       Corregir
                     </button>
@@ -266,11 +266,11 @@ export default function AsistentePage() {
         ))}
         {loading && (
           <div className="flex justify-start mb-2 p-2">
-            <div className="bg-muted text-foreground rounded-2xl rounded-bl-sm px-4 py-2 max-w-[75%]">
+            <div className="bg-muted text-foreground rounded-xl rounded-bl-sm px-4 py-2 max-w-[75%]">
               <span className="inline-flex gap-1">
-                <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.3s]" />
-                <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce [animation-delay:-0.15s]" />
-                <span className="w-2 h-2 bg-muted-foreground rounded-full animate-bounce" />
+                <span className="w-2 h-2 bg-muted-foreground rounded-md animate-bounce [animation-delay:-0.3s]" />
+                <span className="w-2 h-2 bg-muted-foreground rounded-md animate-bounce [animation-delay:-0.15s]" />
+                <span className="w-2 h-2 bg-muted-foreground rounded-md animate-bounce" />
               </span>
             </div>
           </div>
@@ -278,7 +278,7 @@ export default function AsistentePage() {
       </div>
 
       {correctHint && (
-        <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-lg px-3 py-2">
+        <div className="text-xs text-muted-foreground bg-muted/40 border border-border rounded-md px-3 py-2">
           Decí qué corregir (ej: &apos;el sku es XXX&apos; o &apos;el precio es 1500&apos;)
         </div>
       )}
@@ -291,8 +291,8 @@ export default function AsistentePage() {
           <input
             ref={inputRef}
             type="text"
-            aria-label="Pregunta al asistente"
-            placeholder="Pregunta al asistente..."
+            aria-label="Pregunta al Asistente"
+            placeholder="Pregunta al Asistente..."
             value={input}
             onChange={(e) => {
               setInput(e.target.value);
@@ -300,7 +300,7 @@ export default function AsistentePage() {
             }}
             onKeyDown={onKeyDown}
             disabled={loading}
-            className="block w-full pl-10 pr-3 py-2 border border-border rounded-full bg-muted text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all disabled:opacity-50"
+            className="block w-full pl-10 pr-3 py-2 border border-border rounded-md bg-muted text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all disabled:opacity-50"
           />
         </div>
 
@@ -309,7 +309,7 @@ export default function AsistentePage() {
           aria-label="Enviar"
           onClick={send}
           disabled={loading || !input.trim()}
-          className="flex rounded-full bg-red-500 items-center justify-center w-10 h-10 ml-2 hover:bg-red-800 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+          className="flex rounded-md bg-red-500 items-center justify-center w-10 h-10 ml-2 hover:bg-red-800 transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
         >
           <SendHorizonal size={18} className="text-background" />
         </button>
@@ -324,14 +324,14 @@ export default function AsistentePage() {
               <button
                 type="button"
                 onClick={() => setShowClearConfirm(false)}
-                className="rounded-full border border-border bg-card hover:bg-muted px-4 py-1.5 text-xs font-medium transition-colors"
+                className="rounded-md border border-border bg-card hover:bg-muted px-4 py-1.5 text-xs font-medium transition-colors"
               >
                 Cancelar
               </button>
               <button
                 type="button"
                 onClick={clearChat}
-                className="rounded-full bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 text-xs font-medium transition-colors"
+                className="rounded-md bg-red-500 hover:bg-red-600 text-white px-4 py-1.5 text-xs font-medium transition-colors"
               >
                 Confirmar borrado
               </button>
@@ -342,3 +342,7 @@ export default function AsistentePage() {
     </main>
   );
 }
+
+
+
+

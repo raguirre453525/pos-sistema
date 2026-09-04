@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
 import ProdCard from "@/components/Ventas/ProdCard";
@@ -423,7 +423,7 @@ export default function VentasPage() {
   return (
     <main className="min-h-screen bg-background p-4 flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-foreground text-2xl font-black tracking-tight">VENTAS</h1>
+        <h1 className="text-foreground text-2xl font-semibold tracking-tight">Ventas</h1>
         {saleMsg && (
           <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">{saleMsg}</span>
         )}
@@ -433,7 +433,7 @@ export default function VentasPage() {
       </div>
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
+        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={fetchProducts}>
             Reintentar
@@ -477,8 +477,8 @@ export default function VentasPage() {
           </div>
 
           {comboPromos.length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 rounded-2xl p-3">
-              <h3 className="text-sm font-bold text-amber-800 dark:text-amber-200 mb-2">Combos activos</h3>
+            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 rounded-xl p-3">
+              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">Combos activos</h3>
               <div className="flex gap-3 overflow-x-auto pb-1">
                 {comboPromos.map(pr => {
                   const totalOrig = pr.totalOriginalPrice ?? pr.lines?.reduce((s,x)=>s+x.lineTotal,0) ?? 0;
@@ -488,11 +488,11 @@ export default function VentasPage() {
                   return (
                     <div key={pr.id} className="min-w-[260px] bg-card border border-amber-200 rounded-xl p-3 shrink-0">
                       {pr.imageUrl ? (
-                        <img src={pr.imageUrl.startsWith("/") ? `${API_URL}${pr.imageUrl}` : pr.imageUrl} alt={pr.name} className="w-full h-20 object-cover rounded-lg mb-2 border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                        <img src={pr.imageUrl.startsWith("/") ? `${API_URL}${pr.imageUrl}` : pr.imageUrl} alt={pr.name} className="w-full h-20 object-cover rounded-md mb-2 border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
                       ) : null}
                       <div className="font-semibold text-sm">{pr.name}</div>
                       <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{linesDesc}</div>
-                      <div className="text-xs mt-2"><span className="line-through text-muted-foreground">${totalOrig.toLocaleString("es-AR")}</span><span className="mx-1">→</span><span className="font-bold text-amber-700">Combo ${Number(pr.comboPrice).toLocaleString("es-AR")}</span><span className="ml-2 bg-emerald-600 text-white px-1.5 py-0.5 rounded text-xs">Ahorrás {pct.toFixed(0)}%</span></div>
+                      <div className="text-xs mt-2"><span className="line-through text-muted-foreground">${totalOrig.toLocaleString("es-AR")}</span><span className="mx-1">→</span><span className="font-semibold text-amber-700">Combo ${Number(pr.comboPrice).toLocaleString("es-AR")}</span><span className="ml-2 bg-emerald-600 text-white px-1.5 py-0.5 rounded text-xs">Ahorrás {pct.toFixed(0)}%</span></div>
                       <div className="text-xs text-emerald-700">Ahorrás ${saving.toLocaleString("es-AR")}</div>
                       <Button size="sm" className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>handleAddCombo(pr)}>Agregar combo</Button>
                     </div>
@@ -502,7 +502,7 @@ export default function VentasPage() {
             </div>
           )}
 
-          <div className="bg-card rounded-2xl border border-border p-4">
+          <div className="bg-card rounded-xl border border-border p-4">
             {loading || catLoading ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Cargando productos…</p>
             ) : filteredProducts.length === 0 ? (
@@ -517,7 +517,7 @@ export default function VentasPage() {
                   const discPrice = hasDisc ? p.price * (1 - disc! / 100) : p.price;
                   return (
                     <div key={p.id} className="relative">
-                      {hasDisc && <span className="absolute -top-2 -right-2 z-10 bg-red-600 text-white text-xs font-bold px-2 py-1 rounded-full">-{disc}%</span>}
+                      {hasDisc && <span className="absolute -top-2 -right-2 z-10 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded-md">-{disc}%</span>}
                       <ProdCard
                         name={p.name}
                         image="/img-prod.webp"
@@ -539,7 +539,7 @@ export default function VentasPage() {
         </div>
 
         {/* Right: factura panel */}
-        <div className="lg:col-span-1 bg-card rounded-2xl border border-border shadow-sm p-6 flex flex-col h-fit lg:sticky lg:top-4">
+        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm p-6 flex flex-col h-fit lg:sticky lg:top-4">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-foreground">FACTURA</h2>
             {(cart.length > 0 || cartCombos.length > 0) && (
@@ -573,7 +573,7 @@ export default function VentasPage() {
                             <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">Ahorrás {pct.toFixed(0)}%</span>
                           </div>
                           <div className="text-xs text-muted-foreground mt-1">Productos: {linesDesc}</div>
-                          <div className="text-sm mt-1"><span className="line-through text-muted-foreground text-xs">${totalOrig.toLocaleString("es-AR")}</span><span className="ml-2 font-bold text-amber-700">${unit.toLocaleString("es-AR")} c/u</span><span className="ml-2 font-semibold">= ${ (unit*cc.quantity).toLocaleString("es-AR")}</span></div>
+                          <div className="text-sm mt-1"><span className="line-through text-muted-foreground text-xs">${totalOrig.toLocaleString("es-AR")}</span><span className="ml-2 font-semibold text-amber-700">${unit.toLocaleString("es-AR")} c/u</span><span className="ml-2 font-semibold">= ${ (unit*cc.quantity).toLocaleString("es-AR")}</span></div>
                           {isExpanded && (
                             <div className="mt-2 text-xs bg-card border rounded p-2">
                               {promo.lines?.map(l => (
@@ -633,7 +633,7 @@ export default function VentasPage() {
             <div className="flex items-center justify-between gap-2">
               <span className="text-muted-foreground whitespace-nowrap">Descuento {discountAmount > 0 ? `(-$${discountAmount.toLocaleString("es-AR")})` : ""}</span>
               <div className="flex items-center gap-1">
-                <div className="flex rounded-lg border border-input overflow-hidden">
+                <div className="flex rounded-md border border-input overflow-hidden">
                   <button
                     type="button"
                     onClick={() => setDiscountType("%")}
@@ -659,7 +659,7 @@ export default function VentasPage() {
                 />
               </div>
             </div>
-            <div className="flex justify-between items-center text-2xl font-black pt-1">
+            <div className="flex justify-between items-center text-2xl font-semibold pt-1">
               <span>Total</span>
               <span>${total.toLocaleString("es-AR")}</span>
             </div>
@@ -670,7 +670,7 @@ export default function VentasPage() {
           </div>
 
           <Button
-            className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-bold py-6 rounded-xl transition-all disabled:opacity-50 text-base"
+            className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold py-6 rounded-xl transition-all disabled:opacity-50 text-base"
             disabled={(cart.length === 0 && cartCombos.length===0) || saleLoading}
             onClick={() => {
               setSaleError(null);
@@ -687,13 +687,13 @@ export default function VentasPage() {
       {showCheckout && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowCheckout(false)}>
           <div
-            className="bg-card rounded-2xl border border-border shadow-xl p-6 w-full max-w-md flex flex-col gap-4"
+            className="bg-card rounded-xl border border-border shadow-xl p-6 w-full max-w-md flex flex-col gap-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="text-lg font-bold">Confirmar venta</h3>
+            <h3 className="text-lg font-semibold">Confirmar venta</h3>
             <div className="rounded-xl bg-muted p-3 flex justify-between items-center">
               <span className="text-sm text-muted-foreground">Total a cobrar</span>
-              <span className="text-xl font-black">${total.toLocaleString("es-AR")}</span>
+              <span className="text-xl font-semibold">${total.toLocaleString("es-AR")}</span>
             </div>
             {(discountAmount > 0 || subtotalCombos>0) && (
               <p className="text-xs text-muted-foreground -mt-2">
@@ -721,7 +721,7 @@ export default function VentasPage() {
                   <>
                     <Label className="text-sm">Buscar cliente *</Label>
                     <Input placeholder="Buscar cliente..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
-                    <div className="max-h-32 overflow-auto border rounded-lg bg-card divide-y">
+                    <div className="max-h-32 overflow-auto border rounded-md bg-card divide-y">
                       {customerSearchResults.length === 0 ? (
                         <p className="text-xs text-muted-foreground p-2 text-center">Sin resultados</p>
                       ) : (
@@ -757,7 +757,7 @@ export default function VentasPage() {
                       </Button>
                     )}
                     {showInlineCreate && (
-                      <div className="flex flex-col gap-2 p-2 rounded-lg border bg-card">
+                      <div className="flex flex-col gap-2 p-2 rounded-md border bg-card">
                         <Label className="text-xs">Nuevo cliente</Label>
                         <Input placeholder="Nombre" value={inlineName} onChange={(e) => setInlineName(e.target.value)} />
                         <Input placeholder="Teléfono (opcional)" value={inlinePhone} onChange={(e) => setInlinePhone(e.target.value)} />
@@ -833,7 +833,7 @@ export default function VentasPage() {
                 )}
               </div>
             ) : !isCredit ? (
-              <div className="rounded-lg border border-border bg-muted p-3 text-sm">
+              <div className="rounded-md border border-border bg-muted p-3 text-sm">
                 <p className="font-medium">Total: ${total.toLocaleString("es-AR")}</p>
                 <p className="text-muted-foreground text-xs mt-1">Se registrará como MercadoPago.</p>
               </div>
@@ -842,7 +842,7 @@ export default function VentasPage() {
             {isCredit && <p className="text-xs text-muted-foreground bg-muted border border-border rounded p-2">Venta fiada — no hay vuelto. Quedará pendiente para {selectedCustomer?.name ?? "cliente"}. {dueDateHint ? `Vence ${dueDateHint}.` : ""}</p>}
 
             {saleError && (
-              <div className="rounded-lg border border-red-200 bg-red-50 p-2 text-sm text-red-700">{saleError}</div>
+              <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{saleError}</div>
             )}
 
             <div className="flex gap-2 justify-end pt-2">
@@ -863,3 +863,6 @@ export default function VentasPage() {
     </main>
   );
 }
+
+
+

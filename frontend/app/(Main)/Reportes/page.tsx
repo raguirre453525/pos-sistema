@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useEffect, useState, useCallback } from "react";
 import { DollarSign, TrendingUp, Package } from "lucide-react";
 import StatCard from "@/components/Dashboard/StatCard";
@@ -22,7 +22,7 @@ type Tab = "low-stock" | "sales" | "audits";
 const lowStockColumns: ColumnDef<LowStockDto>[] = [
   { accessorKey: "sku", header: "SKU", cell: ({ row }) => <span className="font-medium">{row.original.sku}</span> },
   { accessorKey: "name", header: "Producto", cell: ({ row }) => <span>{row.original.name}</span> },
-  { accessorKey: "stock", header: "Stock", cell: ({ row }) => <span className={row.original.stock === 0 ? "text-red-600 font-bold" : "font-medium"}>{row.original.stock}</span> },
+  { accessorKey: "stock", header: "Stock", cell: ({ row }) => <span className={row.original.stock === 0 ? "text-red-600 font-semibold" : "font-medium"}>{row.original.stock}</span> },
   { accessorKey: "price", header: "Precio", cell: ({ row }) => <span>${Number(row.original.price).toLocaleString("es-AR")}</span> },
   { accessorKey: "threshold", header: "Umbral", cell: ({ row }) => <span>{row.original.threshold}</span> },
 ];
@@ -161,7 +161,7 @@ export default function ReportesPage() {
 
   return (
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
-      <h1 className="text-foreground text-2xl">REPORTES</h1>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">REPORTES</h1>
 
       <div className="flex gap-2">
         <Button variant={tab === "low-stock" ? "default" : "outline"} onClick={() => setTab("low-stock")}>Bajo stock</Button>
@@ -179,7 +179,7 @@ export default function ReportesPage() {
             <Button onClick={fetchLow} disabled={lowLoading}>{lowLoading ? "Cargando…" : "Buscar"}</Button>
             {lowError && <span className="text-sm text-red-600">{lowError}</span>}
           </div>
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
+          <div className="bg-card rounded-xl border border-border shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4">Productos con stock ≤ umbral</h3>
             {lowLoading ? <p className="text-sm text-muted-foreground py-6 text-center">Cargando…</p> : <DataTable columns={lowStockColumns} data={lowStock} label="Producto" placeholder="Buscar…" />}
           </div>
@@ -189,23 +189,23 @@ export default function ReportesPage() {
       {tab === "sales" && (
         <>
           <div className="flex flex-col md:flex-row gap-6">
-            <StatCard title="Ventas Totales" value={totalSales.toString()} icon={DollarSign} color="bg-white-100 text-black-600 border border-gray-200" />
-            <StatCard title="Ingresos Totales" value={`$${totalIncome.toLocaleString("es-AR")}`} icon={TrendingUp} color="bg-white-100 text-black-600 border border-gray-200" />
-            <StatCard title="Productos Vendidos" value={totalItems.toString()} icon={Package} color="bg-white-100 text-black-600 border border-gray-200" />
+            <StatCard title="Ventas Totales" value={totalSales.toString()} icon={DollarSign} color="bg-card-100 text-black-600 border border-border" />
+            <StatCard title="Ingresos Totales" value={`$${totalIncome.toLocaleString("es-AR")}`} icon={TrendingUp} color="bg-card-100 text-black-600 border border-border" />
+            <StatCard title="Productos Vendidos" value={totalItems.toString()} icon={Package} color="bg-card-100 text-black-600 border border-border" />
           </div>
           <div className="flex flex-wrap gap-3 items-end bg-card p-4 rounded-xl border border-border">
             <div><label className="text-sm">Desde</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
             <div><label className="text-sm">Hasta</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
             <div>
               <label className="text-sm">Pago</label>
-              <select value={pm} onChange={(e) => setPm(e.target.value as "" | "0" | "1")} className="border border-input rounded-lg px-3 py-1.5 text-sm bg-card h-8">
+              <select value={pm} onChange={(e) => setPm(e.target.value as "" | "0" | "1")} className="border border-input rounded-md px-3 py-1.5 text-sm bg-card h-8">
                 <option value="">Todos</option><option value="0">Efectivo</option><option value="1">MercadoPago</option>
               </select>
             </div>
             <Button onClick={() => fetchSales(1)} disabled={salesLoading}>{salesLoading ? "Cargando…" : "Filtrar"}</Button>
             {salesError && <span className="text-sm text-red-600">{salesError}</span>}
           </div>
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
+          <div className="bg-card rounded-xl border border-border shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4">VENTAS {sales ? `(${sales.totalCount})` : ""}</h3>
             {salesLoading ? <p className="text-sm text-muted-foreground py-6 text-center">Cargando…</p> : <DataTable columns={salesColumns} data={sales?.items ?? []} label="Venta" placeholder="Buscar…" />}
             {sales && sales.totalCount > sales.pageSize && (
@@ -226,7 +226,7 @@ export default function ReportesPage() {
             <Button onClick={() => fetchAudits(1)} disabled={auditLoading}>{auditLoading ? "Cargando…" : "Buscar"}</Button>
             {auditError && <span className="text-sm text-red-600">{auditError}</span>}
           </div>
-          <div className="bg-card rounded-2xl border border-border shadow-sm p-6">
+          <div className="bg-card rounded-xl border border-border shadow-sm p-6">
             <h3 className="text-lg font-semibold mb-4">Auditoría de stock {audits ? `(${audits.totalCount})` : ""}</h3>
             {auditLoading ? <p className="text-sm text-muted-foreground py-6 text-center">Cargando…</p> : <DataTable columns={auditColumns} data={audits?.items ?? []} label="Auditoría" placeholder="Buscar…" />}
             {audits && audits.totalCount > audits.pageSize && (
@@ -242,3 +242,7 @@ export default function ReportesPage() {
     </main>
   );
 }
+
+
+
+

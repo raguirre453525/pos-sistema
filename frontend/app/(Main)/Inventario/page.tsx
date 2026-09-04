@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -777,7 +777,7 @@ function InventarioPageContent() {
   return (
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl font-semibold">INVENTARIO</h1>
+        <h1 className="text-foreground text-2xl font-semibold">Inventario</h1>
         <p className="text-sm text-muted-foreground">Gestioná productos y categorías</p>
       </div>
 
@@ -786,14 +786,14 @@ function InventarioPageContent() {
         <Button variant={activeTab === "productos" ? "default" : "ghost"} onClick={() => handleTabChange("productos")} className="gap-2">
           <Package className="h-4 w-4" />
           Productos
-          <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-medium ${activeTab === "productos" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground border"}`}>
+          <span className={`ml-1 rounded-md px-2 py-0.5 text-xs font-medium ${activeTab === "productos" ? "bg-card/20 text-white" : "bg-muted text-muted-foreground border"}`}>
             {products.length}
           </span>
         </Button>
         <Button variant={activeTab === "categorias" ? "default" : "ghost"} onClick={() => handleTabChange("categorias")} className="gap-2">
           <Tag className="h-4 w-4" />
           Categorías
-          <span className={`ml-1 rounded-full px-2 py-0.5 text-xs font-medium ${activeTab === "categorias" ? "bg-white/20 text-white" : "bg-muted text-muted-foreground border"}`}>
+          <span className={`ml-1 rounded-md px-2 py-0.5 text-xs font-medium ${activeTab === "categorias" ? "bg-card/20 text-white" : "bg-muted text-muted-foreground border"}`}>
             {categories.length}
           </span>
         </Button>
@@ -812,7 +812,7 @@ function InventarioPageContent() {
               title="Valor Total de Activos"
               value={`$${totalValue.toLocaleString("es-AR", { minimumFractionDigits: 2 })}`}
               icon={Package}
-              color="bg-white-100 text-black-600 border border-gray-200"
+              color="bg-card-100 text-black-600 border border-border"
             />
             <Link href="/Inventario/CrearProd">
               <Button variant="outline" size="lg" className="flex ml-auto mt-20">
@@ -823,7 +823,7 @@ function InventarioPageContent() {
           </div>
 
           {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
+            <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
               <span>{error}</span>
               <Button variant="outline" size="sm" onClick={fetchProducts}>
                 Reintentar
@@ -832,7 +832,7 @@ function InventarioPageContent() {
           )}
 
           <div className="grid grid-cols-1 gap-6">
-            <div className="bg-card h-full rounded-2xl border border-border shadow-sm p-6">
+            <div className="bg-card h-full rounded-xl border border-border shadow-sm p-6">
               <div className="flex flex-col gap-4 mb-4">
                 <div className="flex flex-col sm:flex-row justify-between gap-4">
                   <h3 className="text-lg font-semibold text-foreground">
@@ -964,7 +964,7 @@ function InventarioPageContent() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 bg-card border rounded-2xl p-4">
+          <div className="flex items-center gap-2 bg-card border rounded-xl p-4">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -982,7 +982,7 @@ function InventarioPageContent() {
           {catLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="bg-card border rounded-2xl p-4 animate-pulse">
+                <div key={i} className="bg-card border rounded-xl p-4 animate-pulse">
                   <div className="h-5 bg-muted rounded w-1/2 mb-3" />
                   <div className="h-3 bg-muted rounded w-full mb-2" />
                   <div className="h-3 bg-muted rounded w-2/3 mb-4" />
@@ -1001,7 +1001,7 @@ function InventarioPageContent() {
               </Button>
             </div>
           ) : categories.length === 0 ? (
-            <div className="bg-card border rounded-2xl p-8 text-center flex flex-col items-center gap-3">
+            <div className="bg-card border rounded-xl p-8 text-center flex flex-col items-center gap-3">
               <Tag className="h-10 w-10 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">Sin categorías — creá la primera</p>
               <Button onClick={openCreateFromTab} size="sm">
@@ -1010,7 +1010,7 @@ function InventarioPageContent() {
               </Button>
             </div>
           ) : filteredCategories.length === 0 ? (
-            <div className="bg-card border rounded-2xl p-8 text-center text-sm text-muted-foreground">
+            <div className="bg-card border rounded-xl p-8 text-center text-sm text-muted-foreground">
               No se encontraron categorías para &quot;{catSearchTerm}&quot;
             </div>
           ) : (
@@ -1018,13 +1018,13 @@ function InventarioPageContent() {
               {filteredCategories.map((cat) => (
                 <div
                   key={cat.id}
-                  className="bg-card border rounded-2xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
+                  className="bg-card border rounded-xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-semibold text-base leading-tight truncate pr-2">{cat.name}</h3>
                     <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-full border shrink-0 ${
-                        cat.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-600 border-gray-200"
+                      className={`text-xs font-medium px-2 py-0.5 rounded-md border shrink-0 ${
+                        cat.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-600 border-border"
                       }`}
                     >
                       {cat.isActive ? "Activa" : "Inactiva"}
@@ -1038,7 +1038,7 @@ function InventarioPageContent() {
                   )}
 
                   <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-muted-foreground bg-muted border rounded-full px-2.5 py-1">
+                    <span className="text-xs text-muted-foreground bg-muted border rounded-md px-2.5 py-1">
                       {cat.productCount} producto{cat.productCount === 1 ? "" : "s"}
                     </span>
                     <div className="flex gap-1">
@@ -1084,7 +1084,7 @@ function InventarioPageContent() {
                     const isLow = selectedProduct.minStock != null ? selectedProduct.stock <= selectedProduct.minStock : selectedProduct.stock <= 5;
                     return (
                       <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium border ${
+                        className={`px-2 py-0.5 rounded-md text-xs font-medium border ${
                           selectedProduct.stock <= 0
                             ? "bg-zinc-100 text-zinc-600 border-zinc-300"
                             : isLow
@@ -1129,7 +1129,7 @@ function InventarioPageContent() {
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <History className="h-4 w-4" /> Historial
                 </h3>
-                <div className="flex gap-1 p-1 bg-muted rounded-lg w-fit">
+                <div className="flex gap-1 p-1 bg-muted rounded-md w-fit">
                   <button
                     onClick={() => setPriceHistoryTab("stock")}
                     className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${priceHistoryTab === "stock" ? "bg-card shadow border" : "text-muted-foreground hover:text-foreground"}`}
@@ -1169,9 +1169,9 @@ function InventarioPageContent() {
                   ) : auditsError ? (
                     <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{auditsError}</p>
                   ) : audits.length === 0 ? (
-                    <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin movimientos</p>
+                    <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin movimientos</p>
                   ) : (
-                    <div className="border border-border rounded-lg divide-y divide-border max-h-[260px] overflow-auto">
+                    <div className="border border-border rounded-md divide-y divide-border max-h-[260px] overflow-auto">
                       {audits.map((a) => (
                         <div key={a.id} className="p-3 flex justify-between items-center text-sm">
                           <div className="flex flex-col">
@@ -1181,7 +1181,7 @@ function InventarioPageContent() {
                             <span className="truncate max-w-[180px]">{a.reason}</span>
                           </div>
                           <div className="flex flex-col items-end gap-1">
-                            <span className={`font-bold ${a.delta > 0 ? "text-green-600" : "text-red-600"}`}>
+                            <span className={`font-semibold ${a.delta > 0 ? "text-green-600" : "text-red-600"}`}>
                               {a.delta > 0 ? `+${a.delta}` : a.delta}
                             </span>
                             <span className="text-xs text-muted-foreground">→ {a.resultingStock}</span>
@@ -1199,9 +1199,9 @@ function InventarioPageContent() {
                 ) : priceHistoryError ? (
                   <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{priceHistoryError}</p>
                 ) : priceHistory.length === 0 ? (
-                  <p className="text-sm text-muted-foreground border border-dashed rounded-lg p-4 text-center">Sin cambios de precio aún</p>
+                  <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin cambios de precio aún</p>
                 ) : (
-                  <div className="border border-border rounded-lg divide-y divide-border max-h-[320px] overflow-auto">
+                  <div className="border border-border rounded-md divide-y divide-border max-h-[320px] overflow-auto">
                     <div className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-1.5 bg-muted/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0">
                       <span>Fecha</span>
                       <span className="text-center">Anterior → Nuevo</span>
@@ -1217,7 +1217,7 @@ function InventarioPageContent() {
                               {new Date(h.changedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
                             </span>
                             <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold border ${isUp ? "bg-green-50 text-green-700 border-green-200" : isDown ? "bg-red-50 text-red-700 border-red-200" : "bg-zinc-100 text-zinc-600 border-zinc-200"}`}
+                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border ${isUp ? "bg-green-50 text-green-700 border-green-200" : isDown ? "bg-red-50 text-red-700 border-red-200" : "bg-zinc-100 text-zinc-600 border-zinc-200"}`}
                             >
                               {isUp ? <TrendingUp className="h-3 w-3" /> : isDown ? <TrendingDown className="h-3 w-3" /> : null}
                               {h.changePercent === 0 ? "0%" : `${h.changePercent > 0 ? "+" : ""}${h.changePercent.toFixed(1)}%`}
@@ -1239,7 +1239,7 @@ function InventarioPageContent() {
               </section>
 
               {/* Edición rápida */}
-              <section className="flex flex-col gap-3 border border-border rounded-lg p-4 bg-muted/20">
+              <section className="flex flex-col gap-3 border border-border rounded-md p-4 bg-muted/20">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <Pencil className="h-4 w-4" /> Edición rápida
                 </h3>
@@ -1406,7 +1406,7 @@ function InventarioPageContent() {
       {/* Stock adjustment modal */}
       {adjustTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded-2xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
+          <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
             <h3 className="text-lg font-semibold">Ajustar stock — {adjustTarget.name}</h3>
             {(() => {
               const isWeightAdj = adjustTarget.isSoldByWeight === true || (adjustTarget.unit ?? "").toLowerCase() === "kg";
@@ -1464,16 +1464,16 @@ function InventarioPageContent() {
       {/* Delete category confirm modal for Categorias tab */}
       {deleteConfirmId && deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded-2xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
+          <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
             <h3 className="text-lg font-semibold">¿Eliminar &quot;{deleteTarget.name}&quot;?</h3>
             <p className="text-sm text-muted-foreground">Se desactivará la categoría. Esta acción no elimina los productos asociados.</p>
             {deleteTarget.productCount > 0 && (
-              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+              <p className="text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-md p-2">
                 Esta categoría tiene {deleteTarget.productCount} producto{deleteTarget.productCount === 1 ? "" : "s"} activo
                 {deleteTarget.productCount === 1 ? "" : "s"}. Si intentás eliminarla, el servidor responderá con error 409.
               </p>
             )}
-            {deleteError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 text-sm">{deleteError}</div>}
+            {deleteError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-2 text-sm">{deleteError}</div>}
             <div className="flex justify-end gap-2 mt-1">
               <Button variant="outline" onClick={() => setDeleteConfirmId(null)} disabled={deleteLoading}>
                 Cancelar
@@ -1497,12 +1497,12 @@ function InventarioPageContent() {
       {/* Bulk price adjustment dialog */}
       {showBulk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded-2xl shadow-lg w-full max-w-4xl max-h-[85vh] overflow-y-auto flex flex-col gap-4 p-6">
+          <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-4xl max-h-[85vh] overflow-y-auto flex flex-col gap-4 p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" /> Ajuste masivo de precios
               </h3>
-              <button onClick={() => setShowBulk(false)} className="rounded-full p-1 hover:bg-muted">
+              <button onClick={() => setShowBulk(false)} className="rounded-md p-1 hover:bg-muted">
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -1598,10 +1598,10 @@ function InventarioPageContent() {
                               {b.name}
                             </td>
                             <td className="p-2 text-right">${b.oldPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right font-bold">${b.newPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right font-semibold">${b.newPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                             <td className="p-2 text-center">
                               <span
-                                className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium border ${
+                                className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium border ${
                                   isIncrease ? "bg-green-50 text-green-700 border-green-200" : isDecrease ? "bg-red-50 text-red-700 border-red-200" : "bg-muted text-muted-foreground"
                                 }`}
                               >
@@ -1620,8 +1620,8 @@ function InventarioPageContent() {
             {/* Footer */}
             <div className="flex flex-col gap-2">
               <div className="text-sm font-medium">Afectados: {bulkPreviewFiltered.length}</div>
-              {bulkError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 text-sm">{bulkError}</div>}
-              {bulkSuccess && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-2 text-sm">{bulkSuccess}</div>}
+              {bulkError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-2 text-sm">{bulkError}</div>}
+              {bulkSuccess && <div className="bg-green-50 border border-green-200 text-green-700 rounded-md p-2 text-sm">{bulkSuccess}</div>}
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setShowBulk(false)} disabled={bulkLoading}>
                   Cerrar
@@ -1643,8 +1643,12 @@ function InventarioPageContent() {
 
 export default function InventarioPage() {
   return (
-    <Suspense fallback={<main className="p-4 text-sm text-muted-foreground">Cargando inventario…</main>}>
+    <Suspense fallback={<main className="p-4 text-sm text-muted-foreground">Cargando Inventario…</main>}>
       <InventarioPageContent />
     </Suspense>
   );
 }
+
+
+
+

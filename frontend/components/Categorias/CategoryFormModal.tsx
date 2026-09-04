@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -99,7 +99,7 @@ export default function CategoryFormModal({ open, onClose, onSuccess, editingCat
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={handleOverlayClick}>
       <div
-        className="bg-card border border-border rounded-2xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4"
+        className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
@@ -109,9 +109,9 @@ export default function CategoryFormModal({ open, onClose, onSuccess, editingCat
 
         {/* Preview chip */}
         <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-2 rounded-full border border-border bg-muted px-3 py-1.5 text-sm">
+          <span className="inline-flex items-center gap-2 rounded-md border border-border bg-muted px-3 py-1.5 text-sm">
             <span className="font-medium truncate max-w-[180px]">{previewName}</span>
-            <span className="text-xs font-medium px-2 py-0.5 rounded-full border bg-green-50 text-green-700 border-green-200">
+            <span className="text-xs font-medium px-2 py-0.5 rounded-md border bg-green-50 text-green-700 border-green-200">
               Activa
             </span>
           </span>
@@ -140,12 +140,12 @@ export default function CategoryFormModal({ open, onClose, onSuccess, editingCat
             placeholder="Descripción opcional"
             maxLength={500}
             rows={3}
-            className="w-full rounded-lg border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 placeholder:text-muted-foreground resize-none"
+            className="w-full rounded-md border border-input bg-transparent px-2.5 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 placeholder:text-muted-foreground resize-none"
           />
           <span className="text-xs text-muted-foreground text-right">{description.length}/500</span>
         </div>
 
-        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-2 text-sm">{error}</div>}
+        {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-2 text-sm">{error}</div>}
 
         <div className="flex justify-end gap-2 mt-1">
           <Button variant="outline" onClick={onClose} disabled={saving}>
@@ -159,3 +159,6 @@ export default function CategoryFormModal({ open, onClose, onSuccess, editingCat
     </div>
   );
 }
+
+
+

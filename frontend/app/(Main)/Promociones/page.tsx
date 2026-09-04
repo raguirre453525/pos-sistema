@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 import { useState, useEffect, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -195,14 +195,14 @@ export default function PromocionesPage() {
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2"><Tag className="size-6" /> Promos & Combos</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2"><Tag className="size-6" /> Promos & Combos</h1>
           <p className="text-sm text-muted-foreground">Combos con precio fijo y descuentos % con vigencia. Soporta 3x2 mismo producto via cantidad. Solo activos y vigentes aparecen en Ventas.</p>
         </div>
         <Button onClick={openCreate} className="gap-2"><PackageCheck className="size-4" /> Nuevo combo/promo</Button>
       </div>
       {error && <div className="bg-destructive/10 text-destructive p-3 rounded text-sm">{error}</div>}
 
-      <div className="rounded-lg border bg-card">
+      <div className="rounded-md border bg-card">
         <Table>
           <TableHeader>
             <TableRow>
@@ -246,7 +246,7 @@ export default function PromocionesPage() {
                     <div className="flex justify-end gap-1">
                       <Button size="icon" variant="ghost" onClick={() => openEdit(pr)}><Pencil className="size-4" /></Button>
                       <Button size="icon" variant="ghost" onClick={() => handleToggle(pr)} title={pr.isActive ? "Desactivar" : "Activar"}>
-                        <span className={`inline-block size-3 rounded-full ${pr.isActive ? "bg-emerald-500" : "bg-zinc-400"}`} />
+                        <span className={`inline-block size-3 rounded-md ${pr.isActive ? "bg-emerald-500" : "bg-zinc-400"}`} />
                       </Button>
                       <Button size="icon" variant="ghost" onClick={() => handleDelete(pr.id)}><Trash2 className="size-4 text-destructive" /></Button>
                     </div>
@@ -271,16 +271,16 @@ export default function PromocionesPage() {
               {/* Paso 1 – Tipo (compacto, arriba) */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">1</span>
+                  <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-semibold">1</span>
                   <span className="font-semibold text-sm">Tipo</span>
                   <span className="text-xs text-muted-foreground">Elegí el tipo antes de armar el combo</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2">
-                  <label className={`flex items-center gap-2 rounded-lg border p-3 cursor-pointer text-sm ${form.type===0 ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}>
+                  <label className={`flex items-center gap-2 rounded-md border p-3 cursor-pointer text-sm ${form.type===0 ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}>
                     <input type="radio" name="promo-type" checked={form.type===0} onChange={() => setForm(f => ({ ...f, type: 0, discountPercentage: "" }))} className="size-4" />
                     <PackageCheck className="size-4" /> Combo (precio fijo bundle)
                   </label>
-                  <label className={`flex items-center gap-2 rounded-lg border p-3 cursor-pointer text-sm ${form.type===1 ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}>
+                  <label className={`flex items-center gap-2 rounded-md border p-3 cursor-pointer text-sm ${form.type===1 ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted/50"}`}>
                     <input type="radio" name="promo-type" checked={form.type===1} onChange={() => setForm(f => ({ ...f, type: 1, comboPrice: "", lines: f.lines.map(l => ({ ...l, qty: 1 })) }))} className="size-4" />
                     <BadgePercent className="size-4" /> Promoción % (descuento)
                   </label>
@@ -292,7 +292,7 @@ export default function PromocionesPage() {
               {/* Paso 2 – Selección productos */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
-                  <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">2</span>
+                  <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-semibold">2</span>
                   <span className="font-semibold text-sm">Productos</span>
                   <span className="text-xs text-muted-foreground">{form.type===0 ? `(mín 2 unidades — ${totalUnits} actual)` : "(mín 1)"} — {selectedLines.length} líneas</span>
                 </div>
@@ -355,7 +355,7 @@ export default function PromocionesPage() {
               {/* Paso 3 – Detalles del combo/promo (debajo del total, no arriba) */}
               <div className="border-t pt-4 space-y-4">
                 <div className="flex items-center gap-2">
-                  <span className="flex size-6 items-center justify-center rounded-full bg-primary text-primary-foreground text-xs font-bold">3</span>
+                  <span className="flex size-6 items-center justify-center rounded-md bg-primary text-primary-foreground text-xs font-semibold">3</span>
                   <span className="font-semibold text-sm">Detalles del {form.type===0 ? "combo" : "descuento"}</span>
                 </div>
 
@@ -442,3 +442,5 @@ export default function PromocionesPage() {
     </div>
   );
 }
+
+
