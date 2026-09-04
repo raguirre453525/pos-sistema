@@ -89,6 +89,12 @@ function InventarioPageContent() {
   const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
   const [sortBy, setSortBy] = useState<"name_asc" | "name_desc" | "price_asc" | "price_desc" | "stock_asc" | "stock_desc">("name_asc");
 
+  // Deep-link: ?filter=lowStock desde la campana de notificaciones
+  useEffect(() => {
+    if (searchParams.get("filter") === "lowStock") setStockFilter("low");
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+  }, [searchParams]);
+
   // Drawer / selected product
   const [selectedProduct, setSelectedProduct] = useState<ProductDto | null>(null);
   const [audits, setAudits] = useState<StockAuditDto[]>([]);
