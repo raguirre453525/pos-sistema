@@ -1,4 +1,5 @@
 ﻿import { Search } from 'lucide-react';
+import NotificationBell from '@/components/layout/NotificationBell';
 
 const NavBar = () => {
   return (
@@ -16,6 +17,7 @@ const NavBar = () => {
       </div>
       
       <div className="flex items-center gap-4">
+        <NotificationBell />
         <div className="w-8 h-8 rounded-full bg-muted border border-border" />
       </div>
     </div>

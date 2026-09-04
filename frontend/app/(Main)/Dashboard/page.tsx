@@ -120,10 +120,7 @@ export default function Page() {
 
   return (
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
-        <p className="text-sm text-muted-foreground">Vistazo ejecutivo — usa el filtro para cambiar todo el tablero</p>
-      </div>
+      <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
 
       {/* Global filter */}
       <div className="flex flex-wrap gap-2 items-center">

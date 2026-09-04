@@ -776,10 +776,7 @@ function InventarioPageContent() {
 
   return (
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-foreground text-2xl font-semibold">Inventario</h1>
-        <p className="text-sm text-muted-foreground">Gestioná productos y categorías</p>
-      </div>
+      <h1 className="text-foreground text-2xl font-semibold">Inventario</h1>
 
       {/* Tabs header */}
       <div className="flex gap-2 border-b border-border pb-2 items-center">

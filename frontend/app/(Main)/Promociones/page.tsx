@@ -194,10 +194,7 @@ export default function PromocionesPage() {
   return (
     <div className="p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold flex items-center gap-2"><Tag className="size-6" /> Promos & Combos</h1>
-          <p className="text-sm text-muted-foreground">Combos con precio fijo y descuentos % con vigencia. Soporta 3x2 mismo producto via cantidad. Solo activos y vigentes aparecen en Ventas.</p>
-        </div>
+        <h1 className="text-2xl font-semibold flex items-center gap-2"><Tag className="size-6" /> Promos & Combos</h1>
         <Button onClick={openCreate} className="gap-2"><PackageCheck className="size-4" /> Nuevo combo/promo</Button>
       </div>
       {error && <div className="bg-destructive/10 text-destructive p-3 rounded text-sm">{error}</div>}

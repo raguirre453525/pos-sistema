@@ -147,10 +147,7 @@ export default function ClientesPage() {
   return (
     <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2"><Users className="h-6 w-6"/>Clientes</h1>
-          <p className="text-sm text-muted-foreground">Gestión de fiado — saldo, pagos y ventas pendientes</p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2"><Users className="h-6 w-6"/>Clientes</h1>
         <Button onClick={() => { setShowDialog(true); setFormError(null); }} className="gap-1.5"><Plus className="h-4 w-4"/> Nuevo cliente</Button>
       </div>
 
