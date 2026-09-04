@@ -812,7 +812,7 @@ function InventarioPageContent() {
               title="Valor Total de Activos"
               value={`$${totalValue.toLocaleString("es-AR", { minimumFractionDigits: 2 })}`}
               icon={Package}
-              color="bg-muted text-foreground border border-border"
+              color="bg-white-100 text-black-600 border border-gray-200"
             />
             <Link href="/Inventario/CrearProd">
               <Button variant="outline" size="lg" className="flex ml-auto mt-20">

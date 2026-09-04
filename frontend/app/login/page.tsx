@@ -35,7 +35,7 @@ export default function Login() {
     };
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-hidden">
+        <div className="min-h-screen flex items-center justify-center bg-white p-4 overflow-hidden">
             <div className="max-w-7xl w-full flex flex-col md:flex-row items-center gap-12 md:gap-20">
 
                 
@@ -46,10 +46,10 @@ export default function Login() {
             ${faseAnimacion === 2 ? 'opacity-100 translate-y-0 md:translate-x-0' : ''}
           `}
                 >
-                        <img
+                    <img
                         src="/logo.png"
                         alt="Logo Repuestera El Chorolqui"
-                        className="w-full max-w-[2400px] object-contain bg-transparent"
+                        className="w-full max-w-[2400px] object-contain"
                     />
                 </div>
 
@@ -59,8 +59,8 @@ export default function Login() {
             ${faseAnimacion < 2 ? 'opacity-0 -translate-y-[calc(50%+1.5rem)] md:-translate-y-0 md:-translate-x-[calc(50%+1.5rem)]' : 'opacity-100 translate-y-0 md:translate-x-0'}
           `}
                 >
-                    <div className="bg-card rounded-[2rem] p-10 md:p-12 border border-border shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
-                        <h1 className="text-4xl md:text-[2.75rem] font-black text-foreground mb-12 tracking-tight">
+                    <div className="bg-white rounded-[2rem] p-10 md:p-12 border border-gray-100 shadow-[0_4px_24px_rgba(0,0,0,0.03)]">
+                        <h1 className="text-4xl md:text-[2.75rem] font-black text-black mb-12 tracking-tight">
                             Iniciar Sesión
                         </h1>
 
@@ -72,7 +72,7 @@ export default function Login() {
                                     placeholder="Nombre de Usuario"
                                     value={usuario}
                                     onChange={(e) => setUsuario(e.target.value)}
-                                    className="w-full pb-2 text-foreground placeholder-muted-foreground bg-transparent border-b-2 border-[#db4865] focus:outline-none focus:border-red-600 transition-colors"
+                                    className="w-full pb-2 text-gray-700 placeholder-gray-400 bg-transparent border-b-2 border-[#db4865] focus:outline-none focus:border-red-600 transition-colors"
                                     required
                                 />
                             </div>
@@ -84,7 +84,7 @@ export default function Login() {
                                     placeholder="Contraseña"
                                     value={password}
                                     onChange={(e) => setPassword(e.target.value)}
-                                    className="w-full pb-2 text-foreground placeholder-muted-foreground bg-transparent border-b-2 border-[#db4865] focus:outline-none focus:border-red-600 transition-colors"
+                                    className="w-full pb-2 text-gray-700 placeholder-gray-400 bg-transparent border-b-2 border-[#db4865] focus:outline-none focus:border-red-600 transition-colors"
                                     required
                                 />
                             </div>

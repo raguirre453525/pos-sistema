@@ -14,7 +14,7 @@ export default function ConfiguracionPage() {
           link="/Configuracion/Usuarios"
           title="Usuarios"
           icon={Users}
-          color="bg-muted text-foreground border border-border"
+          color="bg-white text-black border border-gray-200"
           disabled
           badge="Próximamente"
         />

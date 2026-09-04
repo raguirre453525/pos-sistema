@@ -190,16 +190,16 @@ export default function Page() {
       ) : data ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           <Link href={reportLink} className="block">
-            <StatCard title={salesTitle} value={String(data.salesCount)} icon={ShoppingBag} color="bg-muted text-foreground border border-border" />
+            <StatCard title={salesTitle} value={String(data.salesCount)} icon={ShoppingBag} color="bg-white-100 text-black-600 border border-gray-200" />
           </Link>
           <Link href={reportLink} className="block">
-            <StatCard title="Total facturado" value={`$${Number(data.totalRevenue).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={DollarSign} color="bg-muted text-foreground border border-border" />
+            <StatCard title="Total facturado" value={`$${Number(data.totalRevenue).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={DollarSign} color="bg-white-100 text-black-600 border border-gray-200" />
           </Link>
           <Link href={reportLink} className="block">
-            <StatCard title="Productos vendidos" value={String(data.productsSoldQuantity)} icon={Package} color="bg-muted text-foreground border border-border" />
+            <StatCard title="Productos vendidos" value={String(data.productsSoldQuantity)} icon={Package} color="bg-white-100 text-black-600 border border-gray-200" />
           </Link>
           <Link href={reportLink} className="block">
-            <StatCard title="Ticket promedio" value={`$${Number(data.ticketAverage).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={CreditCard} color="bg-muted text-foreground border border-border" />
+            <StatCard title="Ticket promedio" value={`$${Number(data.ticketAverage).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={CreditCard} color="bg-white-100 text-black-600 border border-gray-200" />
           </Link>
         </div>
       ) : null}

@@ -189,9 +189,9 @@ export default function ReportesPage() {
       {tab === "sales" && (
         <>
           <div className="flex flex-col md:flex-row gap-6">
-            <StatCard title="Ventas Totales" value={totalSales.toString()} icon={DollarSign} color="bg-muted text-foreground border border-border" />
-            <StatCard title="Ingresos Totales" value={`$${totalIncome.toLocaleString("es-AR")}`} icon={TrendingUp} color="bg-muted text-foreground border border-border" />
-            <StatCard title="Productos Vendidos" value={totalItems.toString()} icon={Package} color="bg-muted text-foreground border border-border" />
+            <StatCard title="Ventas Totales" value={totalSales.toString()} icon={DollarSign} color="bg-white-100 text-black-600 border border-gray-200" />
+            <StatCard title="Ingresos Totales" value={`$${totalIncome.toLocaleString("es-AR")}`} icon={TrendingUp} color="bg-white-100 text-black-600 border border-gray-200" />
+            <StatCard title="Productos Vendidos" value={totalItems.toString()} icon={Package} color="bg-white-100 text-black-600 border border-gray-200" />
           </div>
           <div className="flex flex-wrap gap-3 items-end bg-card p-4 rounded-xl border border-border">
             <div><label className="text-sm">Desde</label><Input type="date" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
