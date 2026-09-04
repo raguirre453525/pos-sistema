@@ -621,7 +621,7 @@ export default function VentasPage() {
                     <CartBox
                       name={c.product.name}
                       price={c.unitPrice}
-                      image="/img-prod.webp"
+                      image={c.product.imageUrl}
                       quantity={c.quantity}
                       stock={c.product.stock}
                       unit={c.product.unit}
