@@ -1,7 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState, useMemo, useCallback } from "react";
-import ProdCard from "@/components/Ventas/ProdCard";
+import SaleCard from "@/components/Ventas/SaleCard";
 import CartBox from "@/components/Ventas/CartBox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,6 @@ import {
   getCustomers,
   createCustomer,
   getActivePromotions,
-  API_URL,
   ProductDto,
   CategoryDto,
   CustomerDto,
@@ -476,64 +475,88 @@ export default function VentasPage() {
             ))}
           </div>
 
-          {comboPromos.length > 0 && (
-            <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-300 rounded-xl p-3">
-              <h3 className="text-sm font-semibold text-amber-800 dark:text-amber-200 mb-2">Combos activos</h3>
-              <div className="flex gap-3 overflow-x-auto pb-1">
-                {comboPromos.map(pr => {
-                  const totalOrig = pr.totalOriginalPrice ?? pr.lines?.reduce((s,x)=>s+x.lineTotal,0) ?? 0;
-                  const saving = pr.savingAmount ?? 0;
-                  const pct = pr.savingPercent ?? 0;
-                  const linesDesc = pr.lines?.map(l => `${l.productName} x${l.quantity}`).join(", ") ?? pr.products.map(x=>x.name).join(", ");
-                  return (
-                    <div key={pr.id} className="min-w-[260px] bg-card border border-amber-200 rounded-xl p-3 shrink-0">
-                      {pr.imageUrl ? (
-                        <img src={pr.imageUrl.startsWith("/") ? `${API_URL}${pr.imageUrl}` : pr.imageUrl} alt={pr.name} className="w-full h-20 object-cover rounded-md mb-2 border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
-                      ) : null}
-                      <div className="font-semibold text-sm">{pr.name}</div>
-                      <div className="text-xs text-muted-foreground mt-1 line-clamp-2">{linesDesc}</div>
-                      <div className="text-xs mt-2"><span className="line-through text-muted-foreground">${totalOrig.toLocaleString("es-AR")}</span><span className="mx-1">→</span><span className="font-semibold text-amber-700">Combo ${Number(pr.comboPrice).toLocaleString("es-AR")}</span><span className="ml-2 bg-emerald-600 text-white px-1.5 py-0.5 rounded text-xs">Ahorrás {pct.toFixed(0)}%</span></div>
-                      <div className="text-xs text-emerald-700">Ahorrás ${saving.toLocaleString("es-AR")}</div>
-                      <Button size="sm" className="w-full mt-2 bg-amber-600 hover:bg-amber-700 text-white" onClick={()=>handleAddCombo(pr)}>Agregar combo</Button>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           <div className="bg-card rounded-xl border border-border p-4">
             {loading || catLoading ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Cargando productos…</p>
-            ) : filteredProducts.length === 0 ? (
-              <p className="text-sm text-muted-foreground py-10 text-center">
-                {products.length === 0 ? "Sin productos activos." : "Sin resultados para el filtro."}
-              </p>
             ) : (
-              <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                {filteredProducts.map((p) => {
-                  const disc = discountMap.get(p.id);
-                  const hasDisc = disc != null && disc > 0;
-                  const discPrice = hasDisc ? p.price * (1 - disc! / 100) : p.price;
+              (() => {
+                const q = search.trim().toLowerCase();
+                const filteredCombos = comboPromos.filter((pr) => {
+                  if (!q) return true;
+                  const linesDesc = pr.lines?.map((l) => `${l.productName} x${l.quantity}`).join(", ") ?? pr.products.map((x) => x.name).join(", ");
+                  return pr.name.toLowerCase().includes(q) || linesDesc.toLowerCase().includes(q);
+                });
+                const hasProducts = filteredProducts.length > 0;
+                const hasCombos = filteredCombos.length > 0;
+                if (!hasProducts && !hasCombos) {
                   return (
-                    <div key={p.id} className="relative">
-                      {hasDisc && <span className="absolute -top-2 -right-2 z-10 bg-red-600 text-white text-xs font-semibold px-2 py-1 rounded-md">-{disc}%</span>}
-                      <ProdCard
-                        name={p.name}
-                        image="/img-prod.webp"
-                        category={p.description ?? "—"}
-                        stock={p.stock}
-                        price={hasDisc ? discPrice : p.price}
-                        disabled={p.stock <= 0}
-                        unit={p.unit}
-                        isSoldByWeight={p.isSoldByWeight}
-                        onAdd={() => addToCart(p)}
-                      />
-                      {hasDisc && <div className="text-xs text-center mt-1"><span className="line-through text-muted-foreground">${p.price.toLocaleString("es-AR")}</span><span className="text-red-600 font-semibold ml-1">Ahora ${discPrice.toLocaleString("es-AR")}</span></div>}
-                    </div>
+                    <p className="text-sm text-muted-foreground py-10 text-center">
+                      {products.length === 0 && comboPromos.length === 0 ? "Sin productos activos." : "Sin resultados para el filtro."}
+                    </p>
                   );
-                })}
-              </div>
+                }
+                return (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-fr">
+                    {filteredCombos.map((pr) => {
+                      const totalOrig = pr.totalOriginalPrice ?? pr.lines?.reduce((s, x) => s + x.lineTotal, 0) ?? 0;
+                      const saving = pr.savingAmount ?? (totalOrig > 0 && pr.comboPrice != null ? totalOrig - pr.comboPrice : 0);
+                      const pct = pr.savingPercent ?? (totalOrig > 0 && pr.comboPrice != null ? ((totalOrig - pr.comboPrice) / totalOrig) * 100 : 0);
+                      const linesDesc = pr.lines?.map((l) => `${l.productName} x${l.quantity}`).join(", ") ?? pr.products.map((x) => x.name).join(", ");
+                      return (
+                        <SaleCard
+                          key={`combo-${pr.id}`}
+                          name={pr.name}
+                          imageUrl={pr.imageUrl ?? null}
+                          subtitle={linesDesc || "Combo"}
+                          sku={undefined}
+                          stockText={null}
+                          stockVariant="ok"
+                          price={Number(pr.comboPrice ?? 0)}
+                          originalPrice={totalOrig > 0 ? totalOrig : null}
+                          topBadge={pct > 0 ? `Ahorrás ${pct.toFixed(0)}%` : null}
+                          savingText={saving > 0 ? `Ahorrás $${saving.toLocaleString("es-AR")}` : null}
+                          disabled={false}
+                          buttonText="Agregar combo"
+                          onAdd={() => handleAddCombo(pr)}
+                        />
+                      );
+                    })}
+                    {filteredProducts.map((p) => {
+                      const disc = discountMap.get(p.id);
+                      const hasDisc = disc != null && disc > 0;
+                      const discPrice = hasDisc ? p.price * (1 - disc! / 100) : p.price;
+                      const isWeight = isWeightProduct(p);
+                      const unitLabel = isWeight ? "kg" : "un.";
+                      const stockDisplay = Number(p.stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+                      const stockVariant: "out" | "low" | "ok" = p.stock <= 0 ? "out" : p.stock <= 5 ? "low" : "ok";
+                      const stockText =
+                        stockVariant === "out"
+                          ? "Sin stock"
+                          : stockVariant === "low"
+                          ? `¡Poco stock: ${stockDisplay} ${unitLabel}`
+                          : `Stock: ${stockDisplay} ${unitLabel}`;
+                      return (
+                        <SaleCard
+                          key={p.id}
+                          name={p.name}
+                          imageUrl={p.imageUrl ?? "/img-prod.webp"}
+                          subtitle={p.description ?? "—"}
+                          sku={p.sku}
+                          stockText={stockText}
+                          stockVariant={stockVariant}
+                          price={hasDisc ? discPrice : p.price}
+                          originalPrice={hasDisc ? p.price : null}
+                          topBadge={hasDisc ? `-${disc}%` : null}
+                          savingText={null}
+                          disabled={p.stock <= 0}
+                          buttonText="Agregar"
+                          onAdd={() => addToCart(p)}
+                        />
+                      );
+                    })}
+                  </div>
+                );
+              })()
             )}
           </div>
         </div>

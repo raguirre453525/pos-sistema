@@ -164,16 +164,6 @@ export default function Page() {
         </div>
       )}
 
-      {/* Stock alert banner */}
-      {data && data.lowStockCount > 0 ? (
-        <Link href="/Inventario?lowStock=1" className="bg-amber-50 border border-amber-200 text-amber-900 rounded-xl p-4 flex items-center justify-between hover:bg-amber-100 transition-colors">
-          <span className="text-sm font-medium">⚠️ {data.lowStockCount} productos con stock ≤5 — Ver en Inventario</span>
-          <span className="text-sm underline">Ir a Inventario</span>
-        </Link>
-      ) : data && data.lowStockCount === 0 ? (
-        <div className="bg-green-50 border border-green-200 text-green-800 rounded-xl p-4 text-sm">✅ Stock al día</div>
-      ) : null}
-
       {/* Cards */}
       {loading ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
