@@ -20,7 +20,7 @@ const SideBarLogo = ({ isExpanded = true }: SideBarLogoProps) => {
 
   return (
     <Link href="/Dashboard" className="block">
-      <div className="bg-transparent flex items-center justify-center p-3 transition-all duration-300 overflow-hidden">
+      <div className="bg-transparent flex items-center justify-center p-3 overflow-hidden">
         {isExpanded ? (
           <Image
             src={logoSrc}

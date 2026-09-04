@@ -10,7 +10,7 @@ export function ThemeProvider({ children, ...props }: React.ComponentProps<typeo
       defaultTheme="dark"
       enableSystem={false}
       storageKey="metratc-theme"
-      disableTransitionOnChange={false}
+      disableTransitionOnChange
       {...props}
     >
       {children}
