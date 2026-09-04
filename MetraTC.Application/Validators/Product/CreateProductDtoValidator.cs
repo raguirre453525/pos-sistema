@@ -11,7 +11,9 @@ public class CreateProductDtoValidator : AbstractValidator<CreateProductDto>
     public CreateProductDtoValidator()
     {
         RuleFor(x => x.Sku)
-            .NotEmpty().WithMessage("El SKU es obligatorio");
+            .NotEmpty().WithMessage("El SKU es obligatorio")
+            .Matches(@"^\d+$").WithMessage("El SKU debe contener solo dígitos")
+            .Length(4, 20).WithMessage("El SKU debe tener entre 4 y 20 dígitos");
 
         RuleFor(x => x.Name)
             .NotEmpty().WithMessage("El nombre del producto es obligatorio")
