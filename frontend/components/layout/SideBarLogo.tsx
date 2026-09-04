@@ -5,44 +5,49 @@ import React from "react";
 import { useTheme } from "next-themes";
 
 interface SideBarLogoProps {
-    isExpanded: boolean
+  isExpanded: boolean
 }
 
-const SideBarLogo = ( { isExpanded = true }: SideBarLogoProps) => {
-  const { theme } = useTheme();
+const SideBarLogo = ({ isExpanded = true }: SideBarLogoProps) => {
+  const { resolvedTheme } = useTheme();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
     setMounted(true);
   }, []);
 
-  
-  const logoSrc = theme === 'dark' ? "/logo_dark.jpg" : "/logo.png";
+  // Tema sincronizado: transparent PNGs, sin recuadro blanco.
+  // /logo.png = versión clara (para fondo claro), /logo_dark.png = versión oscura transparente (para fondo oscuro)
+  // Fallback CSS: si no hay variante transparente, usar mix-blend.
+  // TODO: reemplazar /public/logo.png por versión con fondo transparente exportada desde Figma si el parche no es perfecto
+  const logoSrc = mounted && resolvedTheme === "dark" ? "/logo_dark.png" : "/logo.png";
 
   return (
-      <Link href="/Dashboard">
-        <div className="flex items-center p-3 rounded-full cursor-pointer transition-all duration-300 overflow-hidden">
-          {isExpanded ? (
-            <Image 
-              src={mounted ? logoSrc : "/logo.png"} 
-              alt="Logo" 
-              width={170} 
-              height={40} 
+    <Link href="/Dashboard" className="block">
+      <div className="bg-transparent flex items-center justify-center p-2 transition-all duration-300 overflow-hidden">
+        {isExpanded ? (
+          <Image
+            src={logoSrc}
+            alt="El Chorolqui"
+            width={170}
+            height={40}
+            priority
+            className="h-10 w-auto object-contain bg-transparent mix-blend-multiply dark:mix-blend-normal"
+          />
+        ) : (
+          <div className="w-full flex justify-center bg-transparent">
+            <Image
+              src={logoSrc}
+              alt="El Chorolqui"
+              width={80}
+              height={40}
+              className="h-8 w-auto object-contain bg-transparent mix-blend-multiply dark:mix-blend-normal"
             />
-          ) : (
-            <div className="w-full flex justify-center">
-              <Image 
-                src={mounted ? logoSrc : "/logo.png"} 
-                alt="Logo" 
-                width={80} 
-                height={40} 
-                className="rounded-full" 
-              />
-            </div>
-          )}
-        </div>
-      </Link>
-  )   
+          </div>
+        )}
+      </div>
+    </Link>
+  )
 }
 
 export default SideBarLogo

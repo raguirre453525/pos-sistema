@@ -38,14 +38,13 @@ export default function RootLayout({
         
         
         
-        <ThemeProvider 
-          attribute="class" 
-          defaultTheme="system" 
-          enableSystem 
-          disableTransitionOnChange
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="dark"
+          enableSystem={false}
+          storageKey="metratc-theme"
         >
           {children}
-
         </ThemeProvider>
 
        

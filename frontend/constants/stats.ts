@@ -19,25 +19,25 @@ export const STATS_DATA: StatItem[] = [
         title: "Ventas de hoy",
         value: "24",
         icon: ShoppingBag,
-        color: "bg-white-100 text-black-600 border border-gray-200",
+        color: "bg-muted text-foreground border border-border",
     },
     {
         title: "Total facturado",
         value: "$125,400.00",
         icon: DollarSign,
-        color: "bg-white-100 text-black-600 border border-gray-200",
+        color: "bg-muted text-foreground border border-border",
     },
     {
         title: "Productos vendidos",
         value: "87",
         icon: Package,
-        color: "bg-white-100 text-black-600 border border-gray-200",
+        color: "bg-muted text-foreground border border-border",
     },
     {
         title: "Tiempo de caja",
         value: "05:42 hs",
         icon: Clock,
-        color: "bg-white-100 text-black-600 border border-gray-200",
+        color: "bg-muted text-foreground border border-border",
     },
 ];
 
@@ -46,7 +46,7 @@ export const INV_DATA: StatInv[] = [
         title: "Valor Total de Activos",
         value: "$125,400,000.00",
         icon: Package,
-        color: "bg-white-100 text-black-600 border border-gray-200",
+        color: "bg-muted text-foreground border border-border",
     },
 ];
 

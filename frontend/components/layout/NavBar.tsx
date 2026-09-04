@@ -1,21 +1,23 @@
 import { Search } from 'lucide-react';
+import ModeToggle from '../ModeToggle';
 
 const NavBar = () => {
   return (
-    <div className="bg-card text-foreground h-16 border-b border-border flex items-center justify-between px-6">
+    <div className="bg-card text-foreground h-16 border-b border-border flex items-center justify-between px-6 gap-4">
       <div className="relative w-full max-w-md">
         <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
           <Search size={18} className="text-muted-foreground" />
         </div>
-        <input 
-          type="text" 
+        <input
+          type="text"
           aria-label='Buscar productos'
-          placeholder="Buscar..." 
+          placeholder="Buscar..."
           className="block w-full pl-10 pr-3 py-2 border border-border rounded-full bg-muted text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all"
         />
       </div>
-      
-      <div className="flex items-center gap-4">
+
+      <div className="flex items-center gap-3 ml-auto">
+        <ModeToggle />
         <div className="w-8 h-8 rounded-full bg-muted border border-border" />
       </div>
     </div>
