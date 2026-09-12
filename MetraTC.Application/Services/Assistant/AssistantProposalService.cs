@@ -510,14 +510,22 @@ public class AssistantProposalService
                 else
                 {
                     var id = p.ExistingId!.Value;
+                    var productEntity = await _db.Products.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct);
+                    if (productEntity == null)
+                        throw new KeyNotFoundException($"No se encontró ningún producto con el ID: {id}");
+                    if (!productEntity.IsActive)
+                    {
+                        productEntity.Activate();
+                        await _db.SaveChangesAsync(ct);
+                        _logger.LogInformation("Producto reactivado {ProductId} {Name} vía asistente", id, productEntity.Name);
+                    }
                     // Price update if needed
                     if (p.Price != null && p.Price != p.CurrentPrice)
                     {
-                        // Need existing description for Update: keep existing if not provided
-                        var existingProd = await _db.Products.FirstOrDefaultAsync(x => x.Id == id, ct);
-                        var desc = p.Description ?? existingProd?.Description;
+                        // Need existing description for Update: keep existing if not provided (reuse reactivated entity)
+                        var desc = p.Description ?? productEntity.Description;
                         // Use raw name if provided otherwise existing name
-                        var nameForUpdate = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : existingProd!.Name;
+                        var nameForUpdate = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : productEntity.Name;
                         await _productService.UpdateAsync(id, new UpdateProductDto(nameForUpdate, p.Price.Value, desc, null, null, null));
                         sb.AppendLine($"- ✅ Precio actualizado {p.Name}: {p.CurrentPrice} → {p.Price}");
                     }
