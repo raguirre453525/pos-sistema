@@ -6,8 +6,8 @@ import React from "react";
 import { NAV_ITEMS } from "@/constants/navigation";
 import NavItem from "./NavItem";
 import { usePathname } from "next/navigation";
-import { useState } from "react";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useEffect } from "react";
+import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import SideBarLogo from "./SideBarLogo"
 import ModeToggle from "../ModeToggle";
 
@@ -20,39 +20,68 @@ const SideBar = () => {
   
   const [isExpanded, setIsExpanded] = useState(true)
 
+  useEffect(() => {
+    const saved = localStorage.getItem("metratc:sidebar:expanded");
+    if (saved !== null) setIsExpanded(saved === "true");
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem("metratc:sidebar:expanded", String(isExpanded));
+  }, [isExpanded]);
+
   return (
-
-
-    
-
-    <ul className={`relative h-full bg-card border-r border-border flex flex-col p-4 gap-4 transition-all duration-300 ease-in-out ${ isExpanded ? 'w-64' : 'w-20' }` }>
-    
-      <li className="flex flex-col gap-4 flex-1">
-        
+    <ul
+      className={`h-full bg-card border-r border-border flex flex-col transition-all duration-300 ease-in-out shrink-0 overflow-hidden ${
+        isExpanded ? "w-64 p-4 gap-4" : "w-16 p-2 gap-2"
+      }`}
+    >
+      <li className="flex flex-col gap-1 flex-1 min-h-0">
         <SideBarLogo isExpanded={isExpanded} />
-      
-            {NAV_ITEMS.map((navigation) => (
-                <NavItem key={navigation.path}
-                 {...navigation} 
-                 isActive={pathname === navigation.path}
-                 isExpanded={isExpanded}
-                 />
-            ))}
-      <div className="absolute bottom-8 -right-3 z-50">
-        <button onClick={() => setIsExpanded(!isExpanded)} className="bg-card border border-border p-1 rounded-full shadow-md hover:bg-muted transition-colors text-foreground"
-          title={isExpanded ? 'Minimizar' : 'Expandir'}
-          >
-            {isExpanded ? <ChevronLeft size={16} /> : <ChevronRight size={16} />}
-          </button>
-      </div>
-      
-        <div className="mt-auto">
-            <ModeToggle />
+
+        <nav className={`flex flex-col ${isExpanded ? "gap-1" : "gap-1.5 items-center"}`}>
+          {NAV_ITEMS.map((navigation) => (
+            <NavItem
+              key={navigation.path}
+              {...navigation}
+              isActive={pathname === navigation.path}
+              isExpanded={isExpanded}
+            />
+          ))}
+        </nav>
+
+        <div
+          className={`mt-auto pt-3 border-t border-border flex ${
+            isExpanded ? "items-center justify-between" : "flex-col items-center gap-2"
+          }`}
+        >
+          {/* Orden: colapsado = toggle arriba, luna abajo centrados. Expandido = luna izq, toggle der */}
+          {isExpanded ? (
+            <>
+              <ModeToggle />
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                title="Ocultar menú"
+                aria-label="Ocultar menú"
+              >
+                <PanelLeftClose size={18} strokeWidth={1.8} />
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => setIsExpanded(!isExpanded)}
+                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                title="Expandir menú"
+                aria-label="Expandir menú"
+              >
+                <PanelLeftOpen size={18} strokeWidth={1.8} />
+              </button>
+              <ModeToggle />
+            </>
+          )}
         </div>
-      
-      
       </li>
-            
     </ul>
     
 

@@ -97,7 +97,7 @@ export type CreateSaleComboDto = {
 
 export type CreateSaleDto = {
   items: CreateSaleItemDto[];
-  paymentMethod: 0 | 1; // Cash=0, MercadoPago=1
+  paymentMethod: 0 | 1 | 2; // Cash=0, MercadoPago=1, Card=2 (Débito/Crédito)
   customerId?: string | null;
   isCredit?: boolean;
   dueDate?: string | null;
@@ -307,7 +307,7 @@ export function getDashboard(params: { from?: string; to?: string }) {
 export function getSalesReport(params: {
   from?: string;
   to?: string;
-  paymentMethod?: 0 | 1;
+  paymentMethod?: 0 | 1 | 2;
   page?: number;
   pageSize?: number;
 }) {

@@ -19,8 +19,8 @@ const SideBarLogo = ({ isExpanded = true }: SideBarLogoProps) => {
   const logoSrc = mounted && resolvedTheme === "dark" ? "/logo_dark.jpg" : "/logo.png";
 
   return (
-    <Link href="/Dashboard" className="block">
-      <div className="bg-transparent flex items-center justify-center p-3 overflow-hidden">
+    <Link href="/Dashboard" className="block" title={isExpanded ? undefined : "El Chorolqui"}>
+      <div className={`bg-transparent flex items-center justify-center overflow-hidden ${isExpanded ? 'p-3' : 'p-1'}`}>
         {isExpanded ? (
           <Image
             src={logoSrc}
@@ -31,13 +31,16 @@ const SideBarLogo = ({ isExpanded = true }: SideBarLogoProps) => {
             className="object-contain max-w-full bg-transparent"
           />
         ) : (
-          <div className="w-full flex justify-center bg-transparent">
+          <div
+            className="w-9 h-9 rounded-md bg-white dark:bg-white flex items-center justify-center overflow-hidden shadow-sm border border-border/50"
+            aria-label="El Chorolqui"
+          >
             <Image
               src={logoSrc}
               alt="El Chorolqui"
-              width={80}
-              height={40}
-              className="object-contain max-w-full bg-transparent"
+              width={32}
+              height={32}
+              className="object-contain w-8 h-8"
             />
           </div>
         )}

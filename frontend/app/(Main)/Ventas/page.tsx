@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import SaleCard from "@/components/Ventas/SaleCard";
 import CartBox from "@/components/Ventas/CartBox";
 import { Button } from "@/components/ui/button";
@@ -44,7 +44,7 @@ export default function VentasPage() {
   const [error, setError] = useState<string | null>(null);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartCombos, setCartCombos] = useState<CartCombo[]>([]);
-  const [paymentMethod, setPaymentMethod] = useState<0 | 1>(0);
+  const [paymentMethod, setPaymentMethod] = useState<0 | 1 | 2>(0);
   const [saleLoading, setSaleLoading] = useState(false);
   const [saleMsg, setSaleMsg] = useState<string | null>(null);
   const [saleError, setSaleError] = useState<string | null>(null);
@@ -67,6 +67,11 @@ export default function VentasPage() {
   const [inlineError, setInlineError] = useState<string | null>(null);
   const [activePromos, setActivePromos] = useState<PromotionDto[]>([]);
   const [expandedCombos, setExpandedCombos] = useState<Set<string>>(new Set());
+  const searchRef = useRef<HTMLInputElement>(null);
+  const cashInputRef = useRef<HTMLInputElement>(null);
+  const fiadoSearchRef = useRef<HTMLInputElement>(null);
+  const [vaciarConfirm, setVaciarConfirm] = useState(false);
+  const vaciarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -97,6 +102,40 @@ export default function VentasPage() {
     getCustomers().then(setCustomers).catch(() => {});
     getActivePromotions().then(setActivePromos).catch(() => {});
   }, [fetchProducts, fetchCats]);
+
+  // Autofocus principal buscador al cargar + atajos F2 / Escape
+  useEffect(() => {
+    // pequeño timeout para asegurar que el DOM esté listo tras el primer render
+    const t = setTimeout(() => searchRef.current?.focus(), 100);
+    return () => clearTimeout(t);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Barra espaciadora → enfoca buscador (solo si no está tipeando en un input)
+      if (e.key === " " || e.code === "Space") {
+        if (showCheckout) return;
+        const active = document.activeElement as HTMLElement | null;
+        const isTyping =
+          !!active &&
+          (active.tagName === "INPUT" || active.tagName === "TEXTAREA" || active.tagName === "SELECT" || active.isContentEditable);
+        if (isTyping) return;
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+        return;
+      }
+      if (e.key === "F2" || e.key === "Escape") {
+        if (showCheckout) return;
+        // F2/Escape roban foco siempre, incluso si está escribiendo en otro input
+        e.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [showCheckout]);
 
   useEffect(() => {
     if (selectedCatId === "all") {
@@ -262,12 +301,24 @@ export default function VentasPage() {
 
   const handleVaciar = () => {
     if (cart.length === 0 && cartCombos.length === 0) return;
-    if (confirm("¿Vaciar carrito?")) {
-      setCart([]);
-      setCartCombos([]);
-      setSaleError(null);
+    if (!vaciarConfirm) {
+      setVaciarConfirm(true);
+      if (vaciarTimeoutRef.current) clearTimeout(vaciarTimeoutRef.current);
+      vaciarTimeoutRef.current = setTimeout(() => setVaciarConfirm(false), 3000);
+      return;
     }
+    if (vaciarTimeoutRef.current) clearTimeout(vaciarTimeoutRef.current);
+    setVaciarConfirm(false);
+    setCart([]);
+    setCartCombos([]);
+    setSaleError(null);
   };
+
+  useEffect(() => {
+    return () => {
+      if (vaciarTimeoutRef.current) clearTimeout(vaciarTimeoutRef.current);
+    };
+  }, []);
 
   const comboPromos = useMemo(() => activePromos.filter(p => p.type === 0), [activePromos]);
 
@@ -294,7 +345,9 @@ export default function VentasPage() {
   const customerSearchResults = useMemo(() => {
     const q = customerSearch.trim().toLowerCase();
     if (!q) return customers.slice(0, 8);
-    return customers.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q)).slice(0, 8);
+    return customers
+      .filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q) || (c.note ?? "").toLowerCase().includes(q))
+      .slice(0, 8);
   }, [customers, customerSearch]);
 
   const selectedCustomer = useMemo(() => customers.find((c) => c.id === creditCustomerId) ?? null, [customers, creditCustomerId]);
@@ -419,10 +472,47 @@ export default function VentasPage() {
     }
   };
 
+  // Modal checkout: autofocus según método
+  useEffect(() => {
+    if (!showCheckout) return;
+    if (isCredit) {
+      const t = setTimeout(() => fiadoSearchRef.current?.focus(), 120);
+      return () => clearTimeout(t);
+    }
+    if (paymentMethod === 0) {
+      const t = setTimeout(() => {
+        cashInputRef.current?.focus();
+        cashInputRef.current?.select();
+      }, 120);
+      return () => clearTimeout(t);
+    }
+  }, [showCheckout, isCredit, paymentMethod]);
+
+  // Atajos del modal: Enter confirma (si válido), Escape cancela
+  useEffect(() => {
+    if (!showCheckout) return;
+    const onModalKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowCheckout(false);
+      } else if (e.key === "Enter") {
+        const cashValid = cashPaid === "" || cashNum >= total;
+        const canConfirm = isCredit ? !!creditCustomerId : paymentMethod === 0 ? cashValid : true;
+        const hasItems = cart.length > 0 || cartCombos.length > 0;
+        if (canConfirm && hasItems && !saleLoading) {
+          e.preventDefault();
+          handleConfirmSale();
+        }
+      }
+    };
+    window.addEventListener("keydown", onModalKey);
+    return () => window.removeEventListener("keydown", onModalKey);
+  }, [showCheckout, isCredit, creditCustomerId, paymentMethod, cashPaid, cashNum, total, saleLoading, cart.length, cartCombos.length]);
+
   return (
-    <main className="min-h-screen bg-background p-4 flex flex-col gap-4">
-      <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-foreground text-2xl font-semibold tracking-tight">Ventas</h1>
+    <div className="flex flex-col gap-3 flex-1 min-h-0 lg:overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2 shrink-0">
+        <h1 className="text-foreground text-xl font-semibold tracking-tight">Ventas</h1>
         {saleMsg && (
           <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">{saleMsg}</span>
         )}
@@ -432,7 +522,7 @@ export default function VentasPage() {
       </div>
 
       {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
+        <div className="shrink-0 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
           <span>{error}</span>
           <Button variant="outline" size="sm" onClick={fetchProducts}>
             Reintentar
@@ -440,15 +530,17 @@ export default function VentasPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left: products */}
-        <div className="lg:col-span-2 flex flex-col gap-4 min-w-0">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 lg:overflow-hidden lg:items-stretch">
+        {/* Left: products - scroll interno, no empuja la página */}
+        <div className="lg:col-span-2 flex flex-col gap-3 min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
+              ref={searchRef}
+              autoFocus
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o SKU..."
+              placeholder="Buscar por nombre o SKU...  (F2 / Espacio)"
               className="pl-9 bg-card"
             />
           </div>
@@ -475,7 +567,7 @@ export default function VentasPage() {
             ))}
           </div>
 
-          <div className="bg-card rounded-xl border border-border p-4">
+          <div className="bg-card rounded-xl border border-border p-3">
             {loading || catLoading ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Cargando productos…</p>
             ) : (
@@ -496,11 +588,8 @@ export default function VentasPage() {
                   );
                 }
                 return (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 auto-rows-fr">
+                  <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 auto-rows-fr">
                     {filteredCombos.map((pr) => {
-                      const totalOrig = pr.totalOriginalPrice ?? pr.lines?.reduce((s, x) => s + x.lineTotal, 0) ?? 0;
-                      const saving = pr.savingAmount ?? (totalOrig > 0 && pr.comboPrice != null ? totalOrig - pr.comboPrice : 0);
-                      const pct = pr.savingPercent ?? (totalOrig > 0 && pr.comboPrice != null ? ((totalOrig - pr.comboPrice) / totalOrig) * 100 : 0);
                       const linesDesc = pr.lines?.map((l) => `${l.productName} x${l.quantity}`).join(", ") ?? pr.products.map((x) => x.name).join(", ");
                       return (
                         <SaleCard
@@ -512,9 +601,9 @@ export default function VentasPage() {
                           stockText={null}
                           stockVariant="ok"
                           price={Number(pr.comboPrice ?? 0)}
-                          originalPrice={totalOrig > 0 ? totalOrig : null}
-                          topBadge={pct > 0 ? `Ahorrás ${pct.toFixed(0)}%` : null}
-                          savingText={saving > 0 ? `Ahorrás $${saving.toLocaleString("es-AR")}` : null}
+                          originalPrice={null}
+                          topBadge="COMBO"
+                          savingText={null}
                           disabled={false}
                           buttonText="Agregar combo"
                           onAdd={() => handleAddCombo(pr)}
@@ -533,20 +622,20 @@ export default function VentasPage() {
                         stockVariant === "out"
                           ? "Sin stock"
                           : stockVariant === "low"
-                          ? `¡Poco stock: ${stockDisplay} ${unitLabel}`
-                          : `Stock: ${stockDisplay} ${unitLabel}`;
+                            ? `¡Poco stock: ${stockDisplay} ${unitLabel}`
+                            : `Stock: ${stockDisplay} ${unitLabel}`;
                       return (
                         <SaleCard
                           key={p.id}
                           name={p.name}
                           imageUrl={p.imageUrl ?? "/img-prod.webp"}
-                          subtitle={p.description ?? "—"}
+                          subtitle={undefined}
                           sku={p.sku}
                           stockText={stockText}
                           stockVariant={stockVariant}
                           price={hasDisc ? discPrice : p.price}
-                          originalPrice={hasDisc ? p.price : null}
-                          topBadge={hasDisc ? `-${disc}%` : null}
+                          originalPrice={null}
+                          topBadge={hasDisc ? "PROMO" : null}
                           savingText={null}
                           disabled={p.stock <= 0}
                           buttonText="Agregar"
@@ -561,149 +650,165 @@ export default function VentasPage() {
           </div>
         </div>
 
-        {/* Right: factura panel */}
-        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm p-6 flex flex-col h-fit lg:sticky lg:top-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-foreground">FACTURA</h2>
+        {/* Right: factura panel - altura fija visible, flex-col h-full, sin scroll de página */}
+        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm flex flex-col overflow-hidden lg:sticky lg:top-3 lg:h-full lg:max-h-full">
+          {/* Cabecera fija - padding vertical reducido */}
+          <div className="shrink-0 px-3 py-2.5 flex items-center justify-between border-b">
+            <h2 className="text-sm font-bold tracking-widest text-foreground">FACTURA</h2>
             {(cart.length > 0 || cartCombos.length > 0) && (
-              <Button variant="ghost" size="sm" onClick={handleVaciar} className="text-muted-foreground hover:text-foreground">
-                <Trash2 className="h-4 w-4" />
-                Vaciar
-              </Button>
+              vaciarConfirm ? (
+                <Button size="sm" onClick={handleVaciar} className="h-7 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-in fade-in">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  ¿Seguro?
+                </Button>
+              ) : (
+                <Button variant="ghost" size="sm" onClick={handleVaciar} className="h-7 text-xs text-muted-foreground hover:text-foreground">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Vaciar
+                </Button>
+              )
             )}
           </div>
-          <p className="text-xs text-muted-foreground mt-1">Cliente: Consumidor Final</p>
-          <Separator className="my-3" />
+          <div className="shrink-0 px-3 py-1.5 border-b bg-muted/20">
+            <p className="text-xs text-muted-foreground">Cliente: <span className="font-medium text-foreground">Consumidor Final</span></p>
+          </div>
 
-          <div className="flex-1 overflow-y-auto pr-1 max-h-[40vh] lg:max-h-[38vh] space-y-2">
+          {/* Header tabular - Descripción con prioridad máxima, paddings reducidos */}
+          <div className="shrink-0 grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 px-2 py-1.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase bg-muted/30 border-b">
+            <span className="text-center">Cant.</span>
+            <span>Descripción</span>
+            <span className="text-right">P. Unit</span>
+            <span className="text-right">Subtotal</span>
+            <span></span>
+          </div>
+
+          {/* Lista scrolleable - filas delgadas, 8-10 visibles sin scroll */}
+          <div className="flex-1 overflow-y-auto">
             {cart.length === 0 && cartCombos.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">Carrito vacío — agregá productos o combos</p>
+              <p className="text-sm text-muted-foreground text-center py-10 px-4">Carrito vacío — agregá productos o combos</p>
             ) : (
-              <>
+              <div className="divide-y divide-border">
                 {cartCombos.map((cc) => {
                   const promo = cc.promotion;
-                  const linesDesc = promo.lines?.map(l => `${l.productName} x${l.quantity}`).join(", ") ?? promo.products.map(p=>p.name).join(", ");
+                  const linesDesc = promo.lines?.map(l => `${l.productName} x${l.quantity}`).join(" · ") ?? promo.products.map(p=>p.name).join(" · ");
                   const unit = promo.comboPrice ?? 0;
-                  const totalOrig = promo.totalOriginalPrice ?? promo.lines?.reduce((s,l)=>s+l.lineTotal,0) ?? 0;
-                  const pct = promo.savingPercent ?? (totalOrig>0 ? (totalOrig-unit)/totalOrig*100 : 0);
+                  const sub = unit * cc.quantity;
                   const isExpanded = expandedCombos.has(promo.id);
                   return (
-                    <div key={promo.id} className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-semibold text-sm flex items-center gap-2">
-                            {promo.name} ×{cc.quantity}
-                            <span className="bg-emerald-600 text-white text-[10px] px-1.5 py-0.5 rounded">Ahorrás {pct.toFixed(0)}%</span>
-                          </div>
-                          <div className="text-xs text-muted-foreground mt-1">Productos: {linesDesc}</div>
-                          <div className="text-sm mt-1"><span className="line-through text-muted-foreground text-xs">${totalOrig.toLocaleString("es-AR")}</span><span className="ml-2 font-semibold text-amber-700">${unit.toLocaleString("es-AR")} c/u</span><span className="ml-2 font-semibold">= ${ (unit*cc.quantity).toLocaleString("es-AR")}</span></div>
-                          {isExpanded && (
-                            <div className="mt-2 text-xs bg-card border rounded p-2">
-                              {promo.lines?.map(l => (
-                                <div key={l.productId} className="flex justify-between"><span>{l.productName} ×{l.quantity}</span><span>{l.lineTotal.toLocaleString("es-AR")}</span></div>
-                              ))}
-                            </div>
-                          )}
+                    <div key={promo.id} className="bg-amber-50/40 dark:bg-amber-950/10">
+                      <div className="grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 items-center px-2 py-2">
+                        <div className="flex items-center justify-center gap-1">
+                          <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => decCombo(promo.id)}><Minus className="h-3 w-3" /></Button>
+                          <span className="text-xs font-semibold w-6 text-center">{cc.quantity}</span>
+                          <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => incCombo(promo.id)}><Plus className="h-3 w-3" /></Button>
                         </div>
-                        <Button variant="ghost" size="icon-sm" className="h-7 w-7 shrink-0" onClick={() => removeCombo(promo.id)}><X className="h-4 w-4" /></Button>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            <span className="text-[13px] font-medium leading-tight break-words line-clamp-2" title={promo.name}>{promo.name}</span>
+                            <span className="shrink-0 bg-secondary text-secondary-foreground border text-[9px] px-1 py-0.5 rounded font-bold tracking-wide">COMBO</span>
+                            <button onClick={() => toggleExpand(promo.id)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                              <ChevronDown className={`h-3 w-3 transition ${isExpanded?'rotate-180':''}`} />
+                            </button>
+                          </div>
+                          <div className="text-[11px] text-muted-foreground line-clamp-1 break-words" title={linesDesc}>{linesDesc}</div>
+                        </div>
+                        <span className="text-xs text-muted-foreground text-right">${unit.toLocaleString("es-AR")}</span>
+                        <span className="text-sm font-bold text-right">${sub.toLocaleString("es-AR")}</span>
+                        <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={() => removeCombo(promo.id)}><X className="h-3.5 w-3.5" /></Button>
                       </div>
-                      <div className="flex items-center gap-1 mt-2">
-                        <Button variant="outline" size="icon-sm" className="h-7 w-7 rounded-full" onClick={() => decCombo(promo.id)}><Minus className="h-3 w-3" /></Button>
-                        <span className="text-sm font-semibold w-6 text-center">{cc.quantity}</span>
-                        <Button variant="outline" size="icon-sm" className="h-7 w-7 rounded-full" onClick={() => incCombo(promo.id)}><Plus className="h-3 w-3" /></Button>
-                        <Button variant="ghost" size="sm" className="ml-2 text-xs h-7" onClick={() => toggleExpand(promo.id)}><ChevronDown className={`h-3 w-3 mr-1 transition ${isExpanded?'rotate-180':''}`} />{isExpanded?'Ocultar':'Detalle'}</Button>
-                      </div>
+                      {isExpanded && (
+                        <div className="mx-3 mb-2 text-[11px] bg-card border rounded px-2 py-1.5 space-y-0.5">
+                          {promo.lines?.map(l => (
+                            <div key={l.productId} className="flex justify-between gap-2"><span className="truncate">{l.productName} ×{l.quantity}</span><span className="shrink-0">${l.lineTotal.toLocaleString("es-AR")}</span></div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
-                {cart.map((c) => (
-                  <div key={c.product.id} className={c.unitPrice < c.originalPrice ? "border border-red-200 rounded-xl" : ""}>
-                    <CartBox
-                      name={c.product.name}
-                      price={c.unitPrice}
-                      image={c.product.imageUrl}
-                      quantity={c.quantity}
-                      stock={c.product.stock}
-                      unit={c.product.unit}
-                      isSoldByWeight={c.product.isSoldByWeight}
-                      onInc={() => inc(c.product.id)}
-                      onDec={() => dec(c.product.id)}
-                      onQtyChange={(v) => setQty(c.product.id, v)}
-                      onRemove={() => remove(c.product.id)}
-                    />
-                    {c.unitPrice < c.originalPrice && (
-                      <div className="px-3 pb-2 -mt-2 text-xs text-red-600">Precio con dto: <span className="line-through text-muted-foreground">${c.originalPrice.toLocaleString("es-AR")}</span> → ${c.unitPrice.toLocaleString("es-AR")}</div>
-                    )}
-                  </div>
-                ))}
-              </>
+                {cart.map((c) => {
+                  const lineSub = c.unitPrice * c.quantity;
+                  const isWeight = isWeightProduct(c.product);
+                  const qtyDisplay = Number(c.quantity).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+                  return (
+                    <div key={c.product.id} className="grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 items-center px-2 py-2 hover:bg-muted/30">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => dec(c.product.id)} aria-label="Restar"><Minus className="h-3 w-3" /></Button>
+                        {(c.product.isSoldByWeight || isWeight) ? (
+                          <input
+                            type="number"
+                            step="0.1"
+                            min="0.1"
+                            value={c.quantity}
+                            onChange={(e) => setQty(c.product.id, e.target.value)}
+                            className="w-10 text-center text-xs font-semibold bg-card border border-input rounded h-6 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                          />
+                        ) : (
+                          <span className="text-xs font-semibold w-6 text-center">{qtyDisplay}</span>
+                        )}
+                        <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => inc(c.product.id)} aria-label="Sumar"><Plus className="h-3 w-3" /></Button>
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-[13px] font-medium leading-tight break-words line-clamp-2" title={c.product.name}>{c.product.name}</div>
+                        {discountMap.get(c.product.id) ? <span className="inline-block mt-0.5 text-[9px] px-1 py-0.5 rounded border bg-secondary font-bold tracking-wide">PROMO</span> : null}
+                      </div>
+                      <span className="text-xs text-muted-foreground text-right">${Number(c.unitPrice).toLocaleString("es-AR")}</span>
+                      <span className="text-sm font-bold text-right">${Number(lineSub).toLocaleString("es-AR")}</span>
+                      <Button variant="ghost" size="icon-sm" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => remove(c.product.id)} aria-label="Quitar"><X className="h-3.5 w-3.5" /></Button>
+                    </div>
+                  );
+                })}
+              </div>
             )}
           </div>
 
-          <Separator className="my-3" />
-
-          <div className="flex flex-col gap-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Subtotal sueltos</span>
-              <span className="font-medium">${subtotalNormal.toLocaleString("es-AR")}</span>
-            </div>
-            {cartCombos.length>0 && (
+          {/* Totales sticky footer - siempre visible, pb-4 despegado del borde */}
+          <div className="shrink-0 border-t bg-card px-3 py-2.5 pb-4 flex flex-col gap-1.5">
+            <div className="flex flex-col gap-1.5 text-xs">
               <div className="flex justify-between">
-                <span className="text-muted-foreground">Combos ({cartCombos.reduce((s,c)=>s+c.quantity,0)} u.)</span>
-                <span className="font-medium text-amber-700">${subtotalCombos.toLocaleString("es-AR")}</span>
+                <span className="text-muted-foreground">Subtotal sueltos</span>
+                <span className="font-medium">${subtotalNormal.toLocaleString("es-AR")}</span>
               </div>
-            )}
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-muted-foreground whitespace-nowrap">Descuento {discountAmount > 0 ? `(-$${discountAmount.toLocaleString("es-AR")})` : ""}</span>
-              <div className="flex items-center gap-1">
-                <div className="flex rounded-md border border-input overflow-hidden">
-                  <button
-                    type="button"
-                    onClick={() => setDiscountType("%")}
-                    className={`px-2 py-1 text-xs font-semibold ${discountType === "%" ? "bg-primary text-primary-foreground" : "bg-card"}`}
-                  >
-                    %
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDiscountType("$")}
-                    className={`px-2 py-1 text-xs font-semibold border-l border-input ${discountType === "$" ? "bg-primary text-primary-foreground" : "bg-card"}`}
-                  >
-                    $
-                  </button>
+              {cartCombos.length>0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Combos ({cartCombos.reduce((s,c)=>s+c.quantity,0)} u.)</span>
+                  <span className="font-medium">${subtotalCombos.toLocaleString("es-AR")}</span>
                 </div>
-                <Input
-                  type="number"
-                  min={0}
-                  value={discountValue}
-                  onChange={(e) => setDiscountValue(e.target.value)}
-                  className="w-20 h-7 text-right"
-                  placeholder="0"
-                />
+              )}
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-muted-foreground whitespace-nowrap">Descuento {discountAmount > 0 ? `(-$${discountAmount.toLocaleString("es-AR")})` : ""}</span>
+                <div className="flex items-center gap-1">
+                  <div className="flex rounded-md border border-input overflow-hidden">
+                    <button type="button" onClick={() => setDiscountType("%")} className={`px-2 py-1 text-[11px] font-semibold ${discountType === "%" ? "bg-primary text-primary-foreground" : "bg-card"}`}>%</button>
+                    <button type="button" onClick={() => setDiscountType("$")} className={`px-2 py-1 text-[11px] font-semibold border-l border-input ${discountType === "$" ? "bg-primary text-primary-foreground" : "bg-card"}`}>$</button>
+                  </div>
+                  <Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} className="w-16 h-6 text-right text-xs" placeholder="0" />
+                </div>
               </div>
+              <div className="flex justify-between items-center text-xl font-bold pt-1 border-t mt-1">
+                <span>Total</span>
+                <span>${total.toLocaleString("es-AR")}</span>
+              </div>
+              {discountAmount > 0 && <p className="text-[11px] text-muted-foreground">Descuento visual — el backend cobra sin descuento manual.</p>}
+              {subtotalCombos>0 && <p className="text-[11px] text-muted-foreground">Total usa precio combo, no suma suelta.</p>}
             </div>
-            <div className="flex justify-between items-center text-2xl font-semibold pt-1">
-              <span>Total</span>
-              <span>${total.toLocaleString("es-AR")}</span>
-            </div>
-            {discountAmount > 0 && (
-              <p className="text-xs text-muted-foreground">Descuento visual — el backend cobra sin descuento manual.</p>
-            )}
-            {subtotalCombos>0 && <p className="text-xs text-emerald-700">Total usa precio combo (${subtotalCombos.toLocaleString("es-AR")}), no suma suelta.</p>}
-          </div>
 
-          <Button
-            className="w-full mt-4 bg-red-600 hover:bg-red-700 text-white font-semibold py-6 rounded-xl transition-all disabled:opacity-50 text-base"
-            disabled={(cart.length === 0 && cartCombos.length===0) || saleLoading}
-            onClick={() => {
-              setSaleError(null);
-              setPaymentMethod(0);
-              setCashPaid("");
-              setShowCheckout(true);
-            }}
-          >
+            <Button
+              className="w-full mt-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-4 rounded-xl text-sm shadow-sm"
+              disabled={(cart.length === 0 && cartCombos.length===0) || saleLoading}
+              onClick={() => {
+                setSaleError(null);
+                setIsCredit(false);
+                setPaymentMethod(0);
+                setCashPaid("");
+                setCreditCustomerId("");
+                setCustomerSearch("");
+                setShowCheckout(true);
+              }}
+            >
             Cobrar ${total.toLocaleString("es-AR")}
           </Button>
+          </div>
         </div>
       </div>
 
@@ -724,85 +829,185 @@ export default function VentasPage() {
               </p>
             )}
 
-            <div className={`bg-card border rounded-xl p-3 flex items-center gap-3 ${isCredit ? "border-primary bg-primary/10" : "border-border"}`}>
-              <input
-                id="fiado-switch"
-                type="checkbox"
-                checked={isCredit}
-                onChange={(e) => setIsCredit(e.target.checked)}
-                className="h-4 w-4 rounded accent-primary"
-              />
-              <Label htmlFor="fiado-switch" className="text-sm font-semibold text-foreground cursor-pointer">
-                Fiado
-              </Label>
-              <span className="text-sm text-muted-foreground">Venta pendiente</span>
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                variant={!isCredit && paymentMethod === 0 ? "default" : "outline"}
+                className="rounded-full font-semibold"
+                onClick={() => { setIsCredit(false); setPaymentMethod(0); setSaleError(null); }}
+              >
+                Efectivo
+              </Button>
+              <Button
+                variant={!isCredit && paymentMethod === 1 ? "default" : "outline"}
+                className="rounded-full font-semibold"
+                onClick={() => { setIsCredit(false); setPaymentMethod(1); setSaleError(null); }}
+              >
+                MercadoPago / QR
+              </Button>
+              <Button
+                variant={!isCredit && paymentMethod === 2 ? "default" : "outline"}
+                className="rounded-full font-semibold"
+                onClick={() => { setIsCredit(false); setPaymentMethod(2); setSaleError(null); }}
+              >
+                Débito/Crédito
+              </Button>
+              <Button
+                variant={isCredit ? "default" : "outline"}
+                className={`rounded-full font-semibold ${isCredit ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600" : ""}`}
+                onClick={() => { setIsCredit(true); setSaleError(null); }}
+              >
+                Fiado / Cta. Cte.
+              </Button>
             </div>
 
+            {/* Efectivo */}
+            {!isCredit && paymentMethod === 0 && (
+              <div className="flex flex-col gap-3 p-3 rounded-xl border bg-muted/30">
+                <label className="text-sm font-medium">Pagó con $</label>
+                <Input
+                  ref={cashInputRef}
+                  type="number"
+                  min={0}
+                  value={cashPaid}
+                  onChange={(e) => setCashPaid(e.target.value)}
+                  placeholder="$0"
+                  className="bg-background text-lg font-semibold"
+                />
+                <div className="flex flex-wrap gap-1.5">
+                  <Button variant="outline" size="sm" className="text-xs rounded-full" onClick={() => { setCashPaid(String(total)); setTimeout(()=>cashInputRef.current?.select(),0); }}>Monto exacto</Button>
+                  {[1000,2000,5000,10000].map((delta) => (
+                    <Button
+                      key={delta}
+                      variant="outline"
+                      size="sm"
+                      className="text-xs rounded-full"
+                      onClick={() => {
+                        setCashPaid(String(cashNum + delta));
+                        setTimeout(() => { cashInputRef.current?.focus(); cashInputRef.current?.select(); }, 0);
+                      }}
+                    >
+                      +${delta.toLocaleString("es-AR")}
+                    </Button>
+                  ))}
+                </div>
+                {cashNum >= total ? (
+                  <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-center">
+                    <p className="text-xs font-medium text-green-700 tracking-widest uppercase">Vuelto a entregar</p>
+                    <p className="text-2xl font-black text-green-800 leading-none mt-1">${vuelto.toLocaleString("es-AR")}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-center">
+                    <p className="text-xs font-medium text-amber-700 tracking-widest uppercase">Resta abonar</p>
+                    <p className="text-xl font-bold text-amber-800 leading-none mt-1">${falta.toLocaleString("es-AR")}</p>
+                    <p className="text-xs text-amber-600 mt-1">Ingresá ${falta.toLocaleString("es-AR")} más</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* MercadoPago / QR */}
+            {!isCredit && paymentMethod === 1 && (
+              <div className="rounded-lg border border-border bg-muted p-3 text-sm text-center">
+                <p className="font-semibold">Total: ${total.toLocaleString("es-AR")}</p>
+                <p className="text-muted-foreground text-xs mt-1">Se registrará como MercadoPago / QR.</p>
+                <p className="text-xs text-muted-foreground mt-1">Presioná Enter para confirmar — Esc para cancelar.</p>
+              </div>
+            )}
+
+            {/* Tarjeta Débito/Crédito */}
+            {!isCredit && paymentMethod === 2 && (
+              <div className="rounded-lg border border-border bg-muted p-3 text-sm text-center">
+                <p className="font-semibold">Total: ${total.toLocaleString("es-AR")}</p>
+                <p className="text-muted-foreground text-xs mt-1">Se registrará como Débito / Crédito.</p>
+                <p className="text-xs text-muted-foreground mt-1">Presioná Enter para confirmar — Esc para cancelar.</p>
+              </div>
+            )}
+
+            {/* Fiado */}
             {isCredit && (
-              <div className="flex flex-col gap-2 p-3 rounded-xl border bg-muted/50">
+              <div className="flex flex-col gap-2 p-3 rounded-xl border bg-amber-50/50 dark:bg-amber-950/10 border-amber-200/50">
                 {!selectedCustomer ? (
-                  <>
-                    <Label className="text-sm">Buscar cliente *</Label>
-                    <Input placeholder="Buscar cliente..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} />
-                    <div className="max-h-32 overflow-auto border rounded-md bg-card divide-y">
-                      {customerSearchResults.length === 0 ? (
-                        <p className="text-xs text-muted-foreground p-2 text-center">Sin resultados</p>
-                      ) : (
-                        customerSearchResults.map((c) => (
-                          <button
-                            key={c.id}
-                            onClick={() => {
-                              setCreditCustomerId(c.id);
-                              setCustomerSearch("");
-                              setShowInlineCreate(false);
-                            }}
-                            className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
-                          >
-                            <span className="font-medium">{c.name}</span>
-                            <span className="text-xs text-muted-foreground ml-2">{c.phone ?? ""}</span>
-                            {c.balance > 0 && <span className="ml-2 text-xs text-red-600">Debe ${Number(c.balance).toLocaleString("es-AR")}</span>}
-                          </button>
-                        ))
-                      )}
-                    </div>
-                    {customerSearch.trim().length >= 2 && !exactMatch && customerSearchResults.length === 0 && !showInlineCreate && (
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full"
-                        onClick={() => {
-                          setInlineName(customerSearch.trim());
-                          setInlinePhone("");
-                          setShowInlineCreate(true);
-                        }}
-                      >
-                        + Crear &quot;{customerSearch.trim()}&quot;
-                      </Button>
-                    )}
-                    {showInlineCreate && (
-                      <div className="flex flex-col gap-2 p-2 rounded-md border bg-card">
-                        <Label className="text-xs">Nuevo cliente</Label>
-                        <Input placeholder="Nombre" value={inlineName} onChange={(e) => setInlineName(e.target.value)} />
-                        <Input placeholder="Teléfono (opcional)" value={inlinePhone} onChange={(e) => setInlinePhone(e.target.value)} />
-                        {inlineError && <p className="text-xs text-red-600 border border-red-200 bg-red-50 rounded p-1">{inlineError}</p>}
-                        <div className="flex gap-2">
-                          <Button variant="outline" size="sm" className="flex-1" onClick={() => setShowInlineCreate(false)}>Cancelar</Button>
-                          <Button size="sm" className="flex-1" onClick={handleInlineCreate} disabled={inlineLoading}>
-                            {inlineLoading ? "Creando…" : "Crear y seleccionar"}
-                          </Button>
-                        </div>
+                  showInlineCreate ? (
+                    <div className="flex flex-col gap-2 p-2 rounded-md border bg-card">
+                      <Label className="text-sm font-medium">Nuevo cliente</Label>
+                      <Input placeholder="Nombre" value={inlineName} onChange={(e) => setInlineName(e.target.value)} autoFocus />
+                      <Input placeholder="Teléfono (opcional)" value={inlinePhone} onChange={(e) => setInlinePhone(e.target.value)} />
+                      {inlineError && <p className="text-xs text-red-600 border border-red-200 bg-red-50 rounded p-1">{inlineError}</p>}
+                      <div className="flex gap-2">
+                        <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowInlineCreate(false); setInlineError(null); }}>Cancelar</Button>
+                        <Button size="sm" className="flex-1" onClick={handleInlineCreate} disabled={inlineLoading}>
+                          {inlineLoading ? "Creando…" : "Guardar y seleccionar"}
+                        </Button>
                       </div>
-                    )}
-                    <p className="text-xs text-muted-foreground">Seleccioná un cliente para confirmar fiado.</p>
-                  </>
+                    </div>
+                  ) : (
+                    <>
+                      <Label className="text-sm">Buscar cliente *</Label>
+                      <Input ref={fiadoSearchRef} placeholder="Buscar por nombre, DNI o teléfono..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="bg-card" />
+                      <div className="max-h-40 overflow-auto border rounded-md bg-card divide-y">
+                        {customerSearchResults.length > 0 ? (
+                          <>
+                            {customerSearchResults.map((c) => (
+                              <button
+                                key={c.id}
+                                onClick={() => {
+                                  setCreditCustomerId(c.id);
+                                  setCustomerSearch("");
+                                  setShowInlineCreate(false);
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
+                              >
+                                <span className="font-medium">{c.name}</span>
+                                <span className="text-xs text-muted-foreground ml-2">{c.phone ?? ""}</span>
+                                {c.balance > 0 && <span className="ml-2 text-xs font-semibold text-red-600">Debe ${Number(c.balance).toLocaleString("es-AR")}</span>}
+                              </button>
+                            ))}
+                            <button
+                              onClick={() => {
+                                setInlineName(customerSearch.trim());
+                                setInlinePhone("");
+                                setInlineError(null);
+                                setShowInlineCreate(true);
+                              }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-primary/10 text-sm font-medium text-primary border-t bg-muted/20"
+                            >
+                              + Crear cliente nuevo
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs text-muted-foreground p-2 text-center">Sin resultados</p>
+                            <button
+                              onClick={() => {
+                                setInlineName(customerSearch.trim());
+                                setInlinePhone("");
+                                setInlineError(null);
+                                setShowInlineCreate(true);
+                              }}
+                              className="w-full text-left px-3 py-2.5 hover:bg-primary/10 text-sm font-medium text-primary border-t bg-muted/20"
+                            >
+                              + Crear cliente nuevo
+                            </button>
+                          </>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground">Seleccioná un cliente para confirmar fiado.</p>
+                    </>
+                  )
                 ) : (
                   <>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm">
-                        Cliente: <span className="font-semibold">{selectedCustomer.name}</span> {selectedCustomer.phone ? `(${selectedCustomer.phone})` : ""}
-                      </span>
-                      <Button variant="ghost" size="sm" onClick={() => setCreditCustomerId("")}>
-                        <X className="h-4 w-4" />
+                    <div className="flex justify-between items-center p-2 rounded-lg border bg-card">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="font-semibold text-sm">{selectedCustomer.name}</span>
+                        {selectedCustomer.phone && <span className="text-xs text-muted-foreground">{selectedCustomer.phone}</span>}
+                        {selectedCustomer.balance > 0 ? (
+                          <span className="text-xs font-semibold text-red-600">Debe ${Number(selectedCustomer.balance).toLocaleString("es-AR")}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">Sin deuda</span>
+                        )}
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => { setCreditCustomerId(""); setCustomerSearch(""); }} title="Cambiar cliente">
+                        <X className="h-4 w-4 mr-1" /> Cambiar
                       </Button>
                     </div>
                     <div className="flex flex-col gap-1 pt-2">
@@ -815,54 +1020,7 @@ export default function VentasPage() {
               </div>
             )}
 
-            {!isCredit && (
-              <div className="flex gap-2">
-                <Button
-                  variant={paymentMethod === 0 ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setPaymentMethod(0)}
-                >
-                  Efectivo
-                </Button>
-                <Button
-                  variant={paymentMethod === 1 ? "default" : "outline"}
-                  className="flex-1"
-                  onClick={() => setPaymentMethod(1)}
-                >
-                  MercadoPago
-                </Button>
-              </div>
-            )}
-
-            {!isCredit && paymentMethod === 0 ? (
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Pagó con $</label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={cashPaid}
-                  onChange={(e) => setCashPaid(e.target.value)}
-                  placeholder="0"
-                  className="bg-background"
-                />
-                {cashPaid !== "" && (
-                  <div className="text-sm">
-                    {cashNum >= total ? (
-                      <span className="text-green-700 font-semibold">Vuelto: ${vuelto.toLocaleString("es-AR")}</span>
-                    ) : (
-                      <span className="text-red-600 font-semibold">Falta: ${falta.toLocaleString("es-AR")}</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            ) : !isCredit ? (
-              <div className="rounded-md border border-border bg-muted p-3 text-sm">
-                <p className="font-medium">Total: ${total.toLocaleString("es-AR")}</p>
-                <p className="text-muted-foreground text-xs mt-1">Se registrará como MercadoPago.</p>
-              </div>
-            ) : null}
-
-            {isCredit && <p className="text-xs text-muted-foreground bg-muted border border-border rounded p-2">Venta fiada — no hay vuelto. Quedará pendiente para {selectedCustomer?.name ?? "cliente"}. {dueDateHint ? `Vence ${dueDateHint}.` : ""}</p>}
+            {isCredit && selectedCustomer && <p className="text-xs text-muted-foreground bg-muted border border-border rounded p-2">Venta fiada — no hay vuelto. Quedará pendiente para {selectedCustomer.name}. {dueDateHint ? `Vence ${dueDateHint}.` : ""}</p>}
 
             {saleError && (
               <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{saleError}</div>
@@ -874,7 +1032,7 @@ export default function VentasPage() {
               </Button>
               <Button
                 onClick={handleConfirmSale}
-                disabled={saleLoading || (isCredit ? !creditCustomerId : paymentMethod === 0 && cashPaid !== "" && cashNum < total)}
+                disabled={saleLoading || (isCredit ? !creditCustomerId : paymentMethod === 0 && cashNum < total)}
                 className="bg-red-600 hover:bg-red-700 text-white min-w-[140px]"
               >
                 {saleLoading ? "Procesando…" : "Confirmar venta"}
@@ -883,7 +1041,7 @@ export default function VentasPage() {
           </div>
         </div>
       )}
-    </main>
+    </div>
   );
 }
 

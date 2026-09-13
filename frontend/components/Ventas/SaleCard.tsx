@@ -1,9 +1,7 @@
 "use client";
 
-import { ShoppingCart, Package } from "lucide-react";
+import { Package } from "lucide-react";
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { API_URL } from "@/lib/api";
 
 export interface SaleCardProps {
@@ -42,8 +40,8 @@ export default function SaleCard({
   topBadge,
   savingText,
   disabled,
-  buttonText = "Agregar",
   onAdd,
+  // buttonText kept in props for compat but not rendered — card is fully clickable
 }: SaleCardProps) {
   const [imgError, setImgError] = useState(false);
   const resolved = resolveImage(imageUrl);
@@ -58,91 +56,105 @@ export default function SaleCard({
 
   return (
     <div
+      role="button"
+      tabIndex={isOut ? -1 : 0}
+      aria-disabled={isOut}
       onClick={() => {
         if (!isOut && onAdd) onAdd();
       }}
-      className={`bg-card border border-border rounded-xl shadow-sm overflow-hidden flex flex-col h-full hover:shadow-md transition-shadow group ${
-        isOut ? "opacity-60 pointer-events-none" : "cursor-pointer"
+      onKeyDown={(e) => {
+        if (isOut || !onAdd) return;
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onAdd();
+        }
+      }}
+      className={`group relative flex h-full min-h-[108px] gap-3 rounded-lg border border-border bg-card p-3 text-foreground shadow-sm transition-all duration-100 select-none overflow-hidden ${
+        isOut
+          ? "opacity-55 pointer-events-none"
+          : "cursor-pointer hover:border-primary/20 hover:shadow-sm hover:bg-accent/20 active:scale-[0.98] active:ring-2 active:ring-primary/15 active:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       }`}
     >
-      {/* Image - fixed height 128px for uniformity */}
-      <div className="relative h-32 bg-muted flex items-center justify-center overflow-hidden shrink-0">
+      {/* Left: text content */}
+      <div className="flex min-w-0 flex-1 flex-col pr-1">
+        <h3
+          className="line-clamp-2 text-[12.5px] font-semibold leading-[1.35] tracking-tight min-h-[2.2rem] break-words"
+          title={name}
+        >
+          {name}
+        </h3>
+        {subtitle && (
+          <span className="mt-1 text-[11px] leading-[1.3] text-muted-foreground line-clamp-2" title={subtitle}>
+            {subtitle}
+          </span>
+        )}
+
+        {/* Bottom block: price + SKU/stock — stays at bottom, not floating */}
+        <div className="mt-auto flex flex-col gap-0.5 pt-2">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <span className="text-[15px] font-bold leading-none tracking-tight">
+              ${Number(price).toLocaleString("es-AR")}
+            </span>
+            {originalPrice != null && originalPrice > price && (
+              <span className="text-[11px] leading-none line-through text-muted-foreground">
+                ${Number(originalPrice).toLocaleString("es-AR")}
+              </span>
+            )}
+          </div>
+
+          {savingText && (
+            <span className="text-[10px] font-medium leading-none text-emerald-700 dark:text-emerald-400 line-clamp-1">
+              {savingText}
+            </span>
+          )}
+
+          {sku && (
+            <span className="font-mono text-[11px] leading-none text-muted-foreground line-clamp-1" title={sku}>
+              {sku}
+            </span>
+          )}
+          {stockText && (
+            <span
+              className={`text-[11px] leading-none line-clamp-1 ${
+                stockVariant === "out"
+                  ? "text-red-600 dark:text-red-400 font-medium"
+                  : stockVariant === "low"
+                    ? "text-amber-600 dark:text-amber-400 font-medium"
+                    : "text-muted-foreground"
+              }`}
+            >
+              {stockText}
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Right: 50x50 thumbnail — uniform, object-contain, neutral bg */}
+      <div className="h-[50px] w-[50px] shrink-0 overflow-hidden rounded-md border border-border bg-white dark:bg-muted flex items-center justify-center p-1">
         {showImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={resolved!}
             alt={name}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            className="h-full w-full object-contain object-center"
             onError={() => setImgError(true)}
+            loading="lazy"
+            draggable={false}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center gap-1 text-muted-foreground">
-            <Package className="h-7 w-7 opacity-50" />
-            <span className="text-sm font-semibold tracking-tight">{initials}</span>
+          <div className="flex flex-col items-center justify-center gap-0.5 text-muted-foreground">
+            <Package className="h-5 w-5 opacity-50" />
+            <span className="text-[10px] font-semibold leading-none tracking-tight">{initials}</span>
           </div>
         )}
-        {topBadge && !isOut && (
-          <span className="absolute top-2 right-2 bg-red-600 text-white text-[11px] font-semibold px-2 py-0.5 rounded-md shadow-sm">
-            {topBadge}
-          </span>
-        )}
       </div>
 
-      {/* Content */}
-      <div className="p-4 flex flex-col gap-2 flex-1">
-        {subtitle && (
-          <Badge variant="secondary" className="w-fit text-[10px] uppercase tracking-wider font-medium">
-            {subtitle}
-          </Badge>
-        )}
-        <h3 className="text-sm font-semibold leading-tight line-clamp-2 min-h-[2.5rem]" title={name}>
-          {name}
-        </h3>
-        {sku && <span className="text-xs text-muted-foreground font-mono line-clamp-1">{sku}</span>}
-
-        {savingText && (
-          <span className="w-fit bg-primary/10 text-primary text-xs font-medium px-2 py-0.5 rounded-md">
-            {savingText}
-          </span>
-        )}
-
-        {stockText && (
-          <span
-            className={`text-xs ${
-              stockVariant === "out"
-                ? "text-red-600 font-medium"
-                : stockVariant === "low"
-                ? "text-amber-600 font-medium"
-                : "text-muted-foreground"
-            }`}
-          >
-            {stockText}
-          </span>
-        )}
-
-        <div className="flex items-center gap-2 mt-auto flex-wrap">
-          <span className="text-base font-semibold text-foreground">${Number(price).toLocaleString("es-AR")}</span>
-          {originalPrice != null && originalPrice > price && (
-            <span className="text-xs line-through text-muted-foreground">
-              ${Number(originalPrice).toLocaleString("es-AR")}
-            </span>
-          )}
-        </div>
-
-        <Button
-          type="button"
-          size="sm"
-          disabled={isOut}
-          onClick={(e) => {
-            e.stopPropagation();
-            if (!isOut && onAdd) onAdd();
-          }}
-          className="w-full mt-3 rounded-md"
-        >
-          <ShoppingCart className="h-4 w-4 mr-2" />
-          {isOut ? "Sin stock" : buttonText}
-        </Button>
-      </div>
+      {/* Minimal neutral badge for COMBO/PROMO — soft, not red */}
+      {topBadge && !isOut && (
+        <span className="pointer-events-none absolute right-1.5 top-1.5 rounded bg-muted border border-border px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-wide text-muted-foreground">
+          {topBadge}
+        </span>
+      )}
     </div>
   );
 }

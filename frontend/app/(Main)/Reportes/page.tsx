@@ -79,7 +79,7 @@ export default function ReportesPage() {
   // sales
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
-  const [pm, setPm] = useState<"" | "0" | "1">("");
+  const [pm, setPm] = useState<"" | "0" | "1" | "2">("");
   const [sales, setSales] = useState<PagedResult<SaleDto> | null>(null);
   const [salesPage, setSalesPage] = useState(1);
   const [salesLoading, setSalesLoading] = useState(false);
@@ -115,7 +115,7 @@ export default function ReportesPage() {
       const data = await getSalesReport({
         from: from || undefined,
         to: to || undefined,
-        paymentMethod: pm === "" ? undefined : (Number(pm) as 0 | 1),
+        paymentMethod: pm === "" ? undefined : (Number(pm) as 0 | 1 | 2),
         page,
         pageSize: 10,
       });
@@ -198,8 +198,8 @@ export default function ReportesPage() {
             <div><label className="text-sm">Hasta</label><Input type="date" value={to} onChange={(e) => setTo(e.target.value)} /></div>
             <div>
               <label className="text-sm">Pago</label>
-              <select value={pm} onChange={(e) => setPm(e.target.value as "" | "0" | "1")} className="border border-input rounded-md px-3 py-1.5 text-sm bg-card h-8">
-                <option value="">Todos</option><option value="0">Efectivo</option><option value="1">MercadoPago</option>
+              <select value={pm} onChange={(e) => setPm(e.target.value as "" | "0" | "1" | "2")} className="border border-input rounded-md px-3 py-1.5 text-sm bg-card h-8">
+                <option value="">Todos</option><option value="0">Efectivo</option><option value="1">MercadoPago</option><option value="2">Tarjeta</option>
               </select>
             </div>
             <Button onClick={() => fetchSales(1)} disabled={salesLoading}>{salesLoading ? "Cargando…" : "Filtrar"}</Button>
