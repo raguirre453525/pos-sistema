@@ -68,7 +68,8 @@ namespace MetraTC.Application.DTOs
             List<Guid>? ProductIds,
             decimal? Percentage,
             decimal? FixedAmount,
-            string Reason
+            string Reason,
+            int? Rounding = null
         );
 
         public record BulkPriceAdjustmentResultDto(

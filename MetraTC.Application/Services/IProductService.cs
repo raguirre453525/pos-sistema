@@ -5,17 +5,17 @@ namespace MetraTC.Application.Services;
 
 public interface IProductService
 {
-    Task<ProductDto> CreateAsync(CreateProductDto createProductDto);
+    Task<ProductDto> CreateAsync(CreateProductDto createProductDto, Guid businessId);
 
-    Task<IEnumerable<ProductDto>> GetAllAsync();
+    Task<IEnumerable<ProductDto>> GetAllAsync(Guid businessId);
 
-    Task<ProductDto> GetByIdAsync(Guid id);
+    Task<ProductDto> GetByIdAsync(Guid id, Guid businessId);
 
-    Task<StockAdjustmentResponseDto> AdjustStockAsync(Guid id, StockAdjustmentDto stockAdjustmentDto);
+    Task<StockAdjustmentResponseDto> AdjustStockAsync(Guid id, StockAdjustmentDto stockAdjustmentDto, Guid businessId);
 
-    Task UpdateAsync(Guid id, UpdateProductDto updateProductDto);
+    Task UpdateAsync(Guid id, UpdateProductDto updateProductDto, Guid businessId);
 
-    Task DeleteAsync(Guid id);
+    Task DeleteAsync(Guid id, Guid businessId);
 
-    Task<BulkPriceAdjustmentResultDto> BulkAdjustPricesAsync(BulkPriceAdjustmentDto dto);
+    Task<BulkPriceAdjustmentResultDto> BulkAdjustPricesAsync(BulkPriceAdjustmentDto dto, Guid businessId);
 }

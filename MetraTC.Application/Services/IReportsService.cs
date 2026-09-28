@@ -7,14 +7,15 @@ namespace MetraTC.Application.Services;
 
 public interface IReportsService
 {
-    Task<IEnumerable<LowStockDto>> GetLowStockAsync(int threshold = 5);
+    Task<IEnumerable<LowStockDto>> GetLowStockAsync(int threshold = 5, Guid? businessId = null);
 
     Task<PagedResult<SaleDto>> GetSalesAsync(
         DateTime? from,
         DateTime? to,
         PaymentMethod? paymentMethod,
         int page = 1,
-        int pageSize = 20);
+        int pageSize = 20,
+        Guid? businessId = null);
 
     Task<PagedResult<StockAuditDto>> GetStockAuditsAsync(
         Guid? productId,
@@ -22,7 +23,8 @@ public interface IReportsService
         DateTime? to,
         int page = 1,
         int pageSize = 20,
-        string? reasonContains = null);
+        string? reasonContains = null,
+        Guid? businessId = null);
 
-    Task<DashboardSummaryDto> GetDashboardAsync(DateTime? from, DateTime? to);
+    Task<DashboardSummaryDto> GetDashboardAsync(DateTime? from, DateTime? to, Guid? businessId = null);
 }

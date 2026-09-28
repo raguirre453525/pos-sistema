@@ -4,7 +4,7 @@ namespace MetraTC.Application.Services;
 
 public interface ISalesService
 {
-    Task<SaleDto> CreateAsync(CreateSaleDto dto);
-    Task<SaleDto> GetByIdAsync(Guid id);
-    Task<IEnumerable<SaleDto>> GetAllAsync();
+    Task<SaleDto> CreateAsync(CreateSaleDto dto, Guid businessId);
+    Task<SaleDto> GetByIdAsync(Guid id, Guid businessId);
+    Task<IEnumerable<SaleDto>> GetAllAsync(Guid businessId);
 }

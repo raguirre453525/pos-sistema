@@ -1,5 +1,6 @@
 ﻿"use client";
 import { useEffect, useState, useCallback } from "react";
+import { useFeatureGuard } from "@/hooks/useFeatureGuard";
 import { DollarSign, TrendingUp, Package } from "lucide-react";
 import StatCard from "@/components/Dashboard/StatCard";
 import DataTable from "@/components/Reusables/DataTable";
@@ -68,6 +69,7 @@ const auditColumns: ColumnDef<StockAuditDto>[] = [
 ];
 
 export default function ReportesPage() {
+  const { allowed } = useFeatureGuard({ requireReportes: true, denyRoles: ["User"] });
   const [tab, setTab] = useState<Tab>("low-stock");
 
   // low-stock
@@ -159,8 +161,16 @@ export default function ReportesPage() {
   const totalIncome = sales?.items.reduce((a, s) => a + Number(s.total), 0) ?? 0;
   const totalItems = sales?.items.reduce((a, s) => a + s.items.reduce((x, i) => x + i.quantity, 0), 0) ?? 0;
 
+  if (!allowed) {
+    return (
+      <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Redirigiendo…</p>
+      </main>
+    );
+  }
+
   return (
-    <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">REPORTES</h1>
 
       <div className="flex gap-2">

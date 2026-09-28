@@ -21,5 +21,12 @@ public class PromotionConfiguration : IEntityTypeConfiguration<Promotion>
         builder.Ignore(p => p.Products);
         builder.HasMany(p => p.Lines).WithOne(l => l.Promotion).HasForeignKey(l => l.PromotionId).OnDelete(DeleteBehavior.Cascade);
         builder.HasQueryFilter(p => p.IsActive);
+
+        builder.HasOne(p => p.Business)
+            .WithMany()
+            .HasForeignKey(p => p.BusinessId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(p => p.BusinessId).IsRequired();
+        builder.HasIndex(p => p.BusinessId);
     }
 }

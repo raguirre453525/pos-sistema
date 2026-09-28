@@ -2,15 +2,15 @@
 
 import { useEffect, useState, useCallback, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import StatCard from "@/components/Dashboard/StatCard";
-import DataTable from "@/components/Reusables/DataTable";
-import { createProductColumns } from "@/components/Inventario/DataTable/productColumns";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import Link from "next/link";
-import { Package, PackagePlus, Tag, Pencil, Search, X, History, AlertTriangle, Plus, Trash2, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
+import { Package, PackagePlus, Tag, Pencil, Search, X, History, AlertTriangle, Plus, Trash2, TrendingUp, TrendingDown, Percent, MoreHorizontal } from "lucide-react";
+import { useFeatureFlags } from "@/contexts/FeatureFlagsContext";
+import { useFeatureGuard } from "@/hooks/useFeatureGuard";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import CategoryFormModal from "@/components/Categorias/CategoryFormModal";
+import NewProductModal from "@/components/Inventario/NewProductModal";
 import {
   getProducts,
   adjustStock,
@@ -33,9 +33,40 @@ import {
   ProductPriceHistoryDto,
 } from "@/lib/api";
 
+function formatReason(reason: string | null | undefined): string {
+  if (!reason) return "Cambio de precio";
+  const trimmed = reason.trim();
+  if (!trimmed) return "Cambio de precio";
+  const uuidSingle = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const uuidGlobal = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi;
+  const saleWithUuid = /Sale\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
+  const match = trimmed.match(uuidSingle);
+  if (saleWithUuid.test(trimmed) && match) {
+    return `Venta en mostrador #${match[0].slice(-4)}`;
+  }
+  if (match) {
+    let cleaned = trimmed.replace(/Sale\s*/i, "").trim();
+    cleaned = cleaned.replace(uuidGlobal, (m) => ` #${m.slice(-4)}`);
+    cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+    if (/^#[\da-f]{3,4}$/i.test(cleaned)) {
+      return `Venta en mostrador ${cleaned}`;
+    }
+    if (!cleaned) {
+      return `Venta en mostrador #${match[0].slice(-4)}`;
+    }
+    if (trimmed.toLowerCase().includes("sale") && cleaned.length <= 5) {
+      return `Venta en mostrador #${match[0].slice(-4)}`;
+    }
+    return cleaned;
+  }
+  return trimmed;
+}
+
 function InventarioPageContent() {
+  const { allowed } = useFeatureGuard({ denyRoles: ["SuperAdmin"], redirectTo: "/Admin/Negocios" });
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { flags } = useFeatureFlags();
   const [activeTab, setActiveTab] = useState<"productos" | "categorias">("productos");
 
   useEffect(() => {
@@ -56,12 +87,6 @@ function InventarioPageContent() {
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-
-  const [adjustTarget, setAdjustTarget] = useState<ProductDto | null>(null);
-  const [delta, setDelta] = useState<string>("1");
-  const [reason, setReason] = useState<string>("Ajuste manual");
-  const [adjustLoading, setAdjustLoading] = useState(false);
-  const [adjustError, setAdjustError] = useState<string | null>(null);
 
   // Categories state (shared)
   const [categories, setCategories] = useState<CategoryDto[]>([]);
@@ -84,12 +109,12 @@ function InventarioPageContent() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // B2 states
+  // Filters
   const [search, setSearch] = useState("");
-  const [stockFilter, setStockFilter] = useState<"all" | "low" | "out">("all");
+  const [stockFilter, setStockFilter] = useState<"all" | "inStock" | "low" | "out">("all");
   const [sortBy, setSortBy] = useState<"name_asc" | "name_desc" | "price_asc" | "price_desc" | "stock_asc" | "stock_desc">("name_asc");
 
-  // Deep-link: ?filter=lowStock desde la campana de notificaciones
+  // Deep-link: ?filter=lowStock desde la campana
   useEffect(() => {
     if (searchParams.get("filter") === "lowStock") setStockFilter("low");
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -101,13 +126,27 @@ function InventarioPageContent() {
   const [auditsLoading, setAuditsLoading] = useState(false);
   const [auditsError, setAuditsError] = useState<string | null>(null);
 
-  // Price history tab
+  // Price history tab (kept for compat, kardex now uses drawerKardexFilter)
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [priceHistoryTab, setPriceHistoryTab] = useState<"stock" | "precios">("stock");
   const [priceHistory, setPriceHistory] = useState<ProductPriceHistoryDto[]>([]);
   const [priceHistoryLoading, setPriceHistoryLoading] = useState(false);
   const [priceHistoryError, setPriceHistoryError] = useState<string | null>(null);
 
+  // Drawer tabs: Datos y Precios vs Historial y Stock
+  const [drawerTab, setDrawerTab] = useState<"datos" | "historial">("datos");
+  const [drawerKardexFilter, setDrawerKardexFilter] = useState<"todos" | "stock" | "precios">("todos");
+  const [drawerDelta, setDrawerDelta] = useState<string>("1");
+  const [drawerReason, setDrawerReason] = useState<string>("Ajuste manual");
+  const [drawerAdjustLoading, setDrawerAdjustLoading] = useState(false);
+  const [drawerAdjustError, setDrawerAdjustError] = useState<string | null>(null);
+  const [drawerDeleteConfirm, setDrawerDeleteConfirm] = useState(false);
+  const [drawerConfirmOpen, setDrawerConfirmOpen] = useState(false);
+  const [drawerConfirmSign, setDrawerConfirmSign] = useState<1 | -1>(1);
+  const [drawerConfirmAmount, setDrawerConfirmAmount] = useState<number>(0);
+
   // quick edit inside drawer
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const [editProduct, setEditProduct] = useState<ProductDto | null>(null);
   const [quickName, setQuickName] = useState("");
   const [quickPrice, setQuickPrice] = useState("");
@@ -122,7 +161,6 @@ function InventarioPageContent() {
   const [quickSuccess, setQuickSuccess] = useState<string | null>(null);
   const [assignCatId, setAssignCatId] = useState<string>("");
 
-  // FIX: revoca objectURL al desmontar para evitar leak; hardening evita crash por URLs huérfanas
   useEffect(() => {
     return () => {
       if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl);
@@ -130,12 +168,16 @@ function InventarioPageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quickPreviewUrl]);
 
+  // Nuevo Producto modal state
+  const [showNewProduct, setShowNewProduct] = useState(false);
+
   // Bulk price adjustment state
   const [showBulk, setShowBulk] = useState(false);
   const [bulkCategoryId, setBulkCategoryId] = useState<string>("all");
-  const [bulkPercentage, setBulkPercentage] = useState<string>("");
-  const [bulkFixed, setBulkFixed] = useState<string>("");
+  const [bulkMode, setBulkMode] = useState<"percent" | "fixed">("percent");
+  const [bulkValue, setBulkValue] = useState<string>("");
   const [bulkReason, setBulkReason] = useState<string>("");
+  const [bulkRounding, setBulkRounding] = useState<"none" | "10" | "50">("none");
   const [bulkSelected, setBulkSelected] = useState<Record<string, boolean>>({});
   const [bulkLoading, setBulkLoading] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
@@ -225,41 +267,42 @@ function InventarioPageContent() {
   const round2Away = (v: number) => Math.sign(v) * Math.round(Math.abs(v) * 100) / 100;
 
   const bulkPreview = useMemo(() => {
-    const pct = parseFloat(bulkPercentage);
-    const hasPct = !isNaN(pct) && pct !== 0;
-    const fx = parseFloat(bulkFixed);
-    const hasFx = !isNaN(fx) && fx !== 0;
+    const val = parseFloat(bulkValue);
+    const hasAdjustment = !isNaN(val) && val !== 0;
     return bulkFilteredByCategory.map((p) => {
       const oldPrice = p.price;
       let newPrice = oldPrice;
-      if (hasPct || hasFx) {
-        const pctVal = hasPct ? pct : 0;
-        const fxVal = hasFx ? fx : 0;
-        newPrice = round2Away(oldPrice * (1 + pctVal / 100) + fxVal);
+      if (hasAdjustment) {
+        if (bulkMode === "percent") {
+          newPrice = round2Away(oldPrice * (1 + val / 100));
+        } else {
+          newPrice = round2Away(oldPrice + val);
+        }
         if (newPrice < 0) newPrice = 0;
+        if (bulkRounding !== "none") {
+          const step = bulkRounding === "10" ? 10 : 50;
+          newPrice = Math.round(newPrice / step) * step;
+          newPrice = round2Away(newPrice);
+        }
       }
       const changePercent = oldPrice === 0 ? 0 : ((newPrice - oldPrice) / oldPrice) * 100;
       return { id: p.id, sku: p.sku, name: p.name, oldPrice, newPrice, changePercent };
     });
-  }, [bulkFilteredByCategory, bulkPercentage, bulkFixed]);
+  }, [bulkFilteredByCategory, bulkValue, bulkMode, bulkRounding]);
 
   const bulkPreviewFiltered = useMemo(() => {
-    // only selected
     return bulkPreview.filter((b) => bulkSelected[b.id] !== false);
   }, [bulkPreview, bulkSelected]);
 
   const bulkAllChecked = bulkPreview.length > 0 && bulkPreview.every((b) => bulkSelected[b.id] !== false);
   const bulkHasAdjustment = (() => {
-    const pct = parseFloat(bulkPercentage);
-    const fx = parseFloat(bulkFixed);
-    return (!isNaN(pct) && pct !== 0) || (!isNaN(fx) && fx !== 0);
+    const val = parseFloat(bulkValue);
+    return !isNaN(val) && val !== 0;
   })();
 
   const openBulk = () => {
-    // init selected to all true for current category
     const init: Record<string, boolean> = {};
     const filtered = bulkCategoryId === "all" ? products : products.filter((p) => (productCategories[p.id] ?? []).some((c) => c.id === bulkCategoryId));
-    // but we will recompute in effect; just open
     filtered.forEach((p) => (init[p.id] = true));
     setBulkSelected(init);
     setBulkError(null);
@@ -271,7 +314,6 @@ function InventarioPageContent() {
     if (!showBulk) return;
     const filtered = bulkFilteredByCategory;
     setBulkSelected((prev) => {
-      // when category changes, reset to all true, but keep existing selections if same ids
       const next: Record<string, boolean> = {};
       filtered.forEach((p) => {
         next[p.id] = prev[p.id] ?? true;
@@ -282,17 +324,27 @@ function InventarioPageContent() {
   }, [bulkCategoryId, showBulk, bulkFilteredByCategory.length]);
 
   const handleBulkConfirm = async () => {
-    const pct = parseFloat(bulkPercentage);
-    const fx = parseFloat(bulkFixed);
-    const percentage = !isNaN(pct) && pct !== 0 ? pct : null;
-    const fixedAmount = !isNaN(fx) && fx !== 0 ? fx : null;
+    const val = parseFloat(bulkValue);
+    const percentage = bulkMode === "percent" && !isNaN(val) && val !== 0 ? val : null;
+    const fixedAmount = bulkMode === "fixed" && !isNaN(val) && val !== 0 ? val : null;
     const reasonTrim = bulkReason.trim();
-    if (reasonTrim.length < 3 || reasonTrim.length > 500) {
-      setBulkError("Motivo requerido (3..500 caracteres)");
+    if (reasonTrim.length > 500) {
+      setBulkError("Motivo no puede exceder 500 caracteres");
       return;
     }
+    let effectiveReason = reasonTrim;
+    if (effectiveReason.length === 0) {
+      const dateStr = new Date().toLocaleDateString("es-AR");
+      if (percentage !== null) {
+        effectiveReason = `Aumento inflación ${val > 0 ? "+" : ""}${val}%`;
+      } else if (fixedAmount !== null) {
+        effectiveReason = `Ajuste general ${dateStr}`;
+      } else {
+        effectiveReason = `Ajuste general ${dateStr}`;
+      }
+    }
     if (percentage === null && fixedAmount === null) {
-      setBulkError("Al menos uno de % o monto fijo debe ser distinto de 0");
+      setBulkError("Ingresá un valor distinto de 0");
       return;
     }
     if (percentage !== null && (percentage < -90 || percentage > 500)) {
@@ -312,12 +364,14 @@ function InventarioPageContent() {
     setBulkError(null);
     setBulkSuccess(null);
     try {
+      const rounding = bulkRounding === "none" ? null : Number(bulkRounding);
       const result = await bulkAdjustPrices({
         categoryId: null,
         productIds: selectedIds,
         percentage,
         fixedAmount,
-        reason: reasonTrim,
+        reason: effectiveReason,
+        rounding,
       });
       setBulkSuccess(`Ajuste aplicado a ${result.affectedCount} productos`);
       await fetchProducts();
@@ -341,14 +395,12 @@ function InventarioPageContent() {
     }
   };
 
-  // auto-dismiss banner success
   useEffect(() => {
     if (!catBannerSuccess) return;
     const t = setTimeout(() => setCatBannerSuccess(null), 3000);
     return () => clearTimeout(t);
   }, [catBannerSuccess]);
 
-  // fetch audits & price history when drawer opens
   useEffect(() => {
     if (!selectedProduct) {
       setAudits([]);
@@ -390,8 +442,13 @@ function InventarioPageContent() {
     };
     void fetchAudits();
     void fetchPriceHistory();
-    // init quick edit fields
     setPriceHistoryTab("stock");
+    setDrawerTab("datos");
+    setDrawerKardexFilter("todos");
+    setDrawerDelta("1");
+    setDrawerReason("Ajuste manual");
+    setDrawerAdjustError(null);
+    setDrawerDeleteConfirm(false);
     setEditProduct(null);
     setQuickName(selectedProduct.name);
     setQuickPrice(String(selectedProduct.price));
@@ -413,6 +470,9 @@ function InventarioPageContent() {
   }, [selectedProduct]);
 
   const totalValue = useMemo(() => products.reduce((acc, p) => acc + p.price * p.stock, 0), [products]);
+  const totalProducts = products.length;
+  const lowStockCount = useMemo(() => products.filter((p) => p.stock > 0 && p.stock <= (p.minStock ?? 5)).length, [products]);
+  const outOfStockCount = useMemo(() => products.filter((p) => p.stock <= 0).length, [products]);
 
   const filteredProducts = useMemo(() => {
     let result = [...products];
@@ -424,12 +484,11 @@ function InventarioPageContent() {
       result = result.filter((p) => (productCategories[p.id] ?? []).some((c) => c.id === selectedCategoryId));
     }
     if (stockFilter === "low") {
-      result = result.filter((p) => {
-        const isLow = p.minStock != null ? p.stock <= p.minStock : p.stock <= 5;
-        return isLow && p.stock > 0;
-      });
+      result = result.filter((p) => p.stock > 0 && p.stock <= (p.minStock ?? 5));
     } else if (stockFilter === "out") {
       result = result.filter((p) => p.stock <= 0);
+    } else if (stockFilter === "inStock") {
+      result = result.filter((p) => p.stock > (p.minStock ?? 5));
     }
     switch (sortBy) {
       case "name_asc":
@@ -462,51 +521,6 @@ function InventarioPageContent() {
   };
 
   const hasActiveFilters = search !== "" || selectedCategoryId !== "all" || stockFilter !== "all" || sortBy !== "name_asc";
-
-  const handleAdjust = async () => {
-    if (!adjustTarget) return;
-    const deltaNum = parseFloat(delta.replace(",", "."));
-    if (isNaN(deltaNum) || deltaNum === 0) {
-      setAdjustError("Delta debe ser distinto de 0");
-      return;
-    }
-    if (Math.round(deltaNum * 1000) / 1000 !== deltaNum) {
-      setAdjustError("Delta no puede tener más de 3 decimales");
-      return;
-    }
-    const isWeightAdjust = adjustTarget.isSoldByWeight === true || (adjustTarget.unit ?? "").toLowerCase() === "kg";
-    if (!isWeightAdjust && !Number.isInteger(deltaNum)) {
-      setAdjustError("Para productos por unidad el delta debe ser entero");
-      return;
-    }
-    if (!reason.trim() || reason.trim().length > 250) {
-      setAdjustError("Motivo requerido (1..250 caracteres)");
-      return;
-    }
-    setAdjustLoading(true);
-    setAdjustError(null);
-    try {
-      await adjustStock(adjustTarget.id, { delta: deltaNum, reason: reason.trim() });
-      setAdjustTarget(null);
-      setDelta("1");
-      setReason("Ajuste manual");
-      await fetchProducts();
-      // refresh selectedProduct stock if drawer open on same product
-      if (selectedProduct && selectedProduct.id === adjustTarget.id) {
-        try {
-          const updated = await getProducts();
-          setProducts(updated);
-          const found = updated.find((p) => p.id === adjustTarget.id);
-          if (found) setSelectedProduct(found);
-        } catch {}
-      }
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al ajustar stock";
-      setAdjustError(msg);
-    } finally {
-      setAdjustLoading(false);
-    }
-  };
 
   const handleDelete = async (product: ProductDto) => {
     if (!confirm(`¿Eliminar ${product.name} (${product.sku})? Se hará soft-delete.`)) return;
@@ -548,6 +562,99 @@ function InventarioPageContent() {
     await handleAssign(selectedProduct, assignCatId);
     setAssignCatId("");
   };
+
+  const handleDrawerStockAdjust = (sign: 1 | -1) => {
+    if (!selectedProduct) return;
+    const raw = drawerDelta.replace(",", ".").trim();
+    const qty = parseFloat(raw);
+    if (!raw || !Number.isFinite(qty) || qty === 0) {
+      setDrawerAdjustError("Cantidad debe ser mayor a 0");
+      return;
+    }
+    if (isNaN(qty) || qty <= 0) {
+      setDrawerAdjustError("Cantidad debe ser mayor a 0");
+      return;
+    }
+    if (Math.round(qty * 1000) / 1000 !== qty) {
+      setDrawerAdjustError("Cantidad no puede tener más de 3 decimales");
+      return;
+    }
+    const isWeightDrawerAdj = selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg";
+    if (!isWeightDrawerAdj && !Number.isInteger(qty)) {
+      setDrawerAdjustError("Para productos por unidad la cantidad debe ser entera");
+      return;
+    }
+    if (!drawerReason.trim() || drawerReason.trim().length > 250) {
+      setDrawerAdjustError("Motivo requerido (1..250 caracteres)");
+      return;
+    }
+    setDrawerConfirmSign(sign);
+    setDrawerConfirmAmount(qty);
+    setDrawerConfirmOpen(true);
+    setDrawerAdjustError(null);
+  };
+
+  const confirmDrawerStockAdjust = async () => {
+    if (!selectedProduct) return;
+    const qty = drawerConfirmAmount;
+    const sign = drawerConfirmSign;
+    const deltaNum = sign * qty;
+    setDrawerAdjustLoading(true);
+    setDrawerAdjustError(null);
+    try {
+      await adjustStock(selectedProduct.id, { delta: deltaNum, reason: drawerReason.trim() || "Ajuste manual" });
+      await fetchProducts();
+      try {
+        const fresh = await getProducts();
+        setProducts(fresh);
+        const found = fresh.find((p) => p.id === selectedProduct.id);
+        if (found) setSelectedProduct(found);
+      } catch {}
+      try {
+        const res = await getStockAudits({ productId: selectedProduct.id, pageSize: 20 });
+        setAudits(res.items);
+      } catch {}
+      try {
+        const res2 = await getProductPriceHistory(selectedProduct.id, { pageSize: 20 });
+        setPriceHistory(res2.items);
+      } catch {}
+      setDrawerDelta("1");
+      setDrawerConfirmOpen(false);
+    } catch (e) {
+      const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al ajustar stock";
+      setDrawerAdjustError(msg);
+      setDrawerConfirmOpen(false);
+    } finally {
+      setDrawerAdjustLoading(false);
+    }
+  };
+
+  const kardexMerged = useMemo(() => {
+    type KardexStock = { id: string; date: string; type: "stock"; reason: string; delta: number; resultingStock: number };
+    type KardexPrice = { id: string; date: string; type: "price"; reason: string | null; oldPrice: number; newPrice: number; changePercent: number };
+    const stockEntries: KardexStock[] = audits.map((a) => ({
+      id: `s-${a.id}`,
+      date: a.adjustedAt,
+      type: "stock",
+      reason: a.reason,
+      delta: a.delta,
+      resultingStock: a.resultingStock,
+    }));
+    const priceEntries: KardexPrice[] = priceHistory.map((h) => ({
+      id: `p-${h.id}`,
+      date: h.changedAt,
+      type: "price",
+      reason: h.reason,
+      oldPrice: h.oldPrice,
+      newPrice: h.newPrice,
+      changePercent: h.changePercent,
+    }));
+    const merged: (KardexStock | KardexPrice)[] = [...stockEntries, ...priceEntries];
+    merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    if (drawerKardexFilter === "stock") return merged.filter((e) => e.type === "stock");
+    if (drawerKardexFilter === "precios") return merged.filter((e) => e.type === "price");
+    return merged;
+  }, [audits, priceHistory, drawerKardexFilter]);
 
   const handleQuickSave = async () => {
     if (!selectedProduct) return;
@@ -600,21 +707,16 @@ function InventarioPageContent() {
     }
     setQuickLoading(true);
     try {
-      // For image: if file selected, prioritize file upload after update. Send imageUrl only if no file.
       const imageUrlToSend = quickSelectedFile ? undefined : (quickImageUrl.trim() || null);
-      // Build DTO: include unit/minStock/imageUrl only if changed? Backend preserves if null so we send accordingly
       const dto: any = { name, price: priceNum, description: desc };
       if (resolvedUnit !== (selectedProduct.unit ?? "")) dto.unit = resolvedUnit || null;
       else dto.unit = selectedProduct.unit ?? null;
       if (minStockNum !== undefined) dto.minStock = minStockNum;
       if (imageUrlToSend !== undefined) dto.imageUrl = imageUrlToSend;
       else dto.imageUrl = selectedProduct.imageUrl ?? null;
-      // If file selected, we still send current imageUrl preserved, upload will override
       if (quickSelectedFile) dto.imageUrl = selectedProduct.imageUrl ?? null;
-
       await updateProduct(selectedProduct.id, dto);
       if (quickSelectedFile) {
-        // FIX: validación cliente previa evita crash y no hace fetch si inválido; envuelto en try/catch para no cerrar la app
         if (quickSelectedFile.size > 5*1024*1024) { setQuickError("Producto actualizado, pero falló subir imagen: Archivo muy grande (máximo 5MB)"); }
         else if (quickSelectedFile.type && !quickSelectedFile.type.startsWith("image/")) { setQuickError("Producto actualizado, pero falló subir imagen: Formato no soportado (solo imágenes)"); }
         else {
@@ -675,12 +777,10 @@ function InventarioPageContent() {
       setAssignCatId(cat.id);
     } else {
       const cats = await refreshCategoriesAndMap();
-      // ensure categories updated; if origin tab show banner
       if (origin === "tab") {
         setCatBannerSuccess(`Categoría "${cat.name}" ${isEdit ? "actualizada" : "creada"}`);
         setCatBannerError(null);
       }
-      // keep cats in sync (refresh already does)
       void cats;
     }
   };
@@ -688,18 +788,6 @@ function InventarioPageContent() {
   const closeCatModal = () => {
     setShowCatModal(false);
     setEditingCategory(null);
-  };
-
-  const openCreateFromFilter = () => {
-    setEditingCategory(null);
-    setCatModalOrigin("general");
-    setShowCatModal(true);
-  };
-
-  const openCreateFromDrawer = () => {
-    setEditingCategory(null);
-    setCatModalOrigin("drawer");
-    setShowCatModal(true);
   };
 
   const openCreateFromTab = () => {
@@ -757,72 +845,99 @@ function InventarioPageContent() {
   }, [categories, catSearchTerm]);
 
   const deleteTarget = deleteConfirmId ? categories.find((c) => c.id === deleteConfirmId) : null;
-
   const activeCategories = useMemo(() => categories.filter((c) => c.isActive), [categories]);
-
-  const columns = useMemo(
-    () =>
-      createProductColumns({
-        onAdjust: (p) => {
-          setAdjustTarget(p);
-          setAdjustError(null);
-        },
-        onDelete: handleDelete,
-        categoryMap: productCategories,
-        categories,
-        onAssign: handleAssign,
-        onRemove: handleRemove,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [productCategories, categories]
-  );
 
   const selectedCats = selectedProduct ? productCategories[selectedProduct.id] ?? [] : [];
   const unassignedCats = activeCategories.filter((c) => !selectedCats.some((sc) => sc.id === c.id));
 
-  return (
-    <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
-      <h1 className="text-foreground text-2xl font-semibold">Inventario</h1>
+  if (!allowed) {
+    return <main className="w-full p-4 text-sm text-muted-foreground">Redirigiendo a /Admin/Negocios…</main>;
+  }
 
-      {/* Tabs header */}
-      <div className="flex gap-2 border-b border-border pb-2 items-center">
-        <Button variant={activeTab === "productos" ? "default" : "ghost"} onClick={() => handleTabChange("productos")} className="gap-2">
-          <Package className="h-4 w-4" />
-          Productos
-          <span className={`ml-1 rounded-md px-2 py-0.5 text-xs font-medium ${activeTab === "productos" ? "bg-card/20 text-white" : "bg-muted text-muted-foreground border"}`}>
-            {products.length}
-          </span>
-        </Button>
-        <Button variant={activeTab === "categorias" ? "default" : "ghost"} onClick={() => handleTabChange("categorias")} className="gap-2">
-          <Tag className="h-4 w-4" />
-          Categorías
-          <span className={`ml-1 rounded-md px-2 py-0.5 text-xs font-medium ${activeTab === "categorias" ? "bg-card/20 text-white" : "bg-muted text-muted-foreground border"}`}>
-            {categories.length}
-          </span>
-        </Button>
-        <div className="ml-auto">
-          <Button variant="outline" onClick={openBulk} className="gap-2">
-            <TrendingUp className="h-4 w-4" />
-            Ajuste masivo
-          </Button>
+  return (
+    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+      {/* 1. Cabecera y Jerarquía de Acciones */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-4">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">Inventario</h1>
+          <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border">
+            <button
+              onClick={() => handleTabChange("productos")}
+              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === "productos" ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Package className="h-4 w-4" />
+              Productos
+              <span className={`ml-1 rounded-md px-1.5 py-0.5 text-xs font-semibold ${activeTab === "productos" ? "bg-white/20 text-white dark:bg-slate-900/10 dark:text-slate-900" : "bg-white border border-border text-muted-foreground"}`}>
+                {products.length}
+              </span>
+            </button>
+            <button
+              onClick={() => handleTabChange("categorias")}
+              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === "categorias" ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900" : "text-muted-foreground hover:text-foreground"}`}
+            >
+              <Tag className="h-4 w-4" />
+              Categorías
+              <span className={`ml-1 rounded-md px-1.5 py-0.5 text-xs font-semibold ${activeTab === "categorias" ? "bg-white/20 text-white dark:bg-slate-900/10 dark:text-slate-900" : "bg-white border border-border text-muted-foreground"}`}>
+                {categories.length}
+              </span>
+            </button>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          {activeTab === "productos" && (
+            <>
+              {flags.permitirAjusteInflacion && (
+                <Button
+                  onClick={openBulk}
+                  className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-medium px-4 py-2 rounded-xl shadow-sm flex items-center gap-2"
+                  variant="outline"
+                >
+                  <Percent className="h-4 w-4" />
+                  Ajuste de Precios / Inflación
+                </Button>
+              )}
+              <Button
+                onClick={() => setShowNewProduct(true)}
+                className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-xl shadow-sm flex items-center gap-2"
+              >
+                <PackagePlus className="h-4 w-4" />
+                Nuevo Producto
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
       {activeTab === "productos" ? (
         <>
-          <div className="flex justify-between items-center">
-            <StatCard
-              title="Valor Total de Activos"
-              value={`$${totalValue.toLocaleString("es-AR", { minimumFractionDigits: 2 })}`}
-              icon={Package}
-              color="bg-card-100 text-black-600 border border-border"
-            />
-            <Link href="/Inventario/CrearProd">
-              <Button variant="outline" size="lg" className="flex ml-auto mt-20">
-                <PackagePlus className="mr-1" />
-                Crear Producto
-              </Button>
-            </Link>
+          {/* 2. KPIs / Métricas en Fila */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Total de Productos</span>
+              <span className="text-2xl font-bold text-slate-900 dark:text-foreground tabular-nums">{totalProducts}</span>
+              <span className="text-xs text-slate-500 dark:text-muted-foreground">SKUs activos</span>
+            </div>
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+              <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Valor Total de Stock</span>
+              <span className="text-2xl font-bold text-slate-900 dark:text-foreground font-mono tabular-nums">${totalValue.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+              <span className="text-xs text-slate-500 dark:text-muted-foreground">Valorizado a precio de venta</span>
+            </div>
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Stock Crítico / Bajo</span>
+                {lowStockCount > 0 && <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold px-2 py-0.5 rounded-full">{lowStockCount}</span>}
+              </div>
+              <span className="text-2xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{lowStockCount}</span>
+              <span className="text-xs text-slate-500 dark:text-muted-foreground">Por debajo del mínimo</span>
+            </div>
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Sin Stock</span>
+                {outOfStockCount > 0 && <span className="bg-red-50 text-red-700 border border-red-200 text-xs font-semibold px-2 py-0.5 rounded-full">{outOfStockCount}</span>}
+              </div>
+              <span className="text-2xl font-bold text-red-700 dark:text-red-400 tabular-nums">{outOfStockCount}</span>
+              <span className="text-xs text-slate-500 dark:text-muted-foreground">0 unidades</span>
+            </div>
           </div>
 
           {error && (
@@ -834,107 +949,174 @@ function InventarioPageContent() {
             </div>
           )}
 
-          <div className="grid grid-cols-1 gap-6">
-            <div className="bg-card h-full rounded-xl border border-border shadow-sm p-6">
-              <div className="flex flex-col gap-4 mb-4">
-                <div className="flex flex-col sm:flex-row justify-between gap-4">
-                  <h3 className="text-lg font-semibold text-foreground">
-                    PRODUCTOS{" "}
-                    <span className="text-sm font-normal text-muted-foreground">({filteredProducts.length}/{products.length})</span>
-                    {productCatLoading && <span className="text-xs ml-2 text-muted-foreground">cargando categorías…</span>}
-                  </h3>
-                </div>
+          {/* 3. Filtros y Búsqueda - Barra unificada */}
+          <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-3 flex flex-col lg:flex-row gap-3 lg:items-center">
+            <div className="relative flex-1 min-w-[240px]">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                placeholder="Buscar por nombre o SKU..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-10 h-10 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-xl text-sm placeholder:text-slate-400 focus:bg-white dark:focus:bg-card focus:border-slate-300 transition-colors"
+              />
+            </div>
 
-                {/* Filter bar B2 */}
-                <div className="flex flex-wrap gap-2 items-center">
-                  <div className="relative flex-1 min-w-[200px] max-w-sm">
-                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Buscar por nombre o SKU..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-8 border-input bg-card"
-                    />
-                  </div>
+            <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
+              <SelectTrigger className="w-full lg:w-[180px] h-10 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm">
+                <SelectValue placeholder="Todas" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todas las categorías</SelectItem>
+                {activeCategories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name} ({c.productCount})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-                  <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-                    <SelectTrigger className="w-[180px] border-input bg-card">
-                      <SelectValue placeholder="Todas" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todas</SelectItem>
-                      {activeCategories.map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name} ({c.productCount})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+            {catError && (
+              <span className="text-xs text-red-600 border border-red-200 bg-red-50 rounded px-2 py-1">{catError}</span>
+            )}
 
-                  {catError && (
-                    <span className="text-xs text-red-600 border border-red-200 bg-red-50 rounded px-2 py-1">{catError}</span>
-                  )}
+            <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as typeof stockFilter)}>
+              <SelectTrigger className="w-full lg:w-[180px] h-10 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm">
+                <SelectValue placeholder="Stock" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos</SelectItem>
+                <SelectItem value="inStock">Con stock</SelectItem>
+                <SelectItem value="low">Stock bajo</SelectItem>
+                <SelectItem value="out">Sin stock (0)</SelectItem>
+              </SelectContent>
+            </Select>
 
-                  <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as typeof stockFilter)}>
-                    <SelectTrigger className="w-[200px] border-input bg-card">
-                      <SelectValue placeholder="Stock" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">Todos</SelectItem>
-                      <SelectItem value="low">Stock crítico (≤5)</SelectItem>
-                      <SelectItem value="out">Sin stock (0)</SelectItem>
-                    </SelectContent>
-                  </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
+              <SelectTrigger className="w-full lg:w-[200px] h-10 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm">
+                <SelectValue placeholder="Orden" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="name_asc">Nombre A-Z</SelectItem>
+                <SelectItem value="name_desc">Nombre Z-A</SelectItem>
+                <SelectItem value="price_asc">Precio: menor a mayor</SelectItem>
+                <SelectItem value="price_desc">Precio: mayor a menor</SelectItem>
+                <SelectItem value="stock_asc">Stock: menor a mayor</SelectItem>
+                <SelectItem value="stock_desc">Stock: mayor a menor</SelectItem>
+              </SelectContent>
+            </Select>
 
-                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-                    <SelectTrigger className="w-[200px] border-input bg-card">
-                      <SelectValue placeholder="Nombre A-Z" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="name_asc">Nombre A-Z</SelectItem>
-                      <SelectItem value="name_desc">Nombre Z-A</SelectItem>
-                      <SelectItem value="price_asc">Precio: menor a mayor</SelectItem>
-                      <SelectItem value="price_desc">Precio: mayor a menor</SelectItem>
-                      <SelectItem value="stock_asc">Stock: menor a mayor</SelectItem>
-                      <SelectItem value="stock_desc">Stock: mayor a menor</SelectItem>
-                    </SelectContent>
-                  </Select>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1 rounded-xl shrink-0">
+                <X className="h-3.5 w-3.5" /> Limpiar
+              </Button>
+            )}
+          </div>
 
-                  {hasActiveFilters && (
-                    <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1">
-                      <X className="h-3.5 w-3.5" /> Limpiar filtros
-                    </Button>
-                  )}
-                </div>
+          {catActionError && <p className="text-sm text-amber-700 border border-amber-200 bg-amber-50 rounded p-2">{catActionError}</p>}
+
+          {/* 4. Tabla de Productos Profesional */}
+          <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl overflow-hidden">
+            <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200/60 dark:border-border bg-white dark:bg-card">
+              <h3 className="text-sm font-semibold text-foreground">
+                Productos <span className="text-sm font-normal text-muted-foreground">({filteredProducts.length}/{products.length})</span>
+                {productCatLoading && <span className="text-xs ml-2 text-muted-foreground">cargando categorías…</span>}
+              </h3>
+            </div>
+
+            {loading ? (
+              <p className="text-sm text-muted-foreground py-12 text-center">Cargando productos…</p>
+            ) : filteredProducts.length === 0 ? (
+              <div className="py-12 text-center flex flex-col items-center gap-3">
+                <AlertTriangle className="h-8 w-8 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">Sin productos que coincidan con los filtros</p>
+                {hasActiveFilters && (
+                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                    Limpiar filtros
+                  </Button>
+                )}
+                {products.length === 0 && !hasActiveFilters && <p className="text-xs text-muted-foreground">No hay productos cargados.</p>}
               </div>
-
-              {catActionError && <p className="text-sm text-amber-700 border border-amber-200 bg-amber-50 rounded p-2 mb-3">{catActionError}</p>}
-
-              {loading ? (
-                <p className="text-sm text-muted-foreground py-10 text-center">Cargando productos…</p>
-              ) : filteredProducts.length === 0 ? (
-                <div className="py-10 text-center flex flex-col items-center gap-3">
-                  <AlertTriangle className="h-8 w-8 text-muted-foreground" />
-                  <p className="text-sm text-muted-foreground">Sin productos que coincidan con los filtros</p>
-                  {hasActiveFilters && (
-                    <Button variant="outline" size="sm" onClick={clearFilters}>
-                      Limpiar filtros
-                    </Button>
-                  )}
-                  {products.length === 0 && !hasActiveFilters && <p className="text-xs text-muted-foreground">No hay productos cargados.</p>}
-                </div>
-              ) : (
-                <DataTable
-                  columns={columns}
-                  data={filteredProducts}
-                  label="Producto"
-                  placeholder="Buscar por SKU, nombre…"
-                  hideSearch
-                  hidePagination
-                  onRowClick={(p) => setSelectedProduct(p as ProductDto)}
-                />
-              )}
-              <p className="text-xs text-muted-foreground mt-2">Click en una fila para ver detalle, historial y edición rápida.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 dark:bg-muted/40 border-b border-slate-200 dark:border-border">
+                    <tr>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Producto</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Precio</th>
+                      <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Stock</th>
+                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase w-[60px]">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-border">
+                    {filteredProducts.map((p) => {
+                      const imgSrc = (p.imageUrl as string | null | undefined) ?? null;
+                      const resolved = imgSrc ? (imgSrc.startsWith("/") ? `${API_URL}${imgSrc}` : imgSrc) : "/img-prod.webp";
+                      const stock = p.stock;
+                      const isOut = stock <= 0;
+                      const isLow = stock > 0 && stock <= (p.minStock ?? 5);
+                      const unitLabel = (p.isSoldByWeight || (p.unit ?? "").toLowerCase() === "kg") ? "kg" : "un.";
+                      const cats = productCategories[p.id] ?? [];
+                      return (
+                        <tr
+                          key={p.id}
+                          className="hover:bg-slate-50/60 dark:hover:bg-muted/30 cursor-pointer transition-colors"
+                          onClick={() => setSelectedProduct(p)}
+                        >
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3 min-w-0">
+                              <div className="h-[50px] w-[50px] rounded-lg bg-slate-50 dark:bg-muted border border-slate-200 dark:border-border flex items-center justify-center shrink-0 overflow-hidden">
+                                {/* eslint-disable-next-line @next/next/no-img-element */}
+                                <img
+                                  src={resolved}
+                                  alt={p.name}
+                                  className="h-full w-full object-contain"
+                                  onError={(e) => ((e.target as HTMLImageElement).src = "/img-prod.webp")}
+                                />
+                              </div>
+                              <div className="flex flex-col min-w-0">
+                                <span className="font-medium text-slate-900 dark:text-foreground leading-tight line-clamp-2">{p.name}</span>
+                                <span className="text-xs text-slate-500 dark:text-muted-foreground font-mono">{p.sku}{cats.length > 0 ? ` · ${cats.map((c) => c.name).join(", ")}` : ""}</span>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <span className="font-bold font-mono text-slate-900 dark:text-foreground tabular-nums">${Number(p.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            {isOut ? (
+                              <span className="inline-flex items-center bg-red-50 text-red-700 border border-red-200 text-xs font-semibold px-2.5 py-1 rounded-full">Agotado · 0 {unitLabel}</span>
+                            ) : isLow ? (
+                              <span className="inline-flex items-center bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold px-2.5 py-1 rounded-full">{Number(stock).toLocaleString("es-AR", { maximumFractionDigits: 3 })} {unitLabel} · Bajo</span>
+                            ) : (
+                              <span className="inline-flex items-center text-sm font-medium text-slate-700 dark:text-foreground tabular-nums">{Number(stock).toLocaleString("es-AR", { maximumFractionDigits: 3 })} {unitLabel}</span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-slate-100 dark:hover:bg-muted">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                                <DropdownMenuItem onClick={() => setSelectedProduct(p)}>
+                                  <Pencil className="h-4 w-4 mr-2" /> Ver detalle
+                                </DropdownMenuItem>
+                                <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleDelete(p)}>
+                                  <Trash2 className="h-4 w-4 mr-2" /> Eliminar
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <div className="px-4 py-2 border-t border-slate-100 dark:border-border bg-slate-50/50 dark:bg-muted/20">
+              <p className="text-xs text-muted-foreground">Click en una fila para ver detalle, historial y edición rápida.</p>
             </div>
           </div>
         </>
@@ -949,7 +1131,7 @@ function InventarioPageContent() {
               </h2>
               <p className="text-sm text-muted-foreground">Gestioná las categorías de productos</p>
             </div>
-            <Button onClick={openCreateFromTab} className="gap-1.5">
+            <Button onClick={openCreateFromTab} aria-label="Nueva categoría" className="gap-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-sm font-medium">
               <Plus className="h-4 w-4" />
               Nueva categoría
             </Button>
@@ -967,14 +1149,14 @@ function InventarioPageContent() {
             </div>
           )}
 
-          <div className="flex items-center gap-2 bg-card border rounded-xl p-4">
+          <div className="flex items-center gap-2 bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-3">
             <div className="relative flex-1 max-w-md">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nombre o descripción..."
                 value={catSearchTerm}
                 onChange={(e) => setCatSearchTerm(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-10 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-xl focus:bg-white dark:focus:bg-card"
               />
             </div>
             <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -985,7 +1167,7 @@ function InventarioPageContent() {
           {catLoading ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
               {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="bg-card border rounded-xl p-4 animate-pulse">
+                <div key={i} className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-4 animate-pulse">
                   <div className="h-5 bg-muted rounded w-1/2 mb-3" />
                   <div className="h-3 bg-muted rounded w-full mb-2" />
                   <div className="h-3 bg-muted rounded w-2/3 mb-4" />
@@ -1017,35 +1199,21 @@ function InventarioPageContent() {
               No se encontraron categorías para &quot;{catSearchTerm}&quot;
             </div>
           ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {filteredCategories.map((cat) => (
                 <div
                   key={cat.id}
-                  className="bg-card border rounded-xl p-4 flex flex-col gap-3 shadow-sm hover:shadow-md transition-shadow"
+                  className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl px-3 py-2.5 flex flex-col gap-1.5"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-base leading-tight truncate pr-2">{cat.name}</h3>
-                    <span
-                      className={`text-xs font-medium px-2 py-0.5 rounded-md border shrink-0 ${
-                        cat.isActive ? "bg-green-50 text-green-700 border-green-200" : "bg-gray-100 text-gray-600 border-border"
-                      }`}
-                    >
-                      {cat.isActive ? "Activa" : "Inactiva"}
-                    </span>
-                  </div>
-
-                  {cat.description ? (
-                    <p className="text-sm text-muted-foreground line-clamp-2 min-h-[2.5rem]">{cat.description}</p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground italic min-h-[2.5rem]">Sin descripción</p>
-                  )}
-
-                  <div className="flex items-center justify-between pt-1">
-                    <span className="text-xs text-muted-foreground bg-muted border rounded-md px-2.5 py-1">
-                      {cat.productCount} producto{cat.productCount === 1 ? "" : "s"}
-                    </span>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${cat.name}`} onClick={() => openEditFromTab(cat)}>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <h3 className="font-semibold text-slate-800 dark:text-foreground truncate text-sm leading-tight">{cat.name}</h3>
+                      <span className="bg-slate-100 dark:bg-muted text-slate-600 dark:text-muted-foreground text-xs font-medium px-2 py-1 rounded-full shrink-0">
+                        {cat.productCount} ítems
+                      </span>
+                    </div>
+                    <div className="flex gap-1 shrink-0">
+                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${cat.name}`} onClick={() => openEditFromTab(cat)} className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-muted">
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
@@ -1053,12 +1221,15 @@ function InventarioPageContent() {
                         size="icon-sm"
                         aria-label={`Eliminar ${cat.name}`}
                         onClick={() => confirmDeleteCat(cat)}
-                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        className="h-7 w-7 rounded-lg text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
                   </div>
+                  {cat.description ? (
+                    <p className="text-xs text-muted-foreground line-clamp-1 truncate" title={cat.description}>{cat.description}</p>
+                  ) : null}
                 </div>
               ))}
             </div>
@@ -1066,405 +1237,407 @@ function InventarioPageContent() {
         </>
       )}
 
-      {/* Drawer lateral - only when productos tab active but keep accessible */}
+      {/* Drawer lateral */}
       {selectedProduct && activeTab === "productos" && (
         <div className="fixed inset-0 z-40 flex">
           <div className="flex-1 bg-black/40" onClick={() => setSelectedProduct(null)} aria-hidden />
           <div className="w-full max-w-[480px] bg-card border-l border-border shadow-xl flex flex-col h-full overflow-hidden">
-            <div className="p-6 border-b border-border flex justify-between items-start gap-2">
-              <div className="flex-1 min-w-0">
-                <h2 className="text-lg font-semibold truncate">{selectedProduct.name}</h2>
-                <p className="text-sm text-muted-foreground">
-                  SKU: {selectedProduct.sku} {selectedProduct.barcode ? `· Barcode: ${selectedProduct.barcode}` : ""}
-                </p>
-                <div className="mt-2 flex items-center gap-2">
-                  <span className="font-medium">${Number(selectedProduct.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
-                  {(() => {
-                    const isWeightDrawer = selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg";
-                    const unitLabel = isWeightDrawer ? "kg" : "un.";
-                    const stockStr = Number(selectedProduct.stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-                    const minStr = selectedProduct.minStock != null ? Number(selectedProduct.minStock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 }) : null;
-                    const isLow = selectedProduct.minStock != null ? selectedProduct.stock <= selectedProduct.minStock : selectedProduct.stock <= 5;
-                    return (
-                      <span
-                        className={`px-2 py-0.5 rounded-md text-xs font-medium border ${
-                          selectedProduct.stock <= 0
-                            ? "bg-zinc-100 text-zinc-600 border-zinc-300"
-                            : isLow
-                              ? "bg-red-100 text-red-700 border-red-200"
-                              : "bg-green-100 text-green-700 border-green-200"
-                        }`}
-                      >
-                        Stock: {stockStr} {unitLabel}
-                        {minStr != null ? ` (mín: ${minStr} ${unitLabel})` : ""}
-                        {isLow && selectedProduct.stock > 0 ? " · ¡Poco stock!" : ""}
-                        {selectedProduct.stock <= 0 && " · Sin stock"}
-                      </span>
-                    );
-                  })()}
-                </div>
-              </div>
-              <Button variant="ghost" size="icon" onClick={() => setSelectedProduct(null)} aria-label="Cerrar">
-                <X className="h-5 w-5" />
-              </Button>
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
-              {/* Botones Ajustar */}
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1"
-                  onClick={() => {
-                    setAdjustTarget(selectedProduct);
-                    setAdjustError(null);
-                  }}
-                >
-                  Ajustar stock (+/-)
-                </Button>
-                <Button variant="destructive" className="flex-1" onClick={() => handleDelete(selectedProduct)}>
-                  Eliminar
-                </Button>
-              </div>
-
-              {/* Historial con tabs Stock | Precios */}
-              <section className="flex flex-col gap-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <History className="h-4 w-4" /> Historial
-                </h3>
-                <div className="flex gap-1 p-1 bg-muted rounded-md w-fit">
-                  <button
-                    onClick={() => setPriceHistoryTab("stock")}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${priceHistoryTab === "stock" ? "bg-card shadow border" : "text-muted-foreground hover:text-foreground"}`}
-                  >
-                    Stock
-                  </button>
-                  <button
-                    onClick={async () => {
-                      setPriceHistoryTab("precios");
-                      if (priceHistory.length === 0 && !priceHistoryLoading && selectedProduct) {
-                        setPriceHistoryLoading(true);
-                        setPriceHistoryError(null);
-                        try {
-                          const res = await getProductPriceHistory(selectedProduct.id, { pageSize: 20 });
-                          setPriceHistory(res.items);
-                        } catch (e) {
-                          const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al cargar historial de precios";
-                          setPriceHistoryError(msg);
-                        } finally {
-                          setPriceHistoryLoading(false);
-                        }
-                      }
-                    }}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors flex items-center gap-1 ${priceHistoryTab === "precios" ? "bg-card shadow border" : "text-muted-foreground hover:text-foreground"}`}
-                  >
-                    <DollarSign className="h-3 w-3" /> Precios
-                  </button>
-                </div>
-
-                {priceHistoryTab === "stock" ? (
-                  auditsLoading ? (
-                    <div className="py-4 flex flex-col gap-2">
-                      <div className="h-10 bg-muted rounded animate-pulse" />
-                      <div className="h-10 bg-muted rounded animate-pulse" />
-                      <div className="h-10 bg-muted rounded animate-pulse" />
-                    </div>
-                  ) : auditsError ? (
-                    <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{auditsError}</p>
-                  ) : audits.length === 0 ? (
-                    <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin movimientos</p>
-                  ) : (
-                    <div className="border border-border rounded-md divide-y divide-border max-h-[260px] overflow-auto">
-                      {audits.map((a) => (
-                        <div key={a.id} className="p-3 flex justify-between items-center text-sm">
-                          <div className="flex flex-col">
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(a.adjustedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
-                            </span>
-                            <span className="truncate max-w-[180px]">{a.reason}</span>
-                          </div>
-                          <div className="flex flex-col items-end gap-1">
-                            <span className={`font-semibold ${a.delta > 0 ? "text-green-600" : "text-red-600"}`}>
-                              {a.delta > 0 ? `+${a.delta}` : a.delta}
-                            </span>
-                            <span className="text-xs text-muted-foreground">→ {a.resultingStock}</span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )
-                ) : priceHistoryLoading ? (
-                  <div className="py-4 flex flex-col gap-2">
-                    <div className="h-10 bg-muted rounded animate-pulse" />
-                    <div className="h-10 bg-muted rounded animate-pulse" />
-                    <div className="h-10 bg-muted rounded animate-pulse" />
-                  </div>
-                ) : priceHistoryError ? (
-                  <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{priceHistoryError}</p>
-                ) : priceHistory.length === 0 ? (
-                  <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin cambios de precio aún</p>
-                ) : (
-                  <div className="border border-border rounded-md divide-y divide-border max-h-[320px] overflow-auto">
-                    <div className="grid grid-cols-[auto_1fr_auto] gap-2 px-3 py-1.5 bg-muted/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground sticky top-0">
-                      <span>Fecha</span>
-                      <span className="text-center">Anterior → Nuevo</span>
-                      <span className="text-right">Variación</span>
-                    </div>
-                    {priceHistory.map((h) => {
-                      const isUp = h.newPrice > h.oldPrice;
-                      const isDown = h.newPrice < h.oldPrice;
-                      return (
-                        <div key={h.id} className="px-3 py-2.5 flex flex-col gap-1 text-sm">
-                          <div className="flex justify-between items-center">
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(h.changedAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}
-                            </span>
-                            <span
-                              className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold border ${isUp ? "bg-green-50 text-green-700 border-green-200" : isDown ? "bg-red-50 text-red-700 border-red-200" : "bg-zinc-100 text-zinc-600 border-zinc-200"}`}
-                            >
-                              {isUp ? <TrendingUp className="h-3 w-3" /> : isDown ? <TrendingDown className="h-3 w-3" /> : null}
-                              {h.changePercent === 0 ? "0%" : `${h.changePercent > 0 ? "+" : ""}${h.changePercent.toFixed(1)}%`}
-                            </span>
-                          </div>
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm">
-                              <span className="text-muted-foreground line-through">${Number(h.oldPrice).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
-                              <span className="mx-1">→</span>
-                              <span className="font-semibold">${Number(h.newPrice).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
-                            </span>
-                            {h.reason ? <span className="text-xs text-muted-foreground truncate max-w-[120px]">{h.reason}</span> : null}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-
-              {/* Edición rápida */}
-              <section className="flex flex-col gap-3 border border-border rounded-md p-4 bg-muted/20">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Pencil className="h-4 w-4" /> Edición rápida
-                </h3>
-                <div>
-                  <label className="text-xs font-medium">Nombre *</label>
-                  <Input
-                    value={quickName}
-                    onChange={(e) => setQuickName(e.target.value)}
-                    maxLength={50}
-                    placeholder="Nombre"
-                    className="bg-card border-input mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Precio *</label>
-                  <Input
-                    type="number"
-                    value={quickPrice}
-                    onChange={(e) => setQuickPrice(e.target.value)}
-                    placeholder="0.00"
-                    className="bg-card border-input mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Modo de venta</label>
-                  <div className="flex gap-2 mt-1">
-                    <Select value={quickUnit || "un"} onValueChange={(v) => setQuickUnit(v as "un" | "kg")}>
-                      <SelectTrigger className="flex-1 bg-card border-input">
-                        <SelectValue placeholder="Modo de venta" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="un">Por unidad (paquete)</SelectItem>
-                        <SelectItem value="kg">A granel por peso (kg)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {quickUnit === "kg" ? "Se vende fraccionado, stock en kg (ej: 0,4 kg)" : "Se vende por unidades enteras (ej: 1 paquete Yerba 1kg)"}
+            {/* Cabecera compacta: nombre, SKU, precio y stock */}
+            <div className="p-5 border-b border-border shrink-0 bg-card sticky top-0 z-10">
+              <div className="flex justify-between items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <h2 className="text-base font-semibold truncate text-foreground">{selectedProduct.name}</h2>
+                  <p className="text-xs text-muted-foreground font-mono truncate">
+                    SKU: {selectedProduct.sku} {selectedProduct.barcode ? `· EAN: ${selectedProduct.barcode}` : ""}
                   </p>
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Stock mínimo</label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="99999"
-                    step={quickUnit === "kg" ? "0.001" : "1"}
-                    value={quickMinStock}
-                    onChange={(e) => setQuickMinStock(e.target.value)}
-                    placeholder={quickUnit === "kg" ? "Ej: 2.5 kg" : "Ej: 2 — vacío = 5 por defecto"}
-                    className="bg-card border-input mt-1"
-                  />
-                </div>
-                <div>
-                  <label className="text-xs font-medium">URL de imagen</label>
-                  <div className="flex gap-2 items-center mt-1">
-                    <Input type="url" value={quickImageUrl} onChange={(e) => setQuickImageUrl(e.target.value)} placeholder="https://..." className="flex-1 bg-card border-input" />
-                    {quickImageUrl.trim() && !quickSelectedFile && (
-                      <img src={quickImageUrl.trim().startsWith("/") ? `${API_URL}${quickImageUrl.trim()}` : quickImageUrl.trim()} alt="preview" className="h-10 w-10 object-cover rounded border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
-                    )}
-                  </div>
-                </div>
-                <div>
-                  <label className="text-xs font-medium">o Subir archivo</label>
-                  <Input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; setQuickError(null); if (f) { if (f.size > 5*1024*1024) { setQuickError("Archivo muy grande (máximo 5MB)"); (e.target as HTMLInputElement).value=""; return; } if (f.type && !f.type.startsWith("image/")) { setQuickError("Formato no soportado (solo imágenes)"); (e.target as HTMLInputElement).value=""; return; } } setQuickSelectedFile(f); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); if (f) setQuickPreviewUrl(URL.createObjectURL(f)); else setQuickPreviewUrl(null); }} className="bg-card border-input mt-1" />
-                  {quickSelectedFile && quickPreviewUrl && (
-                    <div className="flex items-center gap-2 mt-2">
-                      <img src={quickPreviewUrl} alt="preview file" className="h-12 w-12 object-cover rounded border" />
-                      <Button type="button" variant="ghost" size="sm" onClick={() => { setQuickSelectedFile(null); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); setQuickPreviewUrl(null); }}>
-                        Quitar
-                      </Button>
-                      <span className="text-xs text-muted-foreground truncate">{quickSelectedFile.name}</span>
-                    </div>
-                  )}
-                  {selectedProduct.imageUrl && !quickSelectedFile && !quickImageUrl && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <img src={selectedProduct.imageUrl.startsWith("/") ? `${API_URL}${selectedProduct.imageUrl}` : selectedProduct.imageUrl} alt="actual" className="h-12 w-12 object-cover rounded border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
-                      <span className="text-xs text-muted-foreground">Imagen actual</span>
-                    </div>
-                  )}
-                  {quickSelectedFile && quickImageUrl.trim() && <p className="text-xs text-amber-600 mt-1">Se priorizará el archivo sobre la URL.</p>}
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Descripción</label>
-                  <Input
-                    value={quickDesc}
-                    onChange={(e) => setQuickDesc(e.target.value)}
-                    maxLength={500}
-                    placeholder="Descripción (opcional)"
-                    className="bg-card border-input mt-1"
-                  />
-                </div>
-                {quickError && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{quickError}</p>}
-                {quickSuccess && <p className="text-sm text-green-700 border border-green-200 bg-green-50 rounded p-2">{quickSuccess}</p>}
-                <Button onClick={handleQuickSave} disabled={quickLoading} className="w-full">
-                  {quickLoading ? "Guardando…" : "Guardar"}
-                </Button>
-              </section>
-
-              {/* Categorías */}
-              <section className="flex flex-col gap-2">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <Tag className="h-4 w-4" /> Categorías
-                </h3>
-                {selectedCats.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">Sin categorías asignadas.</p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {selectedCats.map((c) => (
-                      <span
-                        key={c.id}
-                        className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium"
-                      >
-                        {c.name}
-                        <button
-                          onClick={() => handleRemove(selectedProduct, c.id)}
-                          className="ml-1 hover:text-red-600"
-                          aria-label={`Quitar ${c.name}`}
+                  <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                    <span className="font-mono tabular-nums font-bold text-[15px] text-foreground">
+                      ${Number(selectedProduct.price).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                    </span>
+                    {(() => {
+                      const isWeightDrawer = selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg";
+                      const unitLabel = isWeightDrawer ? "kg" : "un.";
+                      const stockStr = Number(selectedProduct.stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
+                      const isLow = selectedProduct.stock > 0 && selectedProduct.stock <= (selectedProduct.minStock ?? 5);
+                      const isOut = selectedProduct.stock <= 0;
+                      return (
+                        <span
+                          className={`px-2.5 py-0.5 rounded-full text-xs font-semibold border tabular-nums ${
+                            isOut
+                              ? "bg-red-50 text-red-700 border-red-200"
+                              : isLow
+                                ? "bg-amber-50 text-amber-700 border-amber-200"
+                                : "bg-green-50 text-green-700 border-green-200"
+                          }`}
                         >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </span>
-                    ))}
+                          {isOut ? `Sin stock · 0 ${unitLabel}` : isLow ? `${stockStr} ${unitLabel} · Bajo` : `${stockStr} ${unitLabel}`}
+                        </span>
+                      );
+                    })()}
                   </div>
-                )}
-                <div className="flex gap-2 mt-2">
-                  <Select value={assignCatId} onValueChange={setAssignCatId}>
-                    <SelectTrigger className="flex-1 border-input bg-card">
-                      <SelectValue placeholder="Asignar categoría…" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {unassignedCats.length === 0 ? (
-                        <SelectItem value="__none" disabled>
-                          Sin categorías disponibles
-                        </SelectItem>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setSelectedProduct(null)} aria-label="Cerrar" className="shrink-0 rounded-lg">
+                  <X className="h-5 w-5" />
+                </Button>
+              </div>
+              {/* Tabs pill */}
+              <div className="mt-4 bg-muted p-1 rounded-xl flex gap-1">
+                <button
+                  onClick={() => setDrawerTab("datos")}
+                  className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-xl transition-colors ${drawerTab === "datos" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Datos y Precios
+                </button>
+                <button
+                  onClick={() => setDrawerTab("historial")}
+                  className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-xl transition-colors ${drawerTab === "historial" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Historial y Stock
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 pb-2 flex flex-col gap-6">
+              {drawerTab === "datos" ? (
+                <>
+                  {/* Datos y Precios - ordered form */}
+                  <section className="flex flex-col gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Nombre del producto</label>
+                      <Input value={quickName} onChange={(e) => setQuickName(e.target.value)} maxLength={50} placeholder="Nombre del producto" className="h-9 bg-card border-input rounded-xl text-sm" />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Código interno (SKU)</label>
+                        <Input value={selectedProduct.sku} disabled className="h-9 bg-muted/40 border-input rounded-xl text-sm font-mono tabular-nums opacity-70" />
+                        <p className="text-[11px] text-muted-foreground">No editable tras creación</p>
+                      </div>
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Código de barras (EAN)</label>
+                        <Input value={selectedProduct.barcode ?? ""} disabled placeholder="Sin código de barras" className="h-9 bg-muted/40 border-input rounded-xl text-sm font-mono tabular-nums opacity-70" />
+                        <p className="text-[11px] text-muted-foreground">No editable tras creación</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Precio de venta</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-sm">$</span>
+                        <Input type="number" step="0.01" min="0" value={quickPrice} onChange={(e) => setQuickPrice(e.target.value)} placeholder="0.00" className="pl-7 h-10 bg-card border-input rounded-xl font-bold font-mono tabular-nums text-[15px]" />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Modo de venta</label>
+                      <Select value={quickUnit || "un"} onValueChange={(v) => setQuickUnit(v as "un" | "kg")}>
+                        <SelectTrigger className="h-9 bg-card border-input rounded-xl text-sm">
+                          <SelectValue placeholder="Modo de venta" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="un">Unidad</SelectItem>
+                          <SelectItem value="kg">Granel (kg)</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">{quickUnit === "kg" ? "Se vende fraccionado, stock en kg (ej: 0,4 kg)" : "Se vende por unidades enteras"}</p>
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-foreground flex items-center gap-2">
+                        <Tag className="h-3.5 w-3.5" /> Categorías asignadas
+                      </label>
+                      {selectedCats.length === 0 ? (
+                        <p className="text-sm text-muted-foreground">Sin categorías asignadas.</p>
                       ) : (
-                        unassignedCats.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>
-                            {c.name}
-                          </SelectItem>
-                        ))
+                        <div className="flex flex-wrap gap-1.5">
+                          {selectedCats.map((c) => (
+                            <span key={c.id} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium">
+                              {c.name}
+                              <button onClick={() => handleRemove(selectedProduct, c.id)} className="ml-1 hover:text-red-600" aria-label={`Quitar ${c.name}`}>
+                                <X className="h-3 w-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
                       )}
-                    </SelectContent>
-                  </Select>
-                  <Button variant="outline" onClick={handleDrawerAssign} disabled={!assignCatId || assignCatId === "__none"}>
-                    Asignar
-                  </Button>
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  {unassignedCats.length === 0 && (
-                    <p className="text-xs text-muted-foreground">Sin categorías disponibles.</p>
-                  )}
-                  <Button variant="outline" size="sm" onClick={openCreateFromDrawer} className="gap-1.5 w-fit">
-                    <Plus className="h-3.5 w-3.5" />
-                    Nueva categoría
-                  </Button>
-                </div>
-              </section>
+                      <div className="flex gap-2">
+                        <Select value={assignCatId} onValueChange={setAssignCatId}>
+                          <SelectTrigger className="flex-1 h-9 border-input bg-card rounded-xl text-sm">
+                            <SelectValue placeholder="Asignar categoría…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {unassignedCats.length === 0 ? (
+                              <SelectItem value="__none" disabled>
+                                Sin categorías disponibles
+                              </SelectItem>
+                            ) : (
+                              unassignedCats.map((c) => (
+                                <SelectItem key={c.id} value={c.id}>
+                                  {c.name}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <Button variant="outline" onClick={handleDrawerAssign} disabled={!assignCatId || assignCatId === "__none"} className="shrink-0 rounded-xl h-9">
+                          Asignar
+                        </Button>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => { setEditingCategory(null); setCatModalOrigin("drawer"); setShowCatModal(true); }} className="gap-1.5 w-fit rounded-xl h-8 text-xs">
+                        <Plus className="h-3.5 w-3.5" /> Nueva categoría
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Stock mínimo de alerta</label>
+                      <Input type="number" min="0" max="99999" step={quickUnit === "kg" ? "0.001" : "1"} value={quickMinStock} onChange={(e) => setQuickMinStock(e.target.value)} placeholder={quickUnit === "kg" ? "Ej: 2.5" : "Ej: 5"} className="h-9 bg-card border-input rounded-xl text-sm tabular-nums" />
+                    </div>
+
+                    <div className="flex flex-col gap-2">
+                      <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Imagen</label>
+                      <div className="flex gap-3 items-start">
+                        <div className="h-20 w-20 rounded-xl bg-slate-50 dark:bg-muted border border-slate-200 dark:border-border flex items-center justify-center overflow-hidden shrink-0">
+                          {quickPreviewUrl ? (
+                            <img src={quickPreviewUrl} alt="preview" className="h-full w-full object-cover" />
+                          ) : quickImageUrl.trim() ? (
+                            <img src={quickImageUrl.trim().startsWith("/") ? `${API_URL}${quickImageUrl.trim()}` : quickImageUrl.trim()} alt="preview url" className="h-full w-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                          ) : selectedProduct.imageUrl ? (
+                            <img src={selectedProduct.imageUrl.startsWith("/") ? `${API_URL}${selectedProduct.imageUrl}` : selectedProduct.imageUrl} alt="actual" className="h-full w-full object-cover" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
+                          ) : (
+                            <Package className="h-6 w-6 text-slate-400" />
+                          )}
+                        </div>
+                        <div className="flex-1 flex flex-col gap-2 min-w-0">
+                          <label className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-muted text-sm font-medium cursor-pointer">
+                            Subir archivo
+                            <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; setQuickError(null); if (f) { if (f.size > 5*1024*1024) { setQuickError("Archivo muy grande (máximo 5MB)"); (e.target as HTMLInputElement).value=""; return; } if (f.type && !f.type.startsWith("image/")) { setQuickError("Formato no soportado (solo imágenes)"); (e.target as HTMLInputElement).value=""; return; } } setQuickSelectedFile(f); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); if (f) setQuickPreviewUrl(URL.createObjectURL(f)); else setQuickPreviewUrl(null); }} className="hidden" />
+                          </label>
+                          <div className="relative">
+                            <Input type="url" value={quickImageUrl} onChange={(e) => setQuickImageUrl(e.target.value)} placeholder="o pegar URL https://..." className="h-9 bg-card border-input rounded-xl text-sm pr-8" />
+                          </div>
+                          {(quickSelectedFile || quickImageUrl.trim()) && (
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs text-muted-foreground truncate flex-1">{quickSelectedFile?.name || quickImageUrl.trim()}</span>
+                              <button type="button" onClick={() => { setQuickSelectedFile(null); setQuickImageUrl(""); if (quickPreviewUrl) { URL.revokeObjectURL(quickPreviewUrl); setQuickPreviewUrl(null); } }} className="text-xs text-red-600 hover:underline shrink-0">
+                                Quitar
+                              </button>
+                            </div>
+                          )}
+                          {quickSelectedFile && quickImageUrl.trim() && <p className="text-xs text-amber-600 leading-tight">Se priorizará el archivo sobre la URL.</p>}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-medium text-slate-600 dark:text-muted-foreground">Descripción</label>
+                      <Input value={quickDesc} onChange={(e) => setQuickDesc(e.target.value)} maxLength={500} placeholder="Descripción (opcional)" className="h-9 bg-card border-input rounded-xl text-sm" />
+                    </div>
+
+                    {quickError && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-xl p-2">{quickError}</p>}
+                    {quickSuccess && <p className="text-sm text-green-700 border border-green-200 bg-green-50 rounded-xl p-2">{quickSuccess}</p>}
+
+                    <div className="pt-2 border-t border-border mt-1 pb-4">
+                      {!drawerDeleteConfirm ? (
+                        <button onClick={() => setDrawerDeleteConfirm(true)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs py-2 rounded-lg text-center cursor-pointer transition-colors w-full block font-medium">
+                          Eliminar este producto
+                        </button>
+                      ) : (
+                        <div className="flex flex-col gap-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl p-3">
+                          <p className="text-xs text-red-700 dark:text-red-300 font-medium text-center">¿Eliminar {selectedProduct.name}? Esta acción no se puede deshacer.</p>
+                          <div className="flex gap-2">
+                            <Button variant="outline" size="sm" onClick={() => setDrawerDeleteConfirm(false)} className="flex-1 rounded-lg h-8 text-xs">
+                              Cancelar
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={async () => {
+                                const prod = selectedProduct;
+                                setDrawerDeleteConfirm(false);
+                                if (!prod) return;
+                                try {
+                                  await deleteProduct(prod.id);
+                                  if (selectedProduct?.id === prod.id) setSelectedProduct(null);
+                                  await fetchProducts();
+                                  await refreshCategoriesAndMap();
+                                } catch (e) {
+                                  const msg = e instanceof ApiError ? e.message : e instanceof Error ? e.message : "Error al eliminar";
+                                  setQuickError(msg);
+                                }
+                              }}
+                              className="flex-1 rounded-lg h-8 text-xs"
+                            >
+                              Sí, eliminar
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </section>
+                </>
+              ) : (
+                <>
+                  {/* Historial y Stock */}
+                  <section className="border rounded-xl p-4 bg-muted/20 flex flex-col gap-3">
+                    <h3 className="text-sm font-semibold">Ajuste rápido de stock</h3>
+                    <div className="flex flex-col gap-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-medium text-muted-foreground">Cantidad</label>
+                          <Input
+                            type="number"
+                            min="0"
+                            step={(selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg") ? "0.001" : "1"}
+                            value={drawerDelta}
+                            onChange={(e) => setDrawerDelta(e.target.value)}
+                            placeholder={(selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg") ? "Ej: 1.5" : "Ej: 5"}
+                            className="h-9 bg-card border-input rounded-xl tabular-nums"
+                          />
+                        </div>
+                        <div className="flex flex-col gap-1">
+                          <label className="text-xs font-medium text-muted-foreground">Motivo</label>
+                          <Input value={drawerReason} onChange={(e) => setDrawerReason(e.target.value)} maxLength={250} placeholder="Ej: Recepción" className="h-9 bg-card border-input rounded-xl text-sm" />
+                        </div>
+                      </div>
+                      {drawerAdjustError && <p className="text-xs text-red-600 border border-red-200 bg-red-50 rounded-lg p-2">{drawerAdjustError}</p>}
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button onClick={() => handleDrawerStockAdjust(1)} disabled={drawerAdjustLoading} className="bg-green-600 hover:bg-green-700 text-white rounded-xl h-9 text-sm font-medium">
+                          + Sumar
+                        </Button>
+                        <Button onClick={() => handleDrawerStockAdjust(-1)} disabled={drawerAdjustLoading} className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-9 text-sm font-medium">
+                          − Restar
+                        </Button>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                      <h3 className="text-sm font-semibold flex items-center gap-2">
+                        <History className="h-4 w-4" /> Kardex cronológico
+                      </h3>
+                      <span className="text-xs text-muted-foreground tabular-nums">{kardexMerged.length} mov.</span>
+                    </div>
+                    <div className="bg-muted p-1 rounded-lg flex gap-1 w-fit">
+                      <button onClick={() => setDrawerKardexFilter("todos")} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${drawerKardexFilter === "todos" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                        Todos
+                      </button>
+                      <button onClick={() => setDrawerKardexFilter("stock")} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${drawerKardexFilter === "stock" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                        Solo Stock
+                      </button>
+                      <button onClick={() => setDrawerKardexFilter("precios")} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${drawerKardexFilter === "precios" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                        Solo Precios
+                      </button>
+                    </div>
+
+                    {auditsLoading || priceHistoryLoading ? (
+                      <div className="py-4 flex flex-col gap-2">
+                        <div className="h-12 bg-muted rounded-xl animate-pulse" />
+                        <div className="h-12 bg-muted rounded-xl animate-pulse" />
+                        <div className="h-12 bg-muted rounded-xl animate-pulse" />
+                      </div>
+                    ) : auditsError && priceHistoryError ? (
+                      <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-xl p-3">{auditsError}</p>
+                    ) : kardexMerged.length === 0 ? (
+                      <p className="text-sm text-muted-foreground border border-dashed rounded-xl p-6 text-center">Sin movimientos aún</p>
+                    ) : (
+                      <div className="border border-border rounded-xl divide-y divide-border overflow-hidden">
+                        {kardexMerged.map((entry) => {
+                          const isStock = entry.type === "stock";
+                          const dateStr = new Date(entry.date).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" });
+                          if (isStock) {
+                            const s = entry as unknown as { delta: number; resultingStock: number; reason: string };
+                            const isPos = s.delta > 0;
+                            const isNeg = s.delta < 0;
+                            const unitLabel = (selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg") ? "kg" : "un.";
+                            return (
+                              <div key={entry.id} className="flex justify-between items-center p-3 gap-3 hover:bg-muted/20 transition-colors">
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <span className="text-xs text-muted-foreground tabular-nums">{dateStr}</span>
+                                  <span className="text-sm truncate max-w-[180px]" title={formatReason(s.reason)}>
+                                    {formatReason(s.reason)}
+                                  </span>
+                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-200 w-fit mt-0.5">Stock</span>
+                                </div>
+                                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                  <span className={`font-semibold tabular-nums text-sm ${isPos ? "text-green-600" : isNeg ? "text-red-600" : "text-foreground"}`}>
+                                    {isPos ? `+${Number(s.delta).toLocaleString("es-AR", { maximumFractionDigits: 3 })}` : Number(s.delta).toLocaleString("es-AR", { maximumFractionDigits: 3 })}
+                                  </span>
+                                  <span className="text-xs text-muted-foreground tabular-nums">
+                                    → {Number(s.resultingStock).toLocaleString("es-AR", { maximumFractionDigits: 3 })} {unitLabel}
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          } else {
+                            const p = entry as unknown as { oldPrice: number; newPrice: number; changePercent: number; reason: string | null };
+                            const isUp = p.newPrice > p.oldPrice;
+                            const isDown = p.newPrice < p.oldPrice;
+                            const diff = p.newPrice - p.oldPrice;
+                            return (
+                              <div key={entry.id} className="flex justify-between items-center p-3 gap-3 hover:bg-muted/20 transition-colors">
+                                <div className="flex flex-col min-w-0 flex-1">
+                                  <span className="text-xs text-muted-foreground tabular-nums">{dateStr}</span>
+                                  <span className="text-sm truncate max-w-[180px]" title={formatReason(p.reason)}>
+                                    {formatReason(p.reason)}
+                                  </span>
+                                  <span className="text-[11px] px-1.5 py-0.5 rounded bg-sky-50 text-sky-700 border border-sky-200 w-fit mt-0.5">Precio</span>
+                                </div>
+                                <div className="flex flex-col items-end gap-0.5 shrink-0">
+                                  <span className="font-mono tabular-nums text-sm text-foreground">
+                                    ${Number(p.oldPrice).toLocaleString("es-AR", { minimumFractionDigits: 2 })} → ${Number(p.newPrice).toLocaleString("es-AR", { minimumFractionDigits: 2 })}
+                                  </span>
+                                  <span className={`text-xs tabular-nums inline-flex items-center gap-1 ${isUp ? "text-green-600" : isDown ? "text-red-600" : "text-muted-foreground"}`}>
+                                    {isUp ? <TrendingUp className="h-3 w-3" /> : isDown ? <TrendingDown className="h-3 w-3" /> : null}
+                                    <span>
+                                      ({p.changePercent === 0 ? "0%" : `${p.changePercent > 0 ? "+" : ""}${p.changePercent.toFixed(1)}%`}
+                                      {diff !== 0 ? ` · ${diff > 0 ? "+" : "-"} $${Math.abs(diff).toLocaleString("es-AR", { minimumFractionDigits: 2 })}` : ""})
+                                    </span>
+                                  </span>
+                                </div>
+                              </div>
+                            );
+                          }
+                        })}
+                      </div>
+                    )}
+                  </section>
+                </>
+              )}
             </div>
+            {drawerTab === "datos" && (
+              <div className="sticky bottom-0 bg-white/95 dark:bg-card/95 backdrop-blur border-t border-slate-200 dark:border-border p-4 shrink-0">
+                <Button onClick={handleQuickSave} disabled={quickLoading} className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 font-medium">
+                  {quickLoading ? "Guardando…" : "Guardar Cambios"}
+                </Button>
+              </div>
+            )}
           </div>
+          {drawerConfirmOpen && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDrawerConfirmOpen(false)}>
+              <div className="bg-white dark:bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+                <h3 className="text-sm font-semibold">Confirmar ajuste</h3>
+                <p className="text-sm text-muted-foreground">
+                  ¿Confirmás registrar {drawerConfirmSign > 0 ? `+${drawerConfirmAmount}` : `-${drawerConfirmAmount}`} unidades en el stock con motivo &apos;{drawerReason.trim() || "Ajuste manual"}&apos;?
+                </p>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setDrawerConfirmOpen(false)} disabled={drawerAdjustLoading} className="rounded-xl">
+                    Cancelar
+                  </Button>
+                  <Button
+                    onClick={confirmDrawerStockAdjust}
+                    disabled={drawerAdjustLoading}
+                    className={`rounded-xl text-white ${drawerConfirmSign > 0 ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+                  >
+                    {drawerAdjustLoading ? "Guardando…" : "Confirmar"}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
-      {/* Stock adjustment modal */}
-      {adjustTarget && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
-            <h3 className="text-lg font-semibold">Ajustar stock — {adjustTarget.name}</h3>
-            {(() => {
-              const isWeightAdj = adjustTarget.isSoldByWeight === true || (adjustTarget.unit ?? "").toLowerCase() === "kg";
-              const unitLabel = isWeightAdj ? "kg" : "un.";
-              const stockStr = Number(adjustTarget.stock).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
-              return <p className="text-sm text-muted-foreground">SKU: {adjustTarget.sku} · Stock actual: {stockStr} {unitLabel}</p>;
-            })()}
-
-            {(() => {
-              const isWeightAdj = adjustTarget.isSoldByWeight === true || (adjustTarget.unit ?? "").toLowerCase() === "kg";
-              const step = isWeightAdj ? 0.1 : 1;
-              const stepStr = isWeightAdj ? "0.1" : "1";
-              return (
-                <div className="flex gap-2 items-end">
-                  <div className="flex-1">
-                    <label className="text-sm font-medium">Delta (+/-) {isWeightAdj ? "(kg, ej: 0.5 o -0.4)" : "(unidades, ej: 5 o -3)"}</label>
-                    <Input type="number" step={stepStr} value={delta} onChange={(e) => setDelta(e.target.value)} placeholder={isWeightAdj ? "Ej: 0.5 o -0.4" : "Ej: 5 o -3"} />
-                  </div>
-                  <Button variant="outline" onClick={() => setDelta(String((parseFloat(delta || "0") - step).toFixed(3).replace(/\.?0+$/, "")))}>
-                    -{stepStr}
-                  </Button>
-                  <Button variant="outline" onClick={() => setDelta(String((parseFloat(delta || "0") + step).toFixed(3).replace(/\.?0+$/, "")))}>
-                    +{stepStr}
-                  </Button>
-                </div>
-              );
-            })()}
-
-            <div>
-              <label className="text-sm font-medium">Motivo (1..250)</label>
-              <Input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={250} placeholder="Ej: Recepción proveedor" />
-            </div>
-
-            {adjustError && <p className="text-sm text-red-600">{adjustError}</p>}
-
-            <div className="flex justify-end gap-2 mt-2">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setAdjustTarget(null);
-                  setAdjustError(null);
-                }}
-                disabled={adjustLoading}
-              >
-                Cancelar
-              </Button>
-              <Button onClick={handleAdjust} disabled={adjustLoading}>
-                {adjustLoading ? "Guardando…" : "Confirmar"}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Delete category confirm modal for Categorias tab */}
       {deleteConfirmId && deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
           <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
@@ -1489,90 +1662,159 @@ function InventarioPageContent() {
         </div>
       )}
 
-      <CategoryFormModal
-        open={showCatModal}
-        onClose={closeCatModal}
-        onSuccess={handleCategoryCreated}
-        editingCategory={editingCategory}
+      <CategoryFormModal open={showCatModal} onClose={closeCatModal} onSuccess={handleCategoryCreated} editingCategory={editingCategory} categories={categories} />
+
+      <NewProductModal
+        open={showNewProduct}
+        onClose={() => setShowNewProduct(false)}
+        onSuccess={async () => {
+          await fetchProducts();
+          await refreshCategoriesAndMap();
+        }}
         categories={categories}
+        onCategoriesRefresh={refreshCategoriesAndMap}
       />
 
-      {/* Bulk price adjustment dialog */}
+      {/* 5. Modal Ajuste Masivo - con redondeo comercial */}
       {showBulk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded-xl shadow-lg w-full max-w-4xl max-h-[85vh] overflow-y-auto flex flex-col gap-4 p-6">
+          <div className="bg-white dark:bg-card border border-slate-200 dark:border-border rounded-xl shadow-xl w-full max-w-4xl max-h-[88vh] overflow-y-auto flex flex-col gap-3 p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" /> Ajuste masivo de precios
+                <TrendingUp className="h-5 w-5 text-slate-700 dark:text-foreground" /> Ajuste masivo de precios
               </h3>
               <button onClick={() => setShowBulk(false)} className="rounded-md p-1 hover:bg-muted">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Scope */}
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Categoría</label>
-              <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
-                <SelectTrigger className="w-full max-w-sm border-input bg-card">
-                  <SelectValue placeholder="Seleccionar categoría" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Todas</SelectItem>
-                  {categories
-                    .filter((c) => c.isActive)
-                    .map((c) => (
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Categoría objetivo</label>
+                <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
+                  <SelectTrigger className="w-full border-slate-200 dark:border-border bg-white dark:bg-card rounded-xl h-10">
+                    <SelectValue placeholder="Seleccionar categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todo el catálogo</SelectItem>
+                    {categories.filter((c) => c.isActive).map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name}
                       </SelectItem>
                     ))}
-                </SelectContent>
-              </Select>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Redondeo comercial</label>
+                <Select value={bulkRounding} onValueChange={(v) => setBulkRounding(v as typeof bulkRounding)}>
+                  <SelectTrigger className="w-full border-slate-200 dark:border-border bg-white dark:bg-card rounded-xl h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">Sin redondeo</SelectItem>
+                    <SelectItem value="10">Redondear a $10</SelectItem>
+                    <SelectItem value="50">Redondear a $50</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">Evita precios engorrosos en mostrador (ej: $1.237 → $1.240 / $1.250)</p>
+              </div>
             </div>
 
-            {/* Adjustment inputs */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Porcentaje %</label>
-                <Input type="number" step="0.01" value={bulkPercentage} onChange={(e) => setBulkPercentage(e.target.value)} placeholder="ej: 15" />
+            <div className="flex flex-wrap items-center gap-2">
+              <div role="tablist" className="bg-slate-100 dark:bg-muted p-1 rounded-xl flex gap-1 shrink-0">
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bulkMode === "percent"}
+                  onClick={() => setBulkMode("percent")}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${bulkMode === "percent" ? "bg-white dark:bg-card shadow-sm border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Porcentaje (%)
+                </button>
+                <button
+                  type="button"
+                  role="tab"
+                  aria-selected={bulkMode === "fixed"}
+                  onClick={() => setBulkMode("fixed")}
+                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${bulkMode === "fixed" ? "bg-white dark:bg-card shadow-sm border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                >
+                  Monto fijo ($)
+                </button>
               </div>
-              <div className="flex flex-col gap-1">
-                <label className="text-sm font-medium">Monto fijo $</label>
-                <Input type="number" step="0.01" value={bulkFixed} onChange={(e) => setBulkFixed(e.target.value)} placeholder="ej: 500" />
+
+              <div className="relative flex-1 min-w-[140px]">
+                {bulkMode === "fixed" && (
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-sm font-mono pointer-events-none">$</span>
+                )}
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={bulkValue}
+                  onChange={(e) => setBulkValue(e.target.value)}
+                  placeholder={bulkMode === "percent" ? "Ej: 10" : "Ej: 500"}
+                  aria-label={bulkMode === "percent" ? "Porcentaje de aumento" : "Monto fijo a sumar"}
+                  className={`rounded-xl h-10 bg-slate-50 dark:bg-muted/40 focus:bg-white border-slate-200 dark:border-border ${bulkMode === "percent" ? (bulkValue !== "" && bulkValue !== "0" ? "pr-14" : "pr-8") : bulkValue !== "" && bulkValue !== "0" ? "pl-8 pr-10" : "pl-8"}`}
+                />
+                {bulkMode === "percent" && (
+                  <span className={`absolute top-1/2 -translate-y-1/2 text-slate-500 text-sm font-mono pointer-events-none ${bulkValue !== "" && bulkValue !== "0" ? "right-8" : "right-3"}`}>%</span>
+                )}
+                {bulkValue !== "" && bulkValue !== "0" && (
+                  <button
+                    type="button"
+                    onClick={() => setBulkValue("")}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full hover:bg-slate-100 dark:hover:bg-muted flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-muted-foreground"
+                    aria-label="Limpiar valor"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+
+              <div className="flex flex-wrap gap-1.5">
+                {bulkMode === "percent"
+                  ? [5, 10, 15, 20, 25].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setBulkValue(String((parseFloat(bulkValue) || 0) + v))}
+                        className="px-2 py-1 rounded-full border bg-white hover:bg-slate-50 text-xs font-medium dark:bg-card dark:hover:bg-muted"
+                      >
+                        +{v}%
+                      </button>
+                    ))
+                  : [100, 500, 1000, 2000, 5000].map((v) => (
+                      <button
+                        key={v}
+                        type="button"
+                        onClick={() => setBulkValue(String((parseFloat(bulkValue) || 0) + v))}
+                        className="px-2 py-1 rounded-full border bg-white hover:bg-slate-50 text-xs font-medium dark:bg-card dark:hover:bg-muted"
+                      >
+                        +{v >= 1000 ? `${v / 1000}K` : v}
+                      </button>
+                    ))}
               </div>
             </div>
-            <p className="text-xs text-muted-foreground">Al menos uno debe ser distinto de 0. Negativo para rebaja.</p>
 
-            {/* Reason */}
             <div className="flex flex-col gap-1">
-              <label className="text-sm font-medium">Motivo (3..500)</label>
-              <Input value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} maxLength={500} placeholder="Ej: Inflación agosto 2026" />
+              <label className="text-sm font-medium">Motivo (opcional)</label>
+              <Input value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} maxLength={500} placeholder="Ej: Inflación agosto 2026 — si queda vacío se autocompleta" className="rounded-xl h-9" />
               <span className="text-xs text-muted-foreground text-right">{bulkReason.trim().length}/500</span>
             </div>
 
-            {/* Preview table */}
-            <div className="border rounded-xl overflow-hidden bg-card">
-              <div className="max-h-[320px] overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/50 sticky top-0">
+            <div className="border border-slate-200 dark:border-border rounded-lg bg-white dark:bg-card overflow-hidden">
+              <div className="overflow-y-auto max-h-[340px] pr-3 [scrollbar-width:thin] [scrollbar-gutter:stable]" style={{ scrollbarGutter: "stable" as const }}>
+              <table className="w-full table-auto text-sm">
+                <thead className="sticky top-0 bg-slate-50 dark:bg-muted/50 z-10 border-b border-slate-200 dark:border-border">
                     <tr>
                       <th className="p-2 text-left w-10">
-                        <input
-                          type="checkbox"
-                          checked={bulkAllChecked}
-                          onChange={(e) => {
-                            const checked = e.target.checked;
-                            const next: Record<string, boolean> = {};
-                            bulkPreview.forEach((b) => (next[b.id] = checked));
-                            setBulkSelected(next);
-                          }}
-                        />
+                        <input type="checkbox" checked={bulkAllChecked} onChange={(e) => { const checked = e.target.checked; const next: Record<string, boolean> = {}; bulkPreview.forEach((b) => (next[b.id] = checked)); setBulkSelected(next); }} />
                       </th>
-                      <th className="p-2 text-left">SKU</th>
-                      <th className="p-2 text-left">Producto</th>
-                      <th className="p-2 text-right">Anterior</th>
-                      <th className="p-2 text-right">Nuevo</th>
-                      <th className="p-2 text-center">Variación</th>
+                      <th className="p-2 text-left text-xs font-semibold text-slate-500 tracking-wider uppercase">SKU</th>
+                      <th className="p-2 text-left text-xs font-semibold text-slate-500 tracking-wider uppercase">Producto</th>
+                      <th className="p-2 text-right text-xs font-semibold text-slate-500 tracking-wider uppercase">Anterior</th>
+                      <th className="p-2 text-right text-xs font-semibold text-slate-500 tracking-wider uppercase">Nuevo</th>
+                      <th className="p-2 text-center text-xs font-semibold text-slate-500 tracking-wider uppercase">Variación</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1588,26 +1830,18 @@ function InventarioPageContent() {
                         const isIncrease = b.newPrice > b.oldPrice;
                         const isDecrease = b.newPrice < b.oldPrice;
                         return (
-                          <tr key={b.id} className={`border-t border-border ${!checked ? "opacity-50" : ""}`}>
+                          <tr key={b.id} className={`border-t border-slate-100 dark:border-border ${!checked ? "opacity-50" : ""}`}>
                             <td className="p-2">
-                              <input
-                                type="checkbox"
-                                checked={checked}
-                                onChange={(e) => setBulkSelected((prev) => ({ ...prev, [b.id]: e.target.checked }))}
-                              />
+                              <input type="checkbox" checked={checked} onChange={(e) => setBulkSelected((prev) => ({ ...prev, [b.id]: e.target.checked }))} />
                             </td>
                             <td className="p-2 font-mono text-xs">{b.sku}</td>
                             <td className="p-2 truncate max-w-[180px]" title={b.name}>
                               {b.name}
                             </td>
-                            <td className="p-2 text-right">${b.oldPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
-                            <td className="p-2 text-right font-semibold">${b.newPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right tabular-nums">${b.oldPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                            <td className="p-2 text-right font-bold font-mono tabular-nums">${b.newPrice.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                             <td className="p-2 text-center">
-                              <span
-                                className={`inline-flex rounded-md px-2 py-0.5 text-xs font-medium border ${
-                                  isIncrease ? "bg-green-50 text-green-700 border-green-200" : isDecrease ? "bg-red-50 text-red-700 border-red-200" : "bg-muted text-muted-foreground"
-                                }`}
-                              >
+                              <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-semibold border ${isIncrease ? "bg-green-50 text-green-700 border-green-200" : isDecrease ? "bg-red-50 text-red-700 border-red-200" : "bg-muted text-muted-foreground"}`}>
                                 {b.changePercent === 0 ? "0%" : `${b.changePercent > 0 ? "+" : ""}${b.changePercent.toFixed(2)}%`}
                               </span>
                             </td>
@@ -1620,19 +1854,15 @@ function InventarioPageContent() {
               </div>
             </div>
 
-            {/* Footer */}
             <div className="flex flex-col gap-2">
-              <div className="text-sm font-medium">Afectados: {bulkPreviewFiltered.length}</div>
+              <div className="text-sm"><span className="font-semibold">Afectados:</span> {bulkPreviewFiltered.length} de {bulkPreview.length}</div>
               {bulkError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-2 text-sm">{bulkError}</div>}
               {bulkSuccess && <div className="bg-green-50 border border-green-200 text-green-700 rounded-md p-2 text-sm">{bulkSuccess}</div>}
               <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowBulk(false)} disabled={bulkLoading}>
+                <Button variant="outline" onClick={() => setShowBulk(false)} disabled={bulkLoading} className="rounded-xl">
                   Cerrar
                 </Button>
-                <Button
-                  onClick={handleBulkConfirm}
-                  disabled={bulkLoading || bulkPreviewFiltered.length === 0 || !bulkHasAdjustment || bulkReason.trim().length < 3}
-                >
+                <Button onClick={handleBulkConfirm} disabled={bulkLoading || bulkPreviewFiltered.length === 0 || !bulkHasAdjustment || bulkReason.trim().length > 500} className="bg-red-600 hover:bg-red-700 text-white rounded-xl">
                   {bulkLoading ? "Aplicando..." : `Confirmar ajuste (${bulkPreviewFiltered.length})`}
                 </Button>
               </div>
@@ -1646,12 +1876,8 @@ function InventarioPageContent() {
 
 export default function InventarioPage() {
   return (
-    <Suspense fallback={<main className="p-4 text-sm text-muted-foreground">Cargando Inventario…</main>}>
+    <Suspense fallback={<main className="w-full min-w-full max-w-none p-4 text-sm text-muted-foreground">Cargando Inventario…</main>}>
       <InventarioPageContent />
     </Suspense>
   );
 }
-
-
-
-

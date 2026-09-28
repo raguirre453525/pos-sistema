@@ -6,7 +6,7 @@ import { ImageForm } from "@/components/Inventario/Forms/ImageForm"
 
 const page = () => {
   return (
-    <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
         <Link href={"/Inventario"}><Button variant="outline" size="icon" className="rounded-md">
         <ArrowLeft />
       </Button></Link>

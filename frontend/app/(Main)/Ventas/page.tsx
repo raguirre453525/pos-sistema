@@ -6,7 +6,7 @@ import CartBox from "@/components/Ventas/CartBox";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
-import { Trash2, Search, X, Plus, Minus, ChevronDown } from "lucide-react";
+import { Trash2, Search, X, Plus, Minus, ChevronDown, User, ShoppingCart } from "lucide-react";
 import {
   getProducts,
   getCategories,
@@ -22,6 +22,8 @@ import {
   ApiError,
 } from "@/lib/api";
 import { Label } from "@/components/ui/label";
+import { useFeatureFlags } from "@/contexts/FeatureFlagsContext";
+import { useFeatureGuard } from "@/hooks/useFeatureGuard";
 
 type CartItem = {
   product: ProductDto;
@@ -36,6 +38,8 @@ type CartCombo = {
 };
 
 export default function VentasPage() {
+  const { allowed } = useFeatureGuard({ denyRoles: ["SuperAdmin"], redirectTo: "/Admin/Negocios" });
+  const { flags } = useFeatureFlags();
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [categories, setCategories] = useState<CategoryDto[]>([]);
   const [categoryProductIds, setCategoryProductIds] = useState<Set<string> | null>(null);
@@ -72,6 +76,14 @@ export default function VentasPage() {
   const fiadoSearchRef = useRef<HTMLInputElement>(null);
   const [vaciarConfirm, setVaciarConfirm] = useState(false);
   const vaciarTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Flag: if moduloClientes is off, force cash payment and clear fiado state
+  useEffect(() => {
+    if (!flags.moduloClientes && isCredit) {
+      setIsCredit(false);
+      setPaymentMethod(0);
+    }
+  }, [flags.moduloClientes, isCredit]);
 
   const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -322,6 +334,17 @@ export default function VentasPage() {
 
   const comboPromos = useMemo(() => activePromos.filter(p => p.type === 0), [activePromos]);
 
+  const visibleComboPromos = useMemo(() => (flags.moduloPromos ? comboPromos : []), [comboPromos, flags.moduloPromos]);
+
+  const visibleCategories = useMemo(() => {
+    if (flags.moduloPromos) return categories;
+    // filter out "Promos"/"Combos" category when promos disabled
+    return categories.filter((c) => {
+      const n = c.name.trim().toLowerCase();
+      return n !== "promos" && n !== "combos" && n !== "promo" && n !== "combo";
+    });
+  }, [categories, flags.moduloPromos]);
+
   const filteredProducts = useMemo(() => {
     const q = search.trim().toLowerCase();
     return products.filter((p) => {
@@ -392,6 +415,12 @@ export default function VentasPage() {
   const handleConfirmSale = async () => {
     if (cart.length === 0 && cartCombos.length === 0) {
       setSaleError("Carrito vacío");
+      return;
+    }
+    if (!flags.moduloClientes && isCredit) {
+      setSaleError("Módulo Clientes deshabilitado — fiado no disponible");
+      setIsCredit(false);
+      setPaymentMethod(0);
       return;
     }
     if (isCredit && !creditCustomerId) {
@@ -509,71 +538,89 @@ export default function VentasPage() {
     return () => window.removeEventListener("keydown", onModalKey);
   }, [showCheckout, isCredit, creditCustomerId, paymentMethod, cashPaid, cashNum, total, saleLoading, cart.length, cartCombos.length]);
 
-  return (
-    <div className="flex flex-col gap-3 flex-1 min-h-0 lg:overflow-hidden">
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
-        <h1 className="text-foreground text-xl font-semibold tracking-tight">Ventas</h1>
-        {saleMsg && (
-          <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">{saleMsg}</span>
-        )}
-        {saleError && (
-          <span className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">{saleError}</span>
-        )}
-      </div>
+  if (!allowed) {
+    return <div className="p-6 text-sm text-muted-foreground">Redirigiendo a /Admin/Negocios…</div>;
+  }
 
-      {error && (
-        <div className="shrink-0 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
-          <span>{error}</span>
-          <Button variant="outline" size="sm" onClick={fetchProducts}>
-            Reintentar
-          </Button>
+  return (
+    <div className="flex flex-col flex-1 min-h-0 lg:overflow-hidden">
+      {(saleMsg || saleError || error) && (
+        <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-200 dark:border-border bg-white dark:bg-card">
+          <span className="text-xs font-bold tracking-widest text-slate-700 dark:text-foreground">VENTAS</span>
+          {saleMsg && (
+            <span className="text-sm text-green-700 bg-green-50 border border-green-200 rounded px-2 py-1">{saleMsg}</span>
+          )}
+          {saleError && (
+            <span className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1">{saleError}</span>
+          )}
+          {error && (
+            <span className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 flex items-center gap-2">
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={fetchProducts} className="h-6 text-xs">
+                Reintentar
+              </Button>
+            </span>
+          )}
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 flex-1 min-h-0 lg:overflow-hidden lg:items-stretch">
-        {/* Left: products - scroll interno, no empuja la página */}
-        <div className="lg:col-span-2 flex flex-col gap-3 min-w-0 lg:h-full lg:min-h-0 lg:overflow-y-auto lg:pr-1">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              ref={searchRef}
-              autoFocus
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por nombre o SKU...  (F2 / Espacio)"
-              className="pl-9 bg-card"
-            />
-          </div>
+      <div className="flex flex-col lg:flex-row flex-1 min-h-0 w-full min-w-full max-w-none lg:overflow-hidden">
+        {/* Left: catálogo - full bleed, borde derecho sutil, sin márgenes flotantes */}
+        <div className="flex-1 flex flex-col min-w-0 w-full max-w-none lg:overflow-hidden bg-white dark:bg-card lg:border-r border-slate-200 dark:border-border">
+          <div className="shrink-0 px-4 py-3 border-b border-slate-200 dark:border-border bg-white dark:bg-card flex flex-col gap-3">
+            <div className="relative">
+              <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+              <Input
+                ref={searchRef}
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Buscar por nombre o SKU..."
+                className="pl-10 pr-20 h-11 bg-slate-50 dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm placeholder:text-slate-400 focus:bg-white dark:focus:bg-card focus:border-slate-300 dark:focus:border-border focus:ring-2 focus:ring-slate-900/5 shadow-sm transition-all"
+              />
+              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 hidden sm:inline-flex items-center font-mono text-xs px-2 py-0.5 bg-slate-100 border border-slate-300 rounded text-slate-600 dark:bg-muted dark:border-border dark:text-muted-foreground shadow-sm">
+                Espacio
+              </span>
+            </div>
 
-          <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-thin">
+            <div className="flex gap-2 overflow-x-auto scrollbar-thin">
             <Button
               size="sm"
-              variant={selectedCatId === "all" ? "default" : "outline"}
-              className="whitespace-nowrap shrink-0"
+              variant="outline"
+              className={`whitespace-nowrap shrink-0 rounded-full border text-xs font-medium transition-colors ${
+                selectedCatId === "all"
+                  ? "bg-slate-900 text-white border-slate-900 shadow-sm hover:bg-slate-800 hover:text-white hover:border-slate-800 dark:bg-white dark:text-slate-900 dark:border-white dark:hover:bg-zinc-100"
+                  : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-200 dark:bg-card dark:text-muted-foreground dark:border-border dark:hover:bg-muted"
+              }`}
               onClick={() => setSelectedCatId("all")}
             >
               Todos
             </Button>
-            {categories.map((c) => (
+            {visibleCategories.map((c) => (
               <Button
                 key={c.id}
                 size="sm"
-                variant={selectedCatId === c.id ? "default" : "outline"}
-                className="whitespace-nowrap shrink-0"
+                variant="outline"
+                className={`whitespace-nowrap shrink-0 rounded-full border text-xs font-medium transition-colors ${
+                  selectedCatId === c.id
+                    ? "bg-slate-900 text-white border-slate-900 shadow-sm hover:bg-slate-800 hover:text-white hover:border-slate-800 dark:bg-white dark:text-slate-900 dark:border-white dark:hover:bg-zinc-100"
+                    : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-200 dark:bg-card dark:text-muted-foreground dark:border-border dark:hover:bg-muted"
+                }`}
                 onClick={() => setSelectedCatId(c.id)}
               >
                 {c.name}
               </Button>
             ))}
           </div>
+          </div>
 
-          <div className="bg-card rounded-xl border border-border p-3">
+          <div className="flex-1 overflow-y-auto bg-slate-50/70 dark:bg-zinc-900/20 p-4">
             {loading || catLoading ? (
               <p className="text-sm text-muted-foreground py-10 text-center">Cargando productos…</p>
             ) : (
               (() => {
                 const q = search.trim().toLowerCase();
-                const filteredCombos = comboPromos.filter((pr) => {
+                const filteredCombos = visibleComboPromos.filter((pr) => {
                   if (!q) return true;
                   const linesDesc = pr.lines?.map((l) => `${l.productName} x${l.quantity}`).join(", ") ?? pr.products.map((x) => x.name).join(", ");
                   return pr.name.toLowerCase().includes(q) || linesDesc.toLowerCase().includes(q);
@@ -583,7 +630,7 @@ export default function VentasPage() {
                 if (!hasProducts && !hasCombos) {
                   return (
                     <p className="text-sm text-muted-foreground py-10 text-center">
-                      {products.length === 0 && comboPromos.length === 0 ? "Sin productos activos." : "Sin resultados para el filtro."}
+                      {products.length === 0 && visibleComboPromos.length === 0 ? "Sin productos activos." : "Sin resultados para el filtro."}
                     </p>
                   );
                 }
@@ -650,11 +697,17 @@ export default function VentasPage() {
           </div>
         </div>
 
-        {/* Right: factura panel - altura fija visible, flex-col h-full, sin scroll de página */}
-        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm flex flex-col overflow-hidden lg:sticky lg:top-3 lg:h-full lg:max-h-full">
-          {/* Cabecera fija - padding vertical reducido */}
-          <div className="shrink-0 px-3 py-2.5 flex items-center justify-between border-b">
-            <h2 className="text-sm font-bold tracking-widest text-foreground">FACTURA</h2>
+        {/* Right: FACTURA / Ticket - acabado POS comercial, sin márgenes flotantes */}
+        <div className="w-full lg:w-[380px] xl:w-[400px] shrink-0 bg-white dark:bg-card flex flex-col overflow-hidden lg:overflow-hidden border-t lg:border-t-0 border-slate-200 dark:border-border lg:border-l">
+          {/* Cabecera ticket: fondo sutil + FACTURA + Cliente con icono */}
+          <div className="shrink-0 bg-slate-50 dark:bg-zinc-900/50 border-b border-slate-200 dark:border-border px-4 py-3 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-bold tracking-widest text-slate-900 dark:text-foreground">FACTURA</h2>
+              <span className="hidden sm:inline-flex items-center gap-1.5 text-xs bg-white dark:bg-card border border-slate-200 dark:border-border rounded-full px-2.5 py-1 text-slate-600 dark:text-muted-foreground shadow-sm">
+                <User className="h-3.5 w-3.5 text-slate-400" />
+                Consumidor Final
+              </span>
+            </div>
             {(cart.length > 0 || cartCombos.length > 0) && (
               vaciarConfirm ? (
                 <Button size="sm" onClick={handleVaciar} className="h-7 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-in fade-in">
@@ -669,12 +722,12 @@ export default function VentasPage() {
               )
             )}
           </div>
-          <div className="shrink-0 px-3 py-1.5 border-b bg-muted/20">
-            <p className="text-xs text-muted-foreground">Cliente: <span className="font-medium text-foreground">Consumidor Final</span></p>
+          <div className="shrink-0 sm:hidden px-4 py-2 border-b border-slate-200 dark:border-border bg-white dark:bg-card flex items-center gap-1.5 text-xs text-muted-foreground">
+            <User className="h-3.5 w-3.5" /> Consumidor Final
           </div>
 
           {/* Header tabular - Descripción con prioridad máxima, paddings reducidos */}
-          <div className="shrink-0 grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 px-2 py-1.5 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase bg-muted/30 border-b">
+          <div className="shrink-0 grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 px-3 py-2 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase bg-white dark:bg-card border-b border-slate-200 dark:border-border">
             <span className="text-center">Cant.</span>
             <span>Descripción</span>
             <span className="text-right">P. Unit</span>
@@ -683,9 +736,15 @@ export default function VentasPage() {
           </div>
 
           {/* Lista scrolleable - filas delgadas, 8-10 visibles sin scroll */}
-          <div className="flex-1 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto bg-white dark:bg-card">
             {cart.length === 0 && cartCombos.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10 px-4">Carrito vacío — agregá productos o combos</p>
+              <div className="flex flex-col items-center justify-center py-16 px-6 text-center">
+                <div className="w-14 h-14 rounded-full bg-slate-100 dark:bg-muted flex items-center justify-center mb-3">
+                  <ShoppingCart className="h-7 w-7 text-slate-300 dark:text-muted-foreground/50" />
+                </div>
+                <p className="text-sm font-medium text-slate-600 dark:text-foreground">Sin productos en el ticket</p>
+                <p className="text-xs text-slate-400 dark:text-muted-foreground mt-1">Presioná [Espacio] o clickeá un ítem para comenzar</p>
+              </div>
             ) : (
               <div className="divide-y divide-border">
                 {cartCombos.map((cc) => {
@@ -762,39 +821,43 @@ export default function VentasPage() {
             )}
           </div>
 
-          {/* Totales sticky footer - siempre visible, pb-4 despegado del borde */}
-          <div className="shrink-0 border-t bg-card px-3 py-2.5 pb-4 flex flex-col gap-1.5">
-            <div className="flex flex-col gap-1.5 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Subtotal sueltos</span>
-                <span className="font-medium">${subtotalNormal.toLocaleString("es-AR")}</span>
-              </div>
-              {cartCombos.length>0 && (
-                <div className="flex justify-between">
-                  <span className="text-muted-foreground">Combos ({cartCombos.reduce((s,c)=>s+c.quantity,0)} u.)</span>
-                  <span className="font-medium">${subtotalCombos.toLocaleString("es-AR")}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between gap-2">
-                <span className="text-muted-foreground whitespace-nowrap">Descuento {discountAmount > 0 ? `(-$${discountAmount.toLocaleString("es-AR")})` : ""}</span>
-                <div className="flex items-center gap-1">
-                  <div className="flex rounded-md border border-input overflow-hidden">
-                    <button type="button" onClick={() => setDiscountType("%")} className={`px-2 py-1 text-[11px] font-semibold ${discountType === "%" ? "bg-primary text-primary-foreground" : "bg-card"}`}>%</button>
-                    <button type="button" onClick={() => setDiscountType("$")} className={`px-2 py-1 text-[11px] font-semibold border-l border-input ${discountType === "$" ? "bg-primary text-primary-foreground" : "bg-card"}`}>$</button>
+          {/* Bloque totales: fondo suave diferenciado, números alineados a derecha */}
+          <div className="shrink-0 bg-slate-50 dark:bg-zinc-900/30 border-t border-slate-200 dark:border-border p-4 flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5 text-sm">
+              {discountAmount > 0 && (
+                <>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-slate-500 dark:text-muted-foreground">Subtotal sueltos</span>
+                    <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">${subtotalNormal.toLocaleString("es-AR")}</span>
                   </div>
-                  <Input type="number" min={0} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} className="w-16 h-6 text-right text-xs" placeholder="0" />
-                </div>
+                  {cartCombos.length > 0 && (
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-500 dark:text-muted-foreground">Combos ({cartCombos.reduce((s, c) => s + c.quantity, 0)} u.)</span>
+                      <span className="font-medium tabular-nums text-slate-900 dark:text-foreground">${subtotalCombos.toLocaleString("es-AR")}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-emerald-700 dark:text-emerald-400">Descuento aplicado: <span className="font-mono tabular-nums">-${discountAmount.toLocaleString("es-AR")}</span></span>
+                    <button
+                      type="button"
+                      onClick={() => setDiscountValue("0")}
+                      className="inline-flex items-center justify-center h-6 w-6 rounded-full hover:bg-slate-100 dark:hover:bg-muted text-slate-500 hover:text-slate-700 dark:text-muted-foreground transition-colors"
+                      aria-label="Quitar descuento"
+                      title="Quitar descuento"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between items-center">
+                <span className="text-xs font-bold tracking-wider text-slate-500 dark:text-muted-foreground uppercase">Total</span>
+                <span className="font-bold text-2xl font-mono tabular-nums text-slate-900 dark:text-foreground">${total.toLocaleString("es-AR")}</span>
               </div>
-              <div className="flex justify-between items-center text-xl font-bold pt-1 border-t mt-1">
-                <span>Total</span>
-                <span>${total.toLocaleString("es-AR")}</span>
-              </div>
-              {discountAmount > 0 && <p className="text-[11px] text-muted-foreground">Descuento visual — el backend cobra sin descuento manual.</p>}
-              {subtotalCombos>0 && <p className="text-[11px] text-muted-foreground">Total usa precio combo, no suma suelta.</p>}
             </div>
 
             <Button
-              className="w-full mt-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-4 rounded-xl text-sm shadow-sm"
+              className="w-full mt-3 bg-red-600 hover:bg-red-700 active:scale-[0.99] transition-all text-white font-semibold shadow-sm py-3 rounded-xl text-sm"
               disabled={(cart.length === 0 && cartCombos.length===0) || saleLoading}
               onClick={() => {
                 setSaleError(null);
@@ -829,7 +892,57 @@ export default function VentasPage() {
               </p>
             )}
 
-            <div className="grid grid-cols-2 gap-2">
+            {/* Descuento manual — trasladado desde pie de Factura */}
+            <div className="flex items-center gap-2">
+              <div className="bg-slate-100 dark:bg-muted p-1 rounded-xl flex w-fit shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setDiscountType("%")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${discountType === "%" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground"}`}
+                  aria-label="Porcentaje"
+                >
+                  %
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDiscountType("$")}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${discountType === "$" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground"}`}
+                  aria-label="Monto fijo"
+                >
+                  $
+                </button>
+              </div>
+              <div className="relative flex-1">
+                {discountType === "$" && <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">$</span>}
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={discountValue === "0" ? "" : discountValue}
+                  onChange={(e) => setDiscountValue(e.target.value)}
+                  placeholder={discountType === "%" ? "Ej: 10" : "Ej: 500"}
+                  className={`h-9 text-sm bg-background ${discountType === "$" ? "pl-7" : "pr-8"}`}
+                />
+                {discountType === "%" && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>}
+              </div>
+              {discountValue !== "0" && discountValue !== "" && (parseFloat(discountValue) || 0) > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setDiscountValue("0")}
+                  className="inline-flex items-center justify-center h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-muted text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                  aria-label="Limpiar descuento"
+                  title="Limpiar descuento"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            {discountAmount > 0 && (
+              <p className="text-xs text-emerald-700 dark:text-emerald-400 -mt-1">
+                Descuento aplicado: <span className="font-mono tabular-nums">-${discountAmount.toLocaleString("es-AR")}</span> · Total a pagar <span className="font-mono tabular-nums">${total.toLocaleString("es-AR")}</span>
+              </p>
+            )}
+
+            <div className={`grid gap-2 ${flags.moduloClientes ? "grid-cols-2" : "grid-cols-3"}`}>
               <Button
                 variant={!isCredit && paymentMethod === 0 ? "default" : "outline"}
                 className="rounded-full font-semibold"
@@ -851,14 +964,21 @@ export default function VentasPage() {
               >
                 Débito/Crédito
               </Button>
-              <Button
-                variant={isCredit ? "default" : "outline"}
-                className={`rounded-full font-semibold ${isCredit ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600" : ""}`}
-                onClick={() => { setIsCredit(true); setSaleError(null); }}
-              >
-                Fiado / Cta. Cte.
-              </Button>
+              {flags.moduloClientes && (
+                <Button
+                  variant={isCredit ? "default" : "outline"}
+                  className={`rounded-full font-semibold ${isCredit ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600" : ""}`}
+                  onClick={() => { setIsCredit(true); setSaleError(null); }}
+                >
+                  Fiado / Cta. Cte.
+                </Button>
+              )}
             </div>
+            {!flags.moduloClientes && (
+              <div className="text-xs text-muted-foreground bg-slate-50 dark:bg-muted/40 border rounded-lg px-3 py-2 flex items-center gap-2">
+                <User className="h-3.5 w-3.5" /> Cliente: <span className="font-medium text-foreground">Consumidor Final</span> — módulo Clientes deshabilitado
+              </div>
+            )}
 
             {/* Efectivo */}
             {!isCredit && paymentMethod === 0 && (
@@ -923,8 +1043,8 @@ export default function VentasPage() {
               </div>
             )}
 
-            {/* Fiado */}
-            {isCredit && (
+            {/* Fiado — hidden when moduloClientes off */}
+            {flags.moduloClientes && isCredit && (
               <div className="flex flex-col gap-2 p-3 rounded-xl border bg-amber-50/50 dark:bg-amber-950/10 border-amber-200/50">
                 {!selectedCustomer ? (
                   showInlineCreate ? (

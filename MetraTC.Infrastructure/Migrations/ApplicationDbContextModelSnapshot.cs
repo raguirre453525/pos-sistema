@@ -37,6 +37,69 @@ namespace MetraTC.Infrastructure.Migrations
                     b.ToTable("ProductCategories", (string)null);
                 });
 
+            modelBuilder.Entity("MetraTC.Domain.Entities.Business", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Cuit")
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ModuloClientes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ModuloPromos")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<bool>("ModuloReportes")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("PermitirAjusteInflacion")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("Businesses", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("11111111-1111-1111-1111-111111111111"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            IsActive = true,
+                            ModuloClientes = true,
+                            ModuloPromos = true,
+                            ModuloReportes = true,
+                            Name = "Repuestera El Chorolqui",
+                            PermitirAjusteInflacion = true
+                        });
+                });
+
             modelBuilder.Entity("MetraTC.Domain.Entities.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -73,6 +136,9 @@ namespace MetraTC.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -93,6 +159,8 @@ namespace MetraTC.Infrastructure.Migrations
                         .HasColumnType("nvarchar(30)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessId");
 
                     b.HasIndex("IsActive");
 
@@ -148,6 +216,9 @@ namespace MetraTC.Infrastructure.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -189,6 +260,8 @@ namespace MetraTC.Infrastructure.Migrations
                         .HasComment("Modo de venta canónico: un (por unidad) o kg (a granel por peso)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessId");
 
                     b.ToTable("Products", (string)null);
                 });
@@ -234,6 +307,9 @@ namespace MetraTC.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<decimal?>("ComboPrice")
                         .HasColumnType("decimal(18,2)");
 
@@ -269,6 +345,8 @@ namespace MetraTC.Infrastructure.Migrations
                         .HasColumnType("datetime2");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessId");
 
                     b.ToTable("Promotions", (string)null);
                 });
@@ -310,6 +388,9 @@ namespace MetraTC.Infrastructure.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uniqueidentifier");
 
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("datetime2");
 
@@ -345,6 +426,8 @@ namespace MetraTC.Infrastructure.Migrations
                         .HasColumnType("decimal(18,2)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BusinessId");
 
                     b.HasIndex("CustomerId");
 
@@ -484,6 +567,88 @@ namespace MetraTC.Infrastructure.Migrations
                     b.ToTable("StockAdjustmentAudits", (string)null);
                 });
 
+            modelBuilder.Entity("MetraTC.Domain.Entities.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("BusinessId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("nvarchar(20)");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("BusinessId");
+
+                    b.HasIndex("Role");
+
+                    b.HasIndex("Username")
+                        .IsUnique();
+
+                    b.ToTable("Users", (string)null);
+
+                    b.HasData(
+                        new
+                        {
+                            Id = new Guid("00000000-0000-0000-0000-000000000001"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FullName = "Super Admin",
+                            IsActive = true,
+                            PasswordHash = "AQAAAAIAAYagAAAAEEGuJ/JV366gv5+li5dUOQ0+PMbu8bFCO3qjlFI8ktgZcdd5qc5g7L5uLVQBxACaXQ==",
+                            Role = "SuperAdmin",
+                            Username = "superadmin"
+                        },
+                        new
+                        {
+                            Id = new Guid("22222222-2222-2222-2222-222222222222"),
+                            BusinessId = new Guid("11111111-1111-1111-1111-111111111111"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FullName = "Admin Repuestera",
+                            IsActive = true,
+                            PasswordHash = "AQAAAAIAAYagAAAAELtJ86TEJl8lXsvJpddNNYmTmTz5dtR8zflx67izQD6gxbYAoSn6bfPKUTSRrDjOFw==",
+                            Role = "Admin",
+                            Username = "admin"
+                        },
+                        new
+                        {
+                            Id = new Guid("33333333-3333-3333-3333-333333333333"),
+                            BusinessId = new Guid("11111111-1111-1111-1111-111111111111"),
+                            CreatedAt = new DateTime(2026, 1, 1, 0, 0, 0, 0, DateTimeKind.Utc),
+                            FullName = "Cajero",
+                            IsActive = true,
+                            PasswordHash = "AQAAAAIAAYagAAAAEBLfRvQSz32027IEO4FYdU3oF2ogMgdR4i4hMBgbmU0sR7R8GnmjGJOmJHWqpeO70Q==",
+                            Role = "User",
+                            Username = "cajero"
+                        });
+                });
+
             modelBuilder.Entity("CategoryProduct", b =>
                 {
                     b.HasOne("MetraTC.Domain.Entities.Category", null)
@@ -497,6 +662,17 @@ namespace MetraTC.Infrastructure.Migrations
                         .HasForeignKey("ProductsId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("MetraTC.Domain.Entities.Customer", b =>
+                {
+                    b.HasOne("MetraTC.Domain.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Business");
                 });
 
             modelBuilder.Entity("MetraTC.Domain.Entities.CustomerPayment", b =>
@@ -517,6 +693,17 @@ namespace MetraTC.Infrastructure.Migrations
                     b.Navigation("Sale");
                 });
 
+            modelBuilder.Entity("MetraTC.Domain.Entities.Product", b =>
+                {
+                    b.HasOne("MetraTC.Domain.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Business");
+                });
+
             modelBuilder.Entity("MetraTC.Domain.Entities.ProductPriceHistory", b =>
                 {
                     b.HasOne("MetraTC.Domain.Entities.Product", "Product")
@@ -526,6 +713,17 @@ namespace MetraTC.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("MetraTC.Domain.Entities.Promotion", b =>
+                {
+                    b.HasOne("MetraTC.Domain.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Business");
                 });
 
             modelBuilder.Entity("MetraTC.Domain.Entities.PromotionProduct", b =>
@@ -549,10 +747,18 @@ namespace MetraTC.Infrastructure.Migrations
 
             modelBuilder.Entity("MetraTC.Domain.Entities.Sale", b =>
                 {
+                    b.HasOne("MetraTC.Domain.Entities.Business", "Business")
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
                     b.HasOne("MetraTC.Domain.Entities.Customer", "Customer")
                         .WithMany()
                         .HasForeignKey("CustomerId")
                         .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Business");
 
                     b.Navigation("Customer");
                 });
@@ -596,6 +802,21 @@ namespace MetraTC.Infrastructure.Migrations
                         .IsRequired();
 
                     b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("MetraTC.Domain.Entities.User", b =>
+                {
+                    b.HasOne("MetraTC.Domain.Entities.Business", "Business")
+                        .WithMany("Users")
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Business");
+                });
+
+            modelBuilder.Entity("MetraTC.Domain.Entities.Business", b =>
+                {
+                    b.Navigation("Users");
                 });
 
             modelBuilder.Entity("MetraTC.Domain.Entities.Promotion", b =>

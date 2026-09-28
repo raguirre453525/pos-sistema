@@ -4,11 +4,11 @@ namespace MetraTC.Application.Services;
 
 public interface ICustomerService
 {
-    Task<CustomerDto> CreateAsync(CreateCustomerDto dto);
-    Task<CustomerDto> UpdateAsync(Guid id, UpdateCustomerDto dto);
-    Task<IEnumerable<CustomerDto>> GetAllAsync();
-    Task<CustomerDto> GetByIdAsync(Guid id);
-    Task<CustomerDetailDto> GetDetailAsync(Guid id);
-    Task DeleteAsync(Guid id);
-    Task<CustomerPaymentDto> RegisterPaymentAsync(Guid customerId, CreatePaymentDto dto);
+    Task<CustomerDto> CreateAsync(CreateCustomerDto dto, Guid businessId);
+    Task<CustomerDto> UpdateAsync(Guid id, UpdateCustomerDto dto, Guid businessId);
+    Task<IEnumerable<CustomerDto>> GetAllAsync(Guid businessId);
+    Task<CustomerDto> GetByIdAsync(Guid id, Guid businessId);
+    Task<CustomerDetailDto> GetDetailAsync(Guid id, Guid businessId);
+    Task DeleteAsync(Guid id, Guid businessId);
+    Task<CustomerPaymentDto> RegisterPaymentAsync(Guid customerId, CreatePaymentDto dto, Guid businessId);
 }

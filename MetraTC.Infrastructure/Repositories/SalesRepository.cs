@@ -16,7 +16,7 @@ public class SalesRepository : ISalesRepository
         _context = context;
     }
 
-    public async Task<Sale> CreateAsync(List<(Guid productId, decimal quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null, List<(Guid promotionId, int quantity)>? combos = null)
+    public async Task<Sale> CreateAsync(Guid businessId, List<(Guid productId, decimal quantity)> items, PaymentMethod paymentMethod, Guid? createdBy = null, Guid? customerId = null, bool isCredit = false, DateTime? dueDate = null, List<(Guid promotionId, int quantity)>? combos = null)
     {
         var hasItems = items != null && items.Any();
         var hasCombos = combos != null && combos.Any();
@@ -110,7 +110,7 @@ public class SalesRepository : ISalesRepository
         if (comboComponents.Any()) allProductIds.AddRange(comboComponents.Select(c => c.productId));
         allProductIds = allProductIds.Distinct().ToList();
 
-        var products = allProductIds.Any() ? await _context.Products.Where(p => allProductIds.Contains(p.Id)).OrderBy(p => p.Id).ToListAsync() : new List<Product>();
+        var products = allProductIds.Any() ? await _context.Products.Where(p => allProductIds.Contains(p.Id) && p.BusinessId == businessId).OrderBy(p => p.Id).ToListAsync() : new List<Product>();
         var productDict = products.ToDictionary(p => p.Id);
         if (productDict.Count != allProductIds.Count)
         {
@@ -186,6 +186,7 @@ public class SalesRepository : ISalesRepository
             forcedTotal = itemsTotal + comboTotalPaid;
         }
         var sale = new Sale(paymentMethod, saleItems, customerId, isCredit, dueDate, salePromotions.Any() ? salePromotions : null, forcedTotal);
+        sale.BusinessId = businessId;
 
         _context.Sales.Add(sale);
 
@@ -207,20 +208,21 @@ public class SalesRepository : ISalesRepository
         return sale;
     }
 
-    public async Task<Sale?> GetByIdAsync(Guid id)
+    public async Task<Sale?> GetByIdAsync(Guid id, Guid businessId)
     {
         return await _context.Sales
             .IgnoreQueryFilters()
             .Include(s => s.Items)
                 .ThenInclude(i => i.Product)
             .Include(s => s.SalePromotions)
-            .FirstOrDefaultAsync(s => s.Id == id);
+            .FirstOrDefaultAsync(s => s.Id == id && s.BusinessId == businessId);
     }
 
-    public async Task<IEnumerable<Sale>> GetAllAsync()
+    public async Task<IEnumerable<Sale>> GetAllAsync(Guid businessId)
     {
         return await _context.Sales
             .IgnoreQueryFilters()
+            .Where(s => s.BusinessId == businessId)
             .Include(s => s.Items)
                 .ThenInclude(i => i.Product)
             .Include(s => s.SalePromotions)

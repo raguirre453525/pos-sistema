@@ -15,7 +15,7 @@ public class SalesService : ISalesService
         _mapper = mapper;
     }
 
-    public async Task<SaleDto> CreateAsync(CreateSaleDto dto)
+    public async Task<SaleDto> CreateAsync(CreateSaleDto dto, Guid businessId)
     {
         if (dto.IsCredit && (dto.CustomerId == null || dto.CustomerId == Guid.Empty))
             throw new ArgumentException("Cliente requerido para venta fiada", nameof(dto.CustomerId));
@@ -46,23 +46,23 @@ public class SalesService : ISalesService
 
         var items = dto.Items.Select(i => (i.ProductId, i.Quantity)).ToList();
         var combos = dto.Combos?.Select(c => (c.PromotionId, c.Quantity)).ToList();
-        var sale = await _repository.CreateAsync(items, dto.PaymentMethod, null, dto.CustomerId, dto.IsCredit, dueDate, combos);
+        var sale = await _repository.CreateAsync(businessId, items, dto.PaymentMethod, null, dto.CustomerId, dto.IsCredit, dueDate, combos);
 
         return _mapper.Map<SaleDto>(sale);
     }
 
-    public async Task<SaleDto> GetByIdAsync(Guid id)
+    public async Task<SaleDto> GetByIdAsync(Guid id, Guid businessId)
     {
-        var sale = await _repository.GetByIdAsync(id);
+        var sale = await _repository.GetByIdAsync(id, businessId);
         if (sale == null)
             throw new KeyNotFoundException($"No se encontró ninguna venta con el ID: {id}");
 
         return _mapper.Map<SaleDto>(sale);
     }
 
-    public async Task<IEnumerable<SaleDto>> GetAllAsync()
+    public async Task<IEnumerable<SaleDto>> GetAllAsync(Guid businessId)
     {
-        var sales = await _repository.GetAllAsync();
+        var sales = await _repository.GetAllAsync(businessId);
         return _mapper.Map<IEnumerable<SaleDto>>(sales);
     }
 }

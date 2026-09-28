@@ -14,6 +14,8 @@ public class Promotion : BaseEntity
     public decimal? ComboPrice { get; private set; }
     public decimal? DiscountPercentage { get; private set; }
     public string? ImageUrl { get; private set; }
+    public Guid BusinessId { get; set; }
+    public Business Business { get; set; } = null!;
     // Join explícita con cantidad (soporta 3x2 mismo producto con Quantity>1)
     public ICollection<PromotionProduct> Lines { get; private set; } = new List<PromotionProduct>();
     // Compat: Products derivado de Lines (no mapeado por EF) - para código legacy

@@ -480,7 +480,8 @@ public class AssistantProposalService
             {
                 if (!p.Exists)
                 {
-                    // Create
+                    // Create - business isolation: assign to primary business (Repuestera El Chorolqui) when assistant has no JWT context
+                    var businessId = await ResolveBusinessIdAsync(ct);
                     var created = await _productService.CreateAsync(new CreateProductDto(
                         Sku: p.Sku!,
                         Name: p.Name,
@@ -490,11 +491,11 @@ public class AssistantProposalService
                         ImageUrl: null,
                         Unit: null,
                         MinStock: null
-                    ));
+                    ), businessId);
                     // Adjust stock if delta >0
                     if (p.StockDelta.HasValue && p.StockDelta.Value > 0)
                     {
-                        await _productService.AdjustStockAsync(created.Id, new StockAdjustmentDto(p.StockDelta.Value, "Reposición vía asistente"));
+                        await _productService.AdjustStockAsync(created.Id, new StockAdjustmentDto(p.StockDelta.Value, "Reposición vía asistente"), businessId);
                     }
                     // Categories
                     if (p.CategoryNames != null && p.CategoryNames.Count > 0)
@@ -520,18 +521,19 @@ public class AssistantProposalService
                         _logger.LogInformation("Producto reactivado {ProductId} {Name} vía asistente", id, productEntity.Name);
                     }
                     // Price update if needed
+                    var businessIdForUpdate = productEntity.BusinessId != Guid.Empty ? productEntity.BusinessId : await ResolveBusinessIdAsync(ct);
                     if (p.Price != null && p.Price != p.CurrentPrice)
                     {
                         // Need existing description for Update: keep existing if not provided (reuse reactivated entity)
                         var desc = p.Description ?? productEntity.Description;
                         // Use raw name if provided otherwise existing name
                         var nameForUpdate = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : productEntity.Name;
-                        await _productService.UpdateAsync(id, new UpdateProductDto(nameForUpdate, p.Price.Value, desc, null, null, null));
+                        await _productService.UpdateAsync(id, new UpdateProductDto(nameForUpdate, p.Price.Value, desc, null, null, null), businessIdForUpdate);
                         sb.AppendLine($"- ✅ Precio actualizado {p.Name}: {p.CurrentPrice} → {p.Price}");
                     }
                     if (p.StockDelta.HasValue && p.StockDelta.Value != 0)
                     {
-                        await _productService.AdjustStockAsync(id, new StockAdjustmentDto(p.StockDelta.Value, "Reposición vía asistente"));
+                        await _productService.AdjustStockAsync(id, new StockAdjustmentDto(p.StockDelta.Value, "Reposición vía asistente"), businessIdForUpdate);
                         sb.AppendLine($"- ✅ Stock repuesto {p.Name}: +{p.StockDelta} (antes {p.CurrentStock})");
                     }
                     else if (p.Price == null || p.Price == p.CurrentPrice)
@@ -562,6 +564,15 @@ public class AssistantProposalService
         }
         if (sb.Length == 0) return "No se ejecutó ninguna acción.";
         return sb.ToString().Trim();
+    }
+
+    private async Task<Guid> ResolveBusinessIdAsync(CancellationToken ct)
+    {
+        // Assistant runs without HttpContext; fallback to primary business to maintain isolation for existing seed
+        var primary = await _db.Businesses.FirstOrDefaultAsync(b => b.Name.Contains("Chorolqui"), ct);
+        if (primary != null) return primary.Id;
+        var first = await _db.Businesses.FirstOrDefaultAsync(ct);
+        return first?.Id ?? new Guid("11111111-1111-1111-1111-111111111111");
     }
 
     private async Task<Category> EnsureCategoryAsync(string name, CancellationToken ct)

@@ -19,15 +19,15 @@ public class ReportsService : IReportsService
         _mapper = mapper;
     }
 
-    public async Task<IEnumerable<LowStockDto>> GetLowStockAsync(int threshold = 5)
+    public async Task<IEnumerable<LowStockDto>> GetLowStockAsync(int threshold = 5, Guid? businessId = null)
     {
         if (threshold < 0 || threshold > 1000)
             throw new ArgumentException("Threshold debe estar entre 0 y 1000", nameof(threshold));
 
-        var products = await _context.Products
-            .AsNoTracking()
-            .Where(p => p.IsActive)
-            .ToListAsync();
+        var productsQuery = _context.Products.AsNoTracking().Where(p => p.IsActive);
+        if (businessId.HasValue)
+            productsQuery = productsQuery.Where(p => p.BusinessId == businessId.Value);
+        var products = await productsQuery.ToListAsync();
 
         var low = products.Where(p => p.IsLowStock() || p.Stock <= threshold)
             .OrderBy(p => p.Stock)
@@ -35,8 +35,6 @@ public class ReportsService : IReportsService
             .ToList();
 
         // If caller passes explicit threshold !=5, also include those <=threshold (legacy). Default 5 matches IsLowStock fallback.
-        // To avoid duplicate logic, we filter using IsLowStock when MinStock set, otherwise threshold.
-        // Simpler: filter where (p.MinStock.HasValue ? p.Stock <= p.MinStock.Value : p.Stock <= threshold)
         low = products.Where(p => p.MinStock.HasValue ? p.Stock <= p.MinStock.Value : p.Stock <= threshold)
             .OrderBy(p => p.Stock)
             .ThenBy(p => p.Name)
@@ -58,7 +56,8 @@ public class ReportsService : IReportsService
         DateTime? to,
         PaymentMethod? paymentMethod,
         int page = 1,
-        int pageSize = 20)
+        int pageSize = 20,
+        Guid? businessId = null)
     {
         if (page < 1)
             throw new ArgumentException("Page debe ser mayor o igual a 1", nameof(page));
@@ -79,6 +78,9 @@ public class ReportsService : IReportsService
                 .ThenInclude(i => i.Product)
             .AsNoTracking()
             .AsQueryable();
+
+        if (businessId.HasValue)
+            query = query.Where(s => s.BusinessId == businessId.Value);
 
         if (normalizedFrom.HasValue)
             query = query.Where(s => s.Date >= normalizedFrom.Value);
@@ -115,7 +117,8 @@ public class ReportsService : IReportsService
         DateTime? to,
         int page = 1,
         int pageSize = 20,
-        string? reasonContains = null)
+        string? reasonContains = null,
+        Guid? businessId = null)
     {
         if (page < 1)
             throw new ArgumentException("Page debe ser mayor o igual a 1", nameof(page));
@@ -130,10 +133,9 @@ public class ReportsService : IReportsService
 
         if (productId.HasValue)
         {
-            var exists = await _context.Products
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .AnyAsync(p => p.Id == productId.Value);
+            var productQuery = _context.Products.IgnoreQueryFilters().AsNoTracking().Where(p => p.Id == productId.Value);
+            if (businessId.HasValue) productQuery = productQuery.Where(p => p.BusinessId == businessId.Value);
+            var exists = await productQuery.AnyAsync();
             if (!exists)
                 throw new KeyNotFoundException($"No se encontró ningún producto con el ID: {productId.Value}");
         }
@@ -143,6 +145,9 @@ public class ReportsService : IReportsService
             .Include(a => a.Product)
             .AsNoTracking()
             .AsQueryable();
+
+        if (businessId.HasValue)
+            query = query.Where(a => a.Product.BusinessId == businessId.Value);
 
         if (productId.HasValue)
             query = query.Where(a => a.ProductId == productId.Value);
@@ -183,7 +188,7 @@ public class ReportsService : IReportsService
         };
     }
 
-    public async Task<DashboardSummaryDto> GetDashboardAsync(DateTime? from, DateTime? to)
+    public async Task<DashboardSummaryDto> GetDashboardAsync(DateTime? from, DateTime? to, Guid? businessId = null)
     {
         var normalizedFrom = NormalizeFrom(from);
         var normalizedTo = NormalizeTo(to);
@@ -199,12 +204,14 @@ public class ReportsService : IReportsService
             .AsNoTracking()
             .AsQueryable();
 
+        if (businessId.HasValue)
+            query = query.Where(s => s.BusinessId == businessId.Value);
+
         if (normalizedFrom.HasValue)
             query = query.Where(s => s.Date >= normalizedFrom.Value);
         if (normalizedTo.HasValue)
             query = query.Where(s => s.Date <= normalizedTo.Value);
 
-        // NOTE: POS es pequeño, ToList en memoria está bien. Para volúmenes grandes usar GroupBy en DB.
         var sales = await query.ToListAsync();
 
         var salesCount = sales.Count;
@@ -212,10 +219,11 @@ public class ReportsService : IReportsService
         var productsSoldQuantity = sales.SelectMany(s => s.Items).Sum(i => i.Quantity);
         var ticketAverage = salesCount > 0 ? totalRevenue / salesCount : 0;
 
-        var allProducts = await _context.Products.AsNoTracking().Where(p => p.IsActive).ToListAsync();
+        var productsQuery = _context.Products.AsNoTracking().Where(p => p.IsActive);
+        if (businessId.HasValue) productsQuery = productsQuery.Where(p => p.BusinessId == businessId.Value);
+        var allProducts = await productsQuery.ToListAsync();
         var lowStockCount = allProducts.Count(p => p.IsLowStock());
 
-        // DailySales: buckets por cada día del rango, o últimos 7 días si sin filtro
         DateTime startDate;
         DateTime endDate;
         if (normalizedFrom.HasValue)
@@ -232,7 +240,6 @@ public class ReportsService : IReportsService
         else
             endDate = DateTime.UtcNow.Date;
 
-        // Si el rango es invertido por lógica de fallback, corregimos
         if (startDate > endDate)
         {
             var tmp = startDate;
@@ -240,12 +247,10 @@ public class ReportsService : IReportsService
             endDate = tmp;
         }
 
-        // Limitar rango muy grande a 366 días para no generar buckets infinitos
         var totalDays = (endDate - startDate).Days + 1;
         if (totalDays > 366) totalDays = 366;
 
         var dailySales = new List<DailySaleDto>();
-        // Agrupa por fecha UTC
         var groupedByDay = sales.GroupBy(s => s.Date.Date).ToDictionary(g => g.Key, g => g.ToList());
         for (int i = 0; i < totalDays; i++)
         {
@@ -271,7 +276,6 @@ public class ReportsService : IReportsService
             }
         }
 
-        // SalesByCategory
         var categoryAgg = new Dictionary<string, (decimal Total, decimal Quantity)>(StringComparer.OrdinalIgnoreCase);
         foreach (var item in sales.SelectMany(s => s.Items))
         {
@@ -296,7 +300,6 @@ public class ReportsService : IReportsService
             .OrderByDescending(c => c.Total)
             .ToList();
 
-        // TopProducts
         var topProducts = sales.SelectMany(s => s.Items)
             .GroupBy(i => i.ProductId)
             .Select(g =>
@@ -315,7 +318,6 @@ public class ReportsService : IReportsService
             .Take(5)
             .ToList();
 
-        // RecentSales: últimas 5 dentro del rango
         var recent = sales.OrderByDescending(s => s.Date).ThenByDescending(s => s.Id).Take(5).ToList();
         var recentDtos = _mapper.Map<List<SaleDto>>(recent);
 
@@ -341,7 +343,6 @@ public class ReportsService : IReportsService
             dt = dt.ToUniversalTime();
         else if (dt.Kind == DateTimeKind.Unspecified)
             dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-        // 00:00:00 UTC del día
         return DateTime.SpecifyKind(dt.Date, DateTimeKind.Utc);
     }
 
@@ -353,7 +354,6 @@ public class ReportsService : IReportsService
             dt = dt.ToUniversalTime();
         else if (dt.Kind == DateTimeKind.Unspecified)
             dt = DateTime.SpecifyKind(dt, DateTimeKind.Utc);
-        // 23:59:59.999 UTC del día (inclusive)
         return DateTime.SpecifyKind(dt.Date.AddDays(1).AddTicks(-1), DateTimeKind.Utc);
     }
 }

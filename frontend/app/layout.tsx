@@ -3,6 +3,8 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "@/components/Providers/ThemeProvider";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { FeatureFlagsProvider } from "@/contexts/FeatureFlagsContext";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -25,10 +27,10 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} h-full overflow-hidden antialiased`}
+      className={`${inter.variable} h-full w-full min-w-full max-w-none overflow-hidden antialiased`}
     >
 
-      <body className="h-full font-sans antialiased">
+      <body className="h-full w-full min-w-full max-w-none font-sans antialiased">
 
        
         
@@ -40,7 +42,9 @@ export default function RootLayout({
           enableSystem={false}
           storageKey="metratc-theme"
         >
-          {children}
+          <AuthProvider>
+            <FeatureFlagsProvider>{children}</FeatureFlagsProvider>
+          </AuthProvider>
         </ThemeProvider>
 
        

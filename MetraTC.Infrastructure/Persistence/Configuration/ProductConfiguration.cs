@@ -54,6 +54,13 @@ public class ProductConfiguration : IEntityTypeConfiguration<Product>
             .WithMany(c => c.Products)
             .UsingEntity(j => j.ToTable("ProductCategories"));
 
+        builder.HasOne(p => p.Business)
+            .WithMany()
+            .HasForeignKey(p => p.BusinessId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(p => p.BusinessId).IsRequired();
+        builder.HasIndex(p => p.BusinessId);
+
         builder.HasQueryFilter(d => d.IsActive);
     }
 }

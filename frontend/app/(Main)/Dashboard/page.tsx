@@ -8,6 +8,7 @@ import StatCard from "@/components/Dashboard/StatCard";
 import { getDashboard, DashboardSummaryDto, ApiError } from "@/lib/api";
 import { BarChart, Bar, XAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts";
 import { PieChart, Pie, Cell, ResponsiveContainer as PieResponsiveContainer, Tooltip as PieTooltip } from "recharts";
+import { useFeatureGuard } from "@/hooks/useFeatureGuard";
 
 type RangeKey = "today" | "7d" | "30d" | "month" | "custom";
 
@@ -41,6 +42,7 @@ function getRangeDates(range: RangeKey, customFrom: string, customTo: string): {
 
 export default function Page() {
   const router = useRouter();
+  const { allowed } = useFeatureGuard({ requireReportes: true, denyRoles: ["User"] });
   const [range, setRange] = useState<RangeKey>("today");
   const [customFrom, setCustomFrom] = useState(toISODate(new Date()));
   const [customTo, setCustomTo] = useState(toISODate(new Date()));
@@ -110,6 +112,14 @@ export default function Page() {
 
   const reportLink = `/Reportes?from=${from}&to=${to}`;
 
+  if (!allowed) {
+    return (
+      <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Redirigiendo…</p>
+      </main>
+    );
+  }
+
   const pills: { key: RangeKey; label: string }[] = [
     { key: "today", label: "Hoy" },
     { key: "7d", label: "7 días" },
@@ -119,7 +129,7 @@ export default function Page() {
   ];
 
   return (
-    <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
 
       {/* Global filter */}

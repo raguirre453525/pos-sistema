@@ -1,4 +1,7 @@
-﻿import { DollarSign, TrendingUp, Package } from "lucide-react"
+﻿"use client";
+
+import { useFeatureGuard } from "@/hooks/useFeatureGuard";
+import { DollarSign, TrendingUp, Package } from "lucide-react"
 import StatCard from "@/components/Dashboard/StatCard"
 import DataTable from "@/components/Reusables/DataTable"
 import { columns } from '@/components/Config/Datatable/columns';
@@ -8,8 +11,16 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 
 const Page = () => {
+  const { allowed } = useFeatureGuard({ denyRoles: ["User"] });
+  if (!allowed) {
+    return (
+      <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Redirigiendo…</p>
+      </main>
+    );
+  }
   return (
-    <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
         <Link href={"/Configuracion"}><Button variant="outline" size="icon" className="rounded-md">
         <ArrowLeft />
       </Button></Link>

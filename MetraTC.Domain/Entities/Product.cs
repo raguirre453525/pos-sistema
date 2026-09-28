@@ -17,6 +17,9 @@ public class Product : BaseEntity
     public string? Unit { get; private set; }
     public decimal? MinStock { get; private set; }
 
+    public Guid BusinessId { get; set; }
+    public Business Business { get; set; } = null!;
+
     /// <summary>
     /// Modo de venta simplificado: "un" (por unidad) vs "kg" (a granel por peso).
     /// Decisión: no se introduce columna SaleMode para minimizar migración; se normaliza Unit

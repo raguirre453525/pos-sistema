@@ -16,5 +16,12 @@ public class CustomerConfiguration : IEntityTypeConfiguration<Customer>
         builder.HasIndex(c => c.Name);
         builder.HasIndex(c => c.IsActive);
         builder.HasQueryFilter(c => c.IsActive);
+
+        builder.HasOne(c => c.Business)
+            .WithMany()
+            .HasForeignKey(c => c.BusinessId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(c => c.BusinessId).IsRequired();
+        builder.HasIndex(c => c.BusinessId);
     }
 }

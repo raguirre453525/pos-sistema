@@ -22,31 +22,31 @@ public class ProductService : IProductService
         _mapper = mapper;
     }
 
-    public async Task<ProductDto> CreateAsync(CreateProductDto createProductDto)
+    public async Task<ProductDto> CreateAsync(CreateProductDto createProductDto, Guid businessId)
     {
         var product = _mapper.Map<Product>(createProductDto);
+        product.BusinessId = businessId;
         await _repository.AddAsync(product);
 
         return _mapper.Map<ProductDto>(product);
     }
 
-    public async Task<IEnumerable<ProductDto>> GetAllAsync()
+    public async Task<IEnumerable<ProductDto>> GetAllAsync(Guid businessId)
     {
-        var products = await _repository.GetAllAsync();
-
+        var products = await _context.Products.Where(p => p.BusinessId == businessId).ToListAsync();
         return _mapper.Map<IEnumerable<ProductDto>>(products);
     }
 
-    public async Task<ProductDto> GetByIdAsync(Guid id)
+    public async Task<ProductDto> GetByIdAsync(Guid id, Guid businessId)
     {
-        var product = await GetProductOrThrowAsync(id);
+        var product = await GetProductOrThrowAsync(id, businessId);
 
         return _mapper.Map<ProductDto>(product);
     }
 
-    public async Task UpdateAsync(Guid id, UpdateProductDto updateProductDto)
+    public async Task UpdateAsync(Guid id, UpdateProductDto updateProductDto, Guid businessId)
     {
-        var product = await GetProductOrThrowAsync(id);
+        var product = await GetProductOrThrowAsync(id, businessId);
 
         var oldPrice = product.Price;
 
@@ -94,8 +94,11 @@ public class ProductService : IProductService
         await _repository.UpdateAsync(product);
     }
 
-    public async Task<StockAdjustmentResponseDto> AdjustStockAsync(Guid id, StockAdjustmentDto stockAdjustmentDto)
+    public async Task<StockAdjustmentResponseDto> AdjustStockAsync(Guid id, StockAdjustmentDto stockAdjustmentDto, Guid businessId)
     {
+        // Ownership check before delegating to inventory repo
+        var exists = await _context.Products.AnyAsync(p => p.Id == id && p.BusinessId == businessId);
+        if (!exists) throw new KeyNotFoundException($"No se encontró ningún producto con el ID: {id}");
         var result = await _inventoryRepository.AdjustStockAsync(id, stockAdjustmentDto.Delta, stockAdjustmentDto.Reason);
 
         return new StockAdjustmentResponseDto(
@@ -106,16 +109,16 @@ public class ProductService : IProductService
             result.Audit.AdjustedAt);
     }
 
-    public async Task DeleteAsync(Guid id)
+    public async Task DeleteAsync(Guid id, Guid businessId)
     {
-        var product = await GetProductOrThrowAsync(id);
+        var product = await GetProductOrThrowAsync(id, businessId);
 
         product.Deactivate();
 
         await _repository.UpdateAsync(product);
     }
 
-    public async Task<BulkPriceAdjustmentResultDto> BulkAdjustPricesAsync(BulkPriceAdjustmentDto dto)
+    public async Task<BulkPriceAdjustmentResultDto> BulkAdjustPricesAsync(BulkPriceAdjustmentDto dto, Guid businessId)
     {
         // Validations
         if (string.IsNullOrWhiteSpace(dto.Reason) || dto.Reason.Trim().Length < 3 || dto.Reason.Trim().Length > 500)
@@ -139,10 +142,10 @@ public class ProductService : IProductService
         {
             var distinctIds = dto.ProductIds.Distinct().ToList();
             products = await _context.Products
-                .Where(p => distinctIds.Contains(p.Id))
+                .Where(p => distinctIds.Contains(p.Id) && p.BusinessId == businessId)
                 .ToListAsync();
 
-            // Validate all exist and are active (query filter hides inactive)
+            // Validate all exist, belong to business and are active (query filter hides inactive)
             if (products.Count != distinctIds.Count)
             {
                 var foundIds = products.Select(p => p.Id).ToHashSet();
@@ -159,12 +162,12 @@ public class ProductService : IProductService
 
             products = await _context.Products
                 .Include(p => p.Categories)
-                .Where(p => p.Categories.Any(c => c.Id == catId))
+                .Where(p => p.BusinessId == businessId && p.Categories.Any(c => c.Id == catId))
                 .ToListAsync();
         }
         else
         {
-            products = await _context.Products.ToListAsync();
+            products = await _context.Products.Where(p => p.BusinessId == businessId).ToListAsync();
         }
 
         if (products.Count == 0)
@@ -180,6 +183,13 @@ public class ProductService : IProductService
             var oldPrice = product.Price;
             var newPrice = Math.Round(oldPrice * (1m + (dto.Percentage ?? 0) / 100m) + (dto.FixedAmount ?? 0), 2, MidpointRounding.AwayFromZero);
             if (newPrice < 0) newPrice = 0;
+            // Redondeo comercial a $10 o $50 más cercano (evita precios engorrosos en mostrador)
+            if (dto.Rounding.HasValue && dto.Rounding.Value > 0)
+            {
+                var step = (decimal)dto.Rounding.Value;
+                newPrice = Math.Round(newPrice / step, 0, MidpointRounding.AwayFromZero) * step;
+                newPrice = Math.Round(newPrice, 2, MidpointRounding.AwayFromZero);
+            }
             if (newPrice == oldPrice) continue;
 
             product.Update(product.Name, newPrice, product.Description);
@@ -211,12 +221,17 @@ public class ProductService : IProductService
         return new BulkPriceAdjustmentResultDto(dtos.Count, dtos);
     }
 
-    private async Task<Product> GetProductOrThrowAsync(Guid id)
+    private async Task<Product> GetProductOrThrowAsync(Guid id, Guid businessId)
     {
-        var product = await _repository.GetByIdAsync(id);
-
+        var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == id && p.BusinessId == businessId);
+        // fallback to repository for global query filter consistency (IsActive)
         if (product == null)
+        {
+            // Check via repository to distinguish not found vs wrong business (both map to 404 to prevent enumeration)
+            var any = await _repository.GetByIdAsync(id);
+            // Still return not found for cross-tenant to avoid leaking existence
             throw new KeyNotFoundException($"No se encontró ningún producto con el ID: {id}");
+        }
 
         return product;
     }

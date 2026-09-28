@@ -69,16 +69,16 @@ export default function SaleCard({
           onAdd();
         }
       }}
-      className={`group relative flex h-full min-h-[108px] gap-3 rounded-lg border border-border bg-card p-3 text-foreground shadow-sm transition-all duration-100 select-none overflow-hidden ${
+      className={`group relative flex h-full min-h-[108px] gap-3 rounded-xl border bg-white dark:bg-card p-3 shadow-sm transition-all duration-150 select-none overflow-hidden ${
         isOut
-          ? "opacity-55 pointer-events-none"
-          : "cursor-pointer hover:border-primary/20 hover:shadow-sm hover:bg-accent/20 active:scale-[0.98] active:ring-2 active:ring-primary/15 active:bg-accent/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          ? "border-slate-200 dark:border-border opacity-55 pointer-events-none text-foreground"
+          : "cursor-pointer border-slate-200 dark:border-border hover:border-slate-300 dark:hover:border-border hover:shadow-md active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring text-foreground"
       }`}
     >
       {/* Left: text content */}
       <div className="flex min-w-0 flex-1 flex-col pr-1">
         <h3
-          className="line-clamp-2 text-[12.5px] font-semibold leading-[1.35] tracking-tight min-h-[2.2rem] break-words"
+          className="line-clamp-2 text-[12.5px] font-semibold leading-[1.35] tracking-tight min-h-[2.2rem] break-words text-slate-800 dark:text-foreground"
           title={name}
         >
           {name}
@@ -92,11 +92,11 @@ export default function SaleCard({
         {/* Bottom block: price + SKU/stock — stays at bottom, not floating */}
         <div className="mt-auto flex flex-col gap-0.5 pt-2">
           <div className="flex items-baseline gap-1.5 flex-wrap">
-            <span className="text-[15px] font-bold leading-none tracking-tight">
+            <span className="text-[15px] font-bold leading-none tracking-tight text-slate-900 dark:text-foreground tabular-nums">
               ${Number(price).toLocaleString("es-AR")}
             </span>
             {originalPrice != null && originalPrice > price && (
-              <span className="text-[11px] leading-none line-through text-muted-foreground">
+              <span className="text-[11px] leading-none line-through text-slate-400 dark:text-muted-foreground tabular-nums">
                 ${Number(originalPrice).toLocaleString("es-AR")}
               </span>
             )}
@@ -109,18 +109,18 @@ export default function SaleCard({
           )}
 
           {sku && (
-            <span className="font-mono text-[11px] leading-none text-muted-foreground line-clamp-1" title={sku}>
+            <span className="font-mono text-[11px] leading-none text-slate-500 dark:text-muted-foreground tabular-nums line-clamp-1" title={sku}>
               {sku}
             </span>
           )}
           {stockText && (
             <span
-              className={`text-[11px] leading-none line-clamp-1 ${
+              className={`text-[11px] leading-none line-clamp-1 tabular-nums ${
                 stockVariant === "out"
                   ? "text-red-600 dark:text-red-400 font-medium"
                   : stockVariant === "low"
                     ? "text-amber-600 dark:text-amber-400 font-medium"
-                    : "text-muted-foreground"
+                    : "text-slate-500 dark:text-muted-foreground"
               }`}
             >
               {stockText}
@@ -129,8 +129,8 @@ export default function SaleCard({
         </div>
       </div>
 
-      {/* Right: 50x50 thumbnail — uniform, object-contain, neutral bg */}
-      <div className="h-[50px] w-[50px] shrink-0 overflow-hidden rounded-md border border-border bg-white dark:bg-muted flex items-center justify-center p-1">
+      {/* Right: 50x50 thumbnail — rounded-lg, bg-slate-50 soft neutral, borde fino */}
+      <div className="h-[50px] w-[50px] shrink-0 overflow-hidden rounded-lg border border-slate-200 dark:border-border bg-slate-50 dark:bg-muted flex items-center justify-center p-1">
         {showImage ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
@@ -149,9 +149,9 @@ export default function SaleCard({
         )}
       </div>
 
-      {/* Minimal neutral badge for COMBO/PROMO — soft, not red */}
+      {/* Badge COMBO/PROMO — píldora minimalista ámbar suave, no rojo marca */}
       {topBadge && !isOut && (
-        <span className="pointer-events-none absolute right-1.5 top-1.5 rounded bg-muted border border-border px-1.5 py-0.5 text-[10px] font-semibold leading-none tracking-wide text-muted-foreground">
+        <span className="pointer-events-none absolute right-1.5 top-1.5 rounded-full bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-900/50 px-2 py-0.5 text-[10px] font-semibold leading-none tracking-wide">
           {topBadge}
         </span>
       )}

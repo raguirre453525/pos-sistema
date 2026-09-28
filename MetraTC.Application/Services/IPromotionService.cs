@@ -4,11 +4,11 @@ namespace MetraTC.Application.Services;
 
 public interface IPromotionService
 {
-    Task<PromotionDto> CreateAsync(CreatePromotionDto dto);
-    Task<PromotionDto> UpdateAsync(Guid id, UpdatePromotionDto dto);
-    Task DeleteAsync(Guid id);
-    Task<IEnumerable<PromotionDto>> GetAllAsync();
-    Task<IEnumerable<PromotionDto>> GetActiveAsync();
-    Task<PromotionDto> GetByIdAsync(Guid id);
-    Task<PromotionDto> ToggleActiveAsync(Guid id);
+    Task<PromotionDto> CreateAsync(CreatePromotionDto dto, Guid businessId);
+    Task<PromotionDto> UpdateAsync(Guid id, UpdatePromotionDto dto, Guid businessId);
+    Task DeleteAsync(Guid id, Guid businessId);
+    Task<IEnumerable<PromotionDto>> GetAllAsync(Guid businessId);
+    Task<IEnumerable<PromotionDto>> GetActiveAsync(Guid businessId);
+    Task<PromotionDto> GetByIdAsync(Guid id, Guid businessId);
+    Task<PromotionDto> ToggleActiveAsync(Guid id, Guid businessId);
 }

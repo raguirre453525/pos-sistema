@@ -2,6 +2,64 @@
 export const API_URL =
   (process.env.NEXT_PUBLIC_API_URL?.replace(/\/$/, "")) || "http://localhost:5240";
 
+// ---------- Auth token storage (Phase 2: pos_token is source of truth) ----------
+export const TOKEN_STORAGE_KEY = "pos_token";
+export const TOKEN_STORAGE_KEY_LEGACY = "pos_jwt_token";
+
+export function getStoredToken(): string | null {
+  try {
+    if (typeof window === "undefined") return null;
+    const primary = localStorage.getItem(TOKEN_STORAGE_KEY);
+    if (primary) return primary;
+    const legacy = localStorage.getItem(TOKEN_STORAGE_KEY_LEGACY);
+    if (legacy) return legacy;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredToken(token: string | null): void {
+  try {
+    if (typeof window === "undefined") return;
+    if (token) {
+      localStorage.setItem(TOKEN_STORAGE_KEY, token);
+      // keep legacy in sync for any old readers, but primary is pos_token
+      localStorage.setItem(TOKEN_STORAGE_KEY_LEGACY, token);
+    } else {
+      localStorage.removeItem(TOKEN_STORAGE_KEY);
+      localStorage.removeItem(TOKEN_STORAGE_KEY_LEGACY);
+      // also clean old mock key
+      localStorage.removeItem("pos_auth_user");
+    }
+  } catch {}
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const token = getStoredToken();
+  if (token) return { Authorization: `Bearer ${token}` };
+  return {};
+}
+
+function buildAuthHeaders(initHeaders?: HeadersInit): Record<string, string> {
+  const token = getStoredToken();
+  const base: Record<string, string> = {};
+  if (token) base["Authorization"] = `Bearer ${token}`;
+  if (!initHeaders) return base;
+  // normalize HeadersInit to record
+  if (initHeaders instanceof Headers) {
+    initHeaders.forEach((v, k) => (base[k] = v));
+  } else if (Array.isArray(initHeaders)) {
+    initHeaders.forEach(([k, v]) => (base[k] = v as string));
+  } else {
+    Object.assign(base, initHeaders as Record<string, string>);
+  }
+  if (token && !base["Authorization"] && !base["authorization"]) {
+    base["Authorization"] = `Bearer ${token}`;
+  }
+  return base;
+}
+
 export class ApiError extends Error {
   status: number;
   details?: unknown;
@@ -13,12 +71,35 @@ export class ApiError extends Error {
 }
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const authHeaders = buildAuthHeaders(init?.headers);
+  const hasBody = init?.body !== undefined && init?.body !== null;
+  // For JSON requests we always want Content-Type, but for auth headers we merge
+  const headers: Record<string, string> = {
+    ...(hasBody ? { "Content-Type": "application/json" } : {}),
+    ...authHeaders,
+    // init headers last so explicit overrides win, but ensure Authorization stays
+    ...(() => {
+      if (!init?.headers) return {};
+      if (init.headers instanceof Headers) {
+        const r: Record<string, string> = {};
+        init.headers.forEach((v, k) => (r[k] = v));
+        return r;
+      }
+      if (Array.isArray(init.headers)) {
+        const r: Record<string, string> = {};
+        (init.headers as [string, string][]).forEach(([k, v]) => (r[k] = v));
+        return r;
+      }
+      return init.headers as Record<string, string>;
+    })(),
+  };
+  // ensure auth header not accidentally overwritten by init without auth
+  if (!headers["Authorization"] && !headers["authorization"] && authHeaders["Authorization"]) {
+    headers["Authorization"] = authHeaders["Authorization"];
+  }
   const res = await fetch(`${API_URL}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {}),
-    },
+    headers,
   });
   const text = await res.text();
   const data = text ? (JSON.parse(text) as unknown) : (null as unknown as T);
@@ -213,6 +294,7 @@ export type BulkPriceAdjustmentDto = {
   percentage?: number | null;
   fixedAmount?: number | null;
   reason: string;
+  rounding?: number | null;
 };
 
 export type BulkPriceAdjustmentResultDto = {
@@ -552,7 +634,8 @@ export async function uploadProductImage(id: string, file: File) {
   const form = new FormData();
   form.append("file", file);
   try {
-    const res = await fetch(`${API_URL}/api/Products/${id}/image`, { method: "POST", body: form });
+    const headers = getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/Products/${id}/image`, { method: "POST", body: form, headers: headers as HeadersInit });
     const text = await res.text();
     let data: any = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text ? { message: text } : null; }
@@ -576,7 +659,8 @@ export async function uploadPromotionImage(id: string, file: File) {
   const form = new FormData();
   form.append("file", file);
   try {
-    const res = await fetch(`${API_URL}/api/Promotions/${id}/image`, { method: "POST", body: form });
+    const headers = getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/Promotions/${id}/image`, { method: "POST", body: form, headers: headers as HeadersInit });
     const text = await res.text();
     let data: any = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text ? { message: text } : null; }
@@ -600,7 +684,8 @@ export async function uploadProductImageTemp(file: File) {
   const form = new FormData();
   form.append("file", file);
   try {
-    const res = await fetch(`${API_URL}/api/Products/image-upload`, { method: "POST", body: form });
+    const headers = getAuthHeaders();
+    const res = await fetch(`${API_URL}/api/Products/image-upload`, { method: "POST", body: form, headers: headers as HeadersInit });
     const text = await res.text();
     let data: any = null;
     try { data = text ? JSON.parse(text) : null; } catch { data = text ? { message: text } : null; }
@@ -613,4 +698,198 @@ export async function uploadProductImageTemp(file: File) {
     if (e instanceof ApiError) throw e;
     throw new ApiError(e instanceof Error ? e.message : "Error de red al subir imagen", 0, e);
   }
+}
+
+// ---------- Auth (Phase 2) ----------
+export type AuthFeatureFlags = {
+  moduloClientes: boolean;
+  moduloPromos: boolean;
+  moduloReportes: boolean;
+  permitirAjusteInflacion: boolean;
+};
+
+export type LoginResponseDto = {
+  id: string;
+  username: string;
+  fullName: string;
+  role: string;
+  businessId: string | null;
+  businessName?: string | null;
+  token: string;
+  features: AuthFeatureFlags;
+};
+
+export type MeResponseDto = {
+  id: string;
+  username: string;
+  fullName: string;
+  role: string;
+  businessId: string | null;
+  businessName: string | null;
+  features: AuthFeatureFlags;
+};
+
+export function normalizeFeatures(raw: unknown): AuthFeatureFlags {
+  const fallback: AuthFeatureFlags = {
+    moduloClientes: true,
+    moduloPromos: true,
+    moduloReportes: true,
+    permitirAjusteInflacion: true,
+  };
+  if (!raw || typeof raw !== "object") return fallback;
+  const o = raw as Record<string, unknown>;
+  // support both camelCase and PascalCase from backend
+  const pick = (camel: string, pascal: string): boolean | undefined => {
+    const c = o[camel];
+    const p = o[pascal];
+    if (typeof c === "boolean") return c;
+    if (typeof p === "boolean") return p;
+    return undefined;
+  };
+  return {
+    moduloClientes: pick("moduloClientes", "ModuloClientes") ?? fallback.moduloClientes,
+    moduloPromos: pick("moduloPromos", "ModuloPromos") ?? fallback.moduloPromos,
+    moduloReportes: pick("moduloReportes", "ModuloReportes") ?? fallback.moduloReportes,
+    permitirAjusteInflacion: pick("permitirAjusteInflacion", "PermitirAjusteInflacion") ?? fallback.permitirAjusteInflacion,
+  };
+}
+
+export async function loginApi(username: string, password: string): Promise<LoginResponseDto> {
+  return apiFetch<LoginResponseDto>("/api/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export async function fetchMeApi(): Promise<MeResponseDto> {
+  const data = await apiFetch<MeResponseDto | (MeResponseDto & { features?: unknown })>("/api/auth/me", {
+    method: "GET",
+  });
+  // normalize features in case PascalCase
+  const rawFeatures = (data as unknown as Record<string, unknown>)["features"];
+  const normalized = normalizeFeatures(rawFeatures);
+  return { ...(data as MeResponseDto), features: normalized };
+}
+
+// ---------- Admin Businesses (SuperAdmin) ----------
+export type BusinessDto = {
+  id: string;
+  name: string;
+  cuit: string | null;
+  isActive: boolean;
+  moduloClientes: boolean;
+  moduloPromos: boolean;
+  moduloReportes: boolean;
+  permitirAjusteInflacion: boolean;
+  usersCount: number;
+  createdAt: string;
+};
+
+export type UpdateBusinessFeaturesDto = {
+  moduloClientes: boolean;
+  moduloPromos: boolean;
+  moduloReportes: boolean;
+  permitirAjusteInflacion: boolean;
+};
+
+export function getBusinesses(): Promise<BusinessDto[]> {
+  return apiFetch<BusinessDto[]>("/api/admin/businesses");
+}
+
+export function getBusiness(id: string): Promise<BusinessDto> {
+  return apiFetch<BusinessDto>(`/api/admin/businesses/${id}`);
+}
+
+export function updateBusinessFeatures(id: string, dto: UpdateBusinessFeaturesDto): Promise<BusinessDto> {
+  return apiFetch<BusinessDto>(`/api/admin/businesses/${id}/features`, {
+    method: "PUT",
+    body: JSON.stringify(dto),
+  });
+}
+
+export function createBusiness(dto: { name: string; cuit?: string | null; isActive?: boolean }): Promise<BusinessDto> {
+  const payload: Record<string, unknown> = { name: dto.name, cuit: dto.cuit ?? null };
+  if (dto.isActive !== undefined) payload.isActive = dto.isActive;
+  return apiFetch<BusinessDto>("/api/admin/businesses", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type CreateUserAdminDto = {
+  username: string;
+  password: string;
+  fullName: string;
+  role: string;
+  businessId: string | null;
+};
+
+export function createUser(dto: CreateUserAdminDto): Promise<unknown> {
+  return apiFetch<unknown>("/api/users", {
+    method: "POST",
+    body: JSON.stringify(dto),
+  });
+}
+
+export type AdminBusinessMetricsDto = {
+  id: string;
+  name: string;
+  isActive: boolean;
+  usersCount: number;
+  totalSales: number;
+  totalRevenue: number;
+};
+
+export type AdminMetricsDto = {
+  totalBusinesses: number;
+  activeBusinesses: number;
+  inactiveBusinesses: number;
+  totalUsers: number;
+  totalSales: number;
+  totalRevenue: number;
+  businesses?: AdminBusinessMetricsDto[];
+};
+
+function normalizeMetrics(raw: unknown): AdminMetricsDto {
+  const o = (raw ?? {}) as Record<string, unknown>;
+  const pickNum = (...keys: string[]): number => {
+    for (const k of keys) {
+      const v = o[k];
+      if (typeof v === "number" && !isNaN(v)) return v;
+      if (typeof v === "string" && v.trim() !== "" && !isNaN(Number(v))) return Number(v);
+    }
+    return 0;
+  };
+  const base = {
+    totalBusinesses: pickNum("totalBusinesses", "TotalBusinesses", "total_businesses", "TotalComercios"),
+    activeBusinesses: pickNum("activeBusinesses", "ActiveBusinesses", "activos", "Activos"),
+    inactiveBusinesses: pickNum("inactiveBusinesses", "InactiveBusinesses", "inactivos", "Inactivos"),
+    totalUsers: pickNum("totalUsers", "TotalUsers", "total_usuarios"),
+    totalSales: pickNum("totalSales", "TotalSales", "totalTransacciones", "TotalTransacciones", "totalVentas"),
+    totalRevenue: pickNum("totalRevenue", "TotalRevenue", "montoTotal", "MontoTotal", "totalFacturado"),
+  };
+  // try to extract businesses array if present (extended metrics)
+  const rawBusinesses = (o["businesses"] ?? o["Businesses"] ?? o["comercios"] ?? o["Comercios"]) as unknown;
+  let businesses: AdminBusinessMetricsDto[] | undefined;
+  if (Array.isArray(rawBusinesses)) {
+    businesses = rawBusinesses
+      .map((b) => {
+        const obj = b as Record<string, unknown>;
+        const id = (obj["id"] ?? obj["Id"] ?? "") as string;
+        const name = (obj["name"] ?? obj["Name"] ?? "") as string;
+        if (!id || !name) return null;
+        const isActive = typeof obj["isActive"] === "boolean" ? obj["isActive"] : typeof obj["IsActive"] === "boolean" ? (obj["IsActive"] as boolean) : true;
+        const usersCount = typeof obj["usersCount"] === "number" ? obj["usersCount"] : typeof obj["UsersCount"] === "number" ? (obj["UsersCount"] as number) : 0;
+        const totalSales = typeof obj["totalSales"] === "number" ? obj["totalSales"] : typeof obj["TotalSales"] === "number" ? (obj["TotalSales"] as number) : 0;
+        const totalRevenue = typeof obj["totalRevenue"] === "number" ? obj["totalRevenue"] : typeof obj["TotalRevenue"] === "number" ? (obj["TotalRevenue"] as number) : 0;
+        return { id: String(id), name: String(name), isActive: Boolean(isActive), usersCount: Number(usersCount) || 0, totalSales: Number(totalSales) || 0, totalRevenue: Number(totalRevenue) || 0 };
+      })
+      .filter(Boolean) as AdminBusinessMetricsDto[];
+  }
+  return businesses ? { ...base, businesses } : base;
+}
+
+export async function getAdminMetrics(): Promise<AdminMetricsDto> {
+  const raw = await apiFetch<unknown>("/api/admin/metrics");
+  return normalizeMetrics(raw);
 }

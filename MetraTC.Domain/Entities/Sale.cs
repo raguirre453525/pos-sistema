@@ -5,6 +5,9 @@ namespace MetraTC.Domain.Entities;
 
 public class Sale : BaseEntity
 {
+    public Guid BusinessId { get; set; }
+    public Business Business { get; set; } = null!;
+
     public DateTime Date { get; private set; }
     public PaymentMethod PaymentMethod { get; private set; }
     public decimal Total { get; private set; }

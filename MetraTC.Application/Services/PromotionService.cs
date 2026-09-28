@@ -15,35 +15,31 @@ public class PromotionService : IPromotionService
         _context = context;
     }
 
-    public async Task<PromotionDto> CreateAsync(CreatePromotionDto dto)
+    public async Task<PromotionDto> CreateAsync(CreatePromotionDto dto, Guid businessId)
     {
         var normalizedFrom = NormalizeFrom(dto.ValidFrom);
         var normalizedTo = NormalizeTo(dto.ValidTo);
-        var lines = await ResolveLinesAsync(dto.Lines, dto.ProductIds);
+        var lines = await ResolveLinesAsync(dto.Lines, dto.ProductIds, businessId);
         var promo = new Promotion(dto.Name, dto.Type, dto.Description, dto.IsActive, normalizedFrom, normalizedTo, dto.ComboPrice, dto.DiscountPercentage, lines.Select(l => (l.ProductId, l.Quantity)));
+        promo.BusinessId = businessId;
         promo.SetImageUrl(dto.ImageUrl);
-        // Adjuntar Products navegado para preview antes de Save
         foreach (var line in promo.Lines)
         {
             var prod = lines.First(x => x.ProductId == line.ProductId).Product;
-            // EF fixup via shadow: set private field via tracking - load navigation later
         }
-        // Necesitamos asegurar que Lines tengan Product navigation cargada para Map: cargar después de SaveChanges
         _context.Promotions.Add(promo);
         await _context.SaveChangesAsync();
-        // Recargar con Lines + Products
         promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstAsync(p => p.Id == promo.Id);
         return Map(promo);
     }
 
-    public async Task<PromotionDto> UpdateAsync(Guid id, UpdatePromotionDto dto)
+    public async Task<PromotionDto> UpdateAsync(Guid id, UpdatePromotionDto dto, Guid businessId)
     {
-        var promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id)
+        var promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id && p.BusinessId == businessId)
             ?? throw new KeyNotFoundException($"No se encontró promoción con ID: {id}");
         var normalizedFrom = NormalizeFrom(dto.ValidFrom);
         var normalizedTo = NormalizeTo(dto.ValidTo);
-        var lines = await ResolveLinesAsync(dto.Lines, dto.ProductIds);
-        // Remover líneas existentes que no están en nuevo set (EF Cascade)
+        var lines = await ResolveLinesAsync(dto.Lines, dto.ProductIds, businessId);
         var existingIds = promo.Lines.Select(l => l.ProductId).ToHashSet();
         var incomingIds = lines.Select(l => l.ProductId).ToHashSet();
         var toRemove = promo.Lines.Where(l => !incomingIds.Contains(l.ProductId)).ToList();
@@ -53,52 +49,50 @@ public class PromotionService : IPromotionService
         {
             if (!string.IsNullOrWhiteSpace(dto.ImageUrl))
                 promo.SetImageUrl(dto.ImageUrl);
-            // else preserve existing
         }
-        // Actualizar Product navigation no necesario: EF los insertará como nuevas PromotionProduct
         await _context.SaveChangesAsync();
         promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstAsync(p => p.Id == id);
         return Map(promo);
     }
 
-    public async Task DeleteAsync(Guid id)
+    public async Task DeleteAsync(Guid id, Guid businessId)
     {
-        var promo = await _context.Promotions.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id)
+        var promo = await _context.Promotions.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id && p.BusinessId == businessId)
             ?? throw new KeyNotFoundException($"No se encontró promoción con ID: {id}");
         promo.Deactivate();
         await _context.SaveChangesAsync();
     }
 
-    public async Task<IEnumerable<PromotionDto>> GetAllAsync()
+    public async Task<IEnumerable<PromotionDto>> GetAllAsync(Guid businessId)
     {
-        var list = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().ToListAsync();
+        var list = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().Where(p => p.BusinessId == businessId).ToListAsync();
         return list.Select(Map);
     }
 
-    public async Task<IEnumerable<PromotionDto>> GetActiveAsync()
+    public async Task<IEnumerable<PromotionDto>> GetActiveAsync(Guid businessId)
     {
         var now = DateTime.UtcNow;
-        var list = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).ToListAsync(); // query filter already IsActive
+        var list = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).Where(p => p.BusinessId == businessId).ToListAsync();
         return list.Where(p => p.IsCurrentlyActive(now)).Select(Map);
     }
 
-    public async Task<PromotionDto> GetByIdAsync(Guid id)
+    public async Task<PromotionDto> GetByIdAsync(Guid id, Guid businessId)
     {
-        var promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id)
+        var promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id && p.BusinessId == businessId)
             ?? throw new KeyNotFoundException($"No se encontró promoción con ID: {id}");
         return Map(promo);
     }
 
-    public async Task<PromotionDto> ToggleActiveAsync(Guid id)
+    public async Task<PromotionDto> ToggleActiveAsync(Guid id, Guid businessId)
     {
-        var promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id)
+        var promo = await _context.Promotions.Include(p => p.Lines).ThenInclude(l => l.Product).IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id && p.BusinessId == businessId)
             ?? throw new KeyNotFoundException($"No se encontró promoción con ID: {id}");
         promo.SetActive(!promo.IsActive);
         await _context.SaveChangesAsync();
         return Map(promo);
     }
 
-    private async Task<List<(Guid ProductId, int Quantity, Product Product)>> ResolveLinesAsync(List<PromotionLineDto>? lines, List<Guid>? legacyIds)
+    private async Task<List<(Guid ProductId, int Quantity, Product Product)>> ResolveLinesAsync(List<PromotionLineDto>? lines, List<Guid>? legacyIds, Guid businessId)
     {
         List<PromotionLineDto> effective;
         if (lines != null && lines.Count > 0) effective = lines;
@@ -106,15 +100,13 @@ public class PromotionService : IPromotionService
         else effective = new List<PromotionLineDto>();
 
         if (effective.Count == 0) return new List<(Guid,int,Product)>();
-        // validar qty
         foreach (var l in effective)
         {
             if (l.Quantity < 1 || l.Quantity > 99) throw new ArgumentException($"Quantity 1..99 para producto {l.ProductId}");
         }
-        // detectar duplicados: debe agrupar? Task dice mismo producto repetible via cantidad => no duplicar entrada, usar Quantity. Si llegan duplicados, mergear
         var grouped = effective.GroupBy(x => x.ProductId).Select(g => new PromotionLineDto(g.Key, g.Sum(x => x.Quantity))).ToList();
         var ids = grouped.Select(x => x.ProductId).ToList();
-        var products = await _context.Products.Where(p => ids.Contains(p.Id)).ToListAsync();
+        var products = await _context.Products.Where(p => ids.Contains(p.Id) && p.BusinessId == businessId).ToListAsync();
         if (products.Count != ids.Count)
         {
             var found = products.Select(p => p.Id).ToHashSet();
@@ -144,7 +136,6 @@ public class PromotionService : IPromotionService
         var lines = p.Lines?.Select(l =>
         {
             var prod = l.Product;
-            // Si navegación no cargada (edge), crear placeholder
             var name = prod?.Name ?? l.ProductId.ToString();
             var sku = prod?.Sku ?? "";
             var price = prod?.Price ?? 0;
@@ -152,7 +143,6 @@ public class PromotionService : IPromotionService
         }).ToList() ?? new List<PromotionProductDto>();
 
         var productDtos = lines.Select(l => new ProductDto(l.ProductId, l.Sku, null, l.ProductName, null, l.UnitPrice, 0, null, null, null, false)).ToList();
-        // Para compat, Products son los productos distintos (sin multiplicar)
         var total = lines.Sum(x => x.LineTotal);
         decimal? savingAmount = null;
         decimal? savingPercent = null;
@@ -173,7 +163,6 @@ public class PromotionService : IPromotionService
     {
         if (!d.HasValue) return null;
         var dt = d.Value;
-        // treat as date only, set to 00:00 UTC
         return new DateTime(dt.Year, dt.Month, dt.Day, 0, 0, 0, DateTimeKind.Utc);
     }
     private static DateTime? NormalizeTo(DateTime? d)

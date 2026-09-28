@@ -1,5 +1,6 @@
 ﻿"use client";
 import { useState, useEffect, useMemo } from "react";
+import { useFeatureGuard } from "@/hooks/useFeatureGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -30,6 +31,7 @@ function fmtMoney(n: number) { return `$${n.toLocaleString("es-AR", { minimumFra
 function fmtDate(s: string | null) { if (!s) return "—"; try { return new Date(s).toLocaleDateString("es-AR"); } catch { return s; } }
 
 export default function PromocionesPage() {
+  const { allowed } = useFeatureGuard({ requirePromos: true, denyRoles: ["SuperAdmin"], redirectTo: "/Admin/Negocios" });
   const [promos, setPromos] = useState<PromotionDto[]>([]);
   const [products, setProducts] = useState<ProductDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -189,10 +191,18 @@ export default function PromocionesPage() {
     else addProduct(id);
   };
 
+  if (!allowed) {
+    return (
+      <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Redirigiendo…</p>
+      </main>
+    );
+  }
+
   if (loading) return <div className="p-6">Cargando promos...</div>;
 
   return (
-    <div className="p-4 md:p-6 space-y-4">
+    <div className="w-full min-w-full max-w-none p-4 md:p-6 space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold flex items-center gap-2"><Tag className="size-6" /> Promos & Combos</h1>
         <Button onClick={openCreate} className="gap-2"><PackageCheck className="size-4" /> Nuevo combo/promo</Button>

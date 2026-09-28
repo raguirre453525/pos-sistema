@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useEffect, useState, useCallback, useMemo } from "react";
+import { useFeatureGuard } from "@/hooks/useFeatureGuard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import { Search, Plus, X, Users, DollarSign } from "lucide-react";
 import { getCustomers, getCustomerDetail, createCustomer, registerCustomerPayment, CustomerDto, CustomerDetailDto, ApiError } from "@/lib/api";
 
 export default function ClientesPage() {
+  const { allowed } = useFeatureGuard({ requireClientes: true, denyRoles: ["SuperAdmin"], redirectTo: "/Admin/Negocios" });
   const [customers, setCustomers] = useState<CustomerDto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,8 +146,16 @@ export default function ClientesPage() {
     return customers.filter((c) => c.name.toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q));
   }, [customers, search]);
 
+  if (!allowed) {
+    return (
+      <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+        <p className="text-sm text-muted-foreground">Redirigiendo…</p>
+      </main>
+    );
+  }
+
   return (
-    <main className="p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2"><Users className="h-6 w-6"/>Clientes</h1>
         <Button onClick={() => { setShowDialog(true); setFormError(null); }} className="gap-1.5"><Plus className="h-4 w-4"/> Nuevo cliente</Button>

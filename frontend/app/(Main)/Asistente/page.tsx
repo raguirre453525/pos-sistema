@@ -159,7 +159,7 @@ export default function AsistentePage() {
   }
 
   return (
-    <main className="h-full p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="h-full w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex items-center justify-between flex-wrap gap-2">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground">Asistente</h1>
         <div className="flex items-center gap-2 ml-auto">

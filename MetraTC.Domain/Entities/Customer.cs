@@ -4,6 +4,9 @@ namespace MetraTC.Domain.Entities;
 
 public class Customer : BaseEntity
 {
+    public Guid BusinessId { get; set; }
+    public Business Business { get; set; } = null!;
+
     public string Name { get; private set; }
     public string? Phone { get; private set; }
     public string? Note { get; private set; }

@@ -23,5 +23,10 @@ public class BulkPriceAdjustmentDtoValidator : AbstractValidator<BulkPriceAdjust
         RuleFor(x => x)
             .Must(x => (x.Percentage.HasValue && x.Percentage.Value != 0) || (x.FixedAmount.HasValue && x.FixedAmount.Value != 0))
             .WithMessage("Al menos uno de Percentage o FixedAmount debe ser distinto de 0");
+
+        RuleFor(x => x.Rounding)
+            .Must(v => v == null || v == 10 || v == 50)
+            .WithMessage("Rounding debe ser null, 10 o 50")
+            .When(x => x.Rounding.HasValue);
     }
 }

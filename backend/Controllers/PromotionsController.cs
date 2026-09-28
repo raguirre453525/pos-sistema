@@ -1,5 +1,7 @@
+using System.Security.Claims;
 using MetraTC.Application.Services;
 using MetraTC.Infrastructure.Persistence;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,6 +12,7 @@ namespace MetraTC.API.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PromotionsController : ControllerBase
 {
     private readonly IPromotionService _service;
@@ -24,43 +27,80 @@ public class PromotionsController : ControllerBase
         _logger = logger;
     }
 
+    private bool TryGetBusinessId(out Guid businessId)
+    {
+        businessId = Guid.Empty;
+        var role = User.FindFirst(ClaimTypes.Role)?.Value ?? User.FindFirst("role")?.Value;
+        if (string.Equals(role, "SuperAdmin", StringComparison.OrdinalIgnoreCase)) return false;
+        var bid = User.FindFirst("businessId")?.Value;
+        if (string.IsNullOrWhiteSpace(bid)) return false;
+        return Guid.TryParse(bid, out businessId) && businessId != Guid.Empty;
+    }
+
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreatePromotionDto dto)
     {
-        var res = await _service.CreateAsync(dto);
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "SuperAdmin no puede crear promociones" });
+        var res = await _service.CreateAsync(dto, businessId);
         return Ok(res);
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll() => Ok(await _service.GetAllAsync());
+    public async Task<IActionResult> GetAll()
+    {
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "El SuperAdmin no puede operar promociones" });
+        return Ok(await _service.GetAllAsync(businessId));
+    }
 
     [HttpGet("active")]
-    public async Task<IActionResult> GetActive() => Ok(await _service.GetActiveAsync());
+    public async Task<IActionResult> GetActive()
+    {
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "El SuperAdmin no puede operar promociones" });
+        return Ok(await _service.GetActiveAsync(businessId));
+    }
 
     [HttpGet("{id:guid}")]
-    public async Task<IActionResult> GetById(Guid id) => Ok(await _service.GetByIdAsync(id));
+    public async Task<IActionResult> GetById(Guid id)
+    {
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "El SuperAdmin no puede operar promociones" });
+        return Ok(await _service.GetByIdAsync(id, businessId));
+    }
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(Guid id, [FromBody] UpdatePromotionDto dto)
     {
-        var res = await _service.UpdateAsync(id, dto);
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "SuperAdmin no puede modificar promociones" });
+        var res = await _service.UpdateAsync(id, dto, businessId);
         return Ok(res);
     }
 
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        await _service.DeleteAsync(id);
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "SuperAdmin no puede eliminar promociones" });
+        await _service.DeleteAsync(id, businessId);
         return NoContent();
     }
 
     [HttpPatch("{id:guid}/toggle")]
-    public async Task<IActionResult> Toggle(Guid id) => Ok(await _service.ToggleActiveAsync(id));
+    public async Task<IActionResult> Toggle(Guid id)
+    {
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "SuperAdmin no puede modificar promociones" });
+        return Ok(await _service.ToggleActiveAsync(id, businessId));
+    }
 
     [HttpPost("{id}/image")]
     public async Task<IActionResult> UploadImage(Guid id, IFormFile file)
     {
-        // FIX: mismo hardening que Products - evita DirectoryNotFound / NullReference y loguea diagnóstico
+        if (!TryGetBusinessId(out var businessId))
+            return StatusCode(StatusCodes.Status403Forbidden, new { message = "SuperAdmin no puede operar promociones" });
         try
         {
             Console.WriteLine($"[Upload] Promotion {id} file {file?.FileName} {file?.Length}");
@@ -72,6 +112,7 @@ public class PromotionsController : ControllerBase
             if (!allowed.Contains(ext)) return BadRequest(new { message = "Extensión no permitida (jpg, jpeg, png, webp)" });
             var promo = await _context.Promotions.IgnoreQueryFilters().FirstOrDefaultAsync(p => p.Id == id);
             if (promo == null) return NotFound(new { message = $"No se encontró promoción con ID: {id}" });
+            if (promo.BusinessId != businessId) return StatusCode(StatusCodes.Status403Forbidden, new { message = "Promoción no pertenece a su negocio" });
             var webRoot = _env.WebRootPath;
             if (string.IsNullOrWhiteSpace(webRoot) || !Directory.Exists(webRoot))
                 webRoot = Path.Combine(AppContext.BaseDirectory, "wwwroot");

@@ -32,6 +32,13 @@ public class SaleConfiguration : IEntityTypeConfiguration<Sale>
         builder.HasIndex(s => s.CustomerId);
         builder.HasIndex(s => s.IsCredit);
 
+        builder.HasOne(s => s.Business)
+            .WithMany()
+            .HasForeignKey(s => s.BusinessId)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Property(s => s.BusinessId).IsRequired();
+        builder.HasIndex(s => s.BusinessId);
+
         builder.HasMany(s => s.Items)
             .WithOne(i => i.Sale)
             .HasForeignKey(i => i.SaleId)
