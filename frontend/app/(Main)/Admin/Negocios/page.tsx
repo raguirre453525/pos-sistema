@@ -316,7 +316,7 @@ export default function NegociosPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => router.push(`/Admin/Licencias?businessId=${b.id}`)}
-                              className="border-slate-200 text-slate-700 hover:bg-slate-50 rounded-lg gap-1.5"
+                              className="border border-slate-300 bg-white text-slate-950 hover:bg-slate-100 hover:text-slate-950 rounded-lg gap-1.5"
                             >
                               <SlidersHorizontal className="h-3.5 w-3.5" /> Licencias
                             </Button>
@@ -328,7 +328,7 @@ export default function NegociosPage() {
                                 disabled={togglingId === b.id}
                                 title="Suspender comercio"
                                 aria-label="Suspender comercio"
-                                className="h-7 px-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 text-xs font-medium gap-1.5"
+                                className="h-7 px-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-700 text-xs font-medium gap-1.5"
                               >
                                 {togglingId === b.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -345,7 +345,7 @@ export default function NegociosPage() {
                                 disabled={togglingId === b.id}
                                 title="Activar comercio"
                                 aria-label="Activar comercio"
-                                className="h-7 px-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 text-xs font-medium gap-1.5"
+                                className="h-7 px-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700 text-xs font-medium gap-1.5"
                               >
                                 {togglingId === b.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
