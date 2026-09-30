@@ -25,6 +25,8 @@ const PRESETS: Array<{ label: string; flags: FeatureFlags }> = [
   { label: "Plan Full", flags: { moduloClientes: true, moduloPromos: true, moduloReportes: true, permitirAjusteInflacion: true } },
 ];
 
+const WHITE_BUTTON = "border border-slate-300 bg-white text-slate-950 hover:bg-slate-100 hover:text-slate-950";
+
 function businessToFlags(b: BusinessDto): FeatureFlags {
   return {
     moduloClientes: b.moduloClientes,
@@ -193,7 +195,7 @@ export default function LicenciasPage() {
                 <span className="text-sm text-muted-foreground">Cargando negocios…</span>
               ) : fetchError ? (
                 <span className="text-sm text-red-600 border border-red-200 bg-red-50 rounded px-2 py-1">
-                  {fetchError} <Button variant="outline" size="sm" className="ml-2 h-6" onClick={() => void fetchBusinessesCb()}>Reintentar</Button>
+                  {fetchError} <Button variant="outline" size="sm" className={`ml-2 h-6 ${WHITE_BUTTON}`} onClick={() => void fetchBusinessesCb()}>Reintentar</Button>
                 </span>
               ) : businesses && businesses.length > 0 ? (
                 <Select value={selectedId} onValueChange={(v) => { setSelectedId(v); router.replace(`/Admin/Licencias?businessId=${v}`); }}>
@@ -211,8 +213,8 @@ export default function LicenciasPage() {
               )}
             </div>
             <div className="flex items-center gap-2 ml-auto shrink-0">
-              <Button onClick={() => void fetchBusinessesCb()} variant="outline" disabled={fetchLoading || saving} className="border border-slate-200 dark:border-border text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-muted">Recargar</Button>
-              <Button onClick={() => void handleSave()} disabled={saving || !selectedId} className="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 font-medium shadow-sm rounded-lg px-5 h-9">
+              <Button onClick={() => void fetchBusinessesCb()} variant="outline" disabled={fetchLoading || saving} className={WHITE_BUTTON}>Recargar</Button>
+              <Button onClick={() => void handleSave()} variant="outline" disabled={saving || !selectedId} className={`${WHITE_BUTTON} font-medium shadow-sm rounded-lg px-5 h-9`}>
                 {saving ? "Guardando…" : "Guardar configuración"}
               </Button>
             </div>
@@ -241,8 +243,9 @@ export default function LicenciasPage() {
                   key={preset.label}
                   size="sm"
                   variant="outline"
+                  aria-pressed={active}
                   onClick={() => handlePreset(preset.flags)}
-                  className={`h-7 px-3 rounded-full text-xs font-medium border-slate-300 bg-white hover:bg-slate-50 ${active ? "bg-slate-900 text-white border-slate-900 hover:bg-slate-800 hover:text-white dark:bg-white dark:text-slate-900 dark:border-white" : ""}`}
+                  className={`h-7 px-3 rounded-full text-xs font-medium ${WHITE_BUTTON} ${active ? "border-slate-950 ring-2 ring-slate-950" : ""}`}
                 >
                   {preset.label}
                 </Button>
