@@ -4,7 +4,7 @@ public static class AssistantDtos
 {
     public record ChatMessageDto(string Role, string Content);
 
-    public record ChatRequestDto(string Message, List<ChatMessageDto>? History);
+    public record ChatRequestDto(string? Message, List<ChatMessageDto>? History, List<string>? Images = null);
 
     public record ChatResponseDto(string Reply, string Provider, ProposalResponse? Proposal = null);
 

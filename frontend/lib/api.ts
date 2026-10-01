@@ -422,7 +422,7 @@ export function getStockAudits(params: {
 
 // ---------- Assistant ----------
 export type ChatMessageDto = { role: "user" | "assistant"; content: string };
-export type ChatRequestDto = { message: string; history?: ChatMessageDto[] };
+export type ChatRequestDto = { message: string; history?: ChatMessageDto[]; images?: string[] };
 export type ProductProposal = {
   name: string;
   sku: string | null;
@@ -447,19 +447,20 @@ export type ProposalResponse = {
 export type ChatResponseDto = { reply: string; provider: string; proposal?: ProposalResponse | null };
 export type ProvidersResponseDto = { current: string; available: string[] };
 
-export function askAssistant(message: string, history?: ChatMessageDto[]) {
+export function askAssistant(message: string, history?: ChatMessageDto[], images?: string[], token?: string | null) {
   return apiFetch<ChatResponseDto>("/api/assistant/chat", {
     method: "POST",
-    body: JSON.stringify({ message, history: history ?? [] }),
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: JSON.stringify({ message, history: history ?? [], ...(images?.length ? { images } : {}) }),
   });
 }
 
-export function confirmAssistantProposal(history?: ChatMessageDto[]) {
-  return askAssistant("confirmar", history);
+export function confirmAssistantProposal(history?: ChatMessageDto[], token?: string | null) {
+  return askAssistant("confirmar", history, undefined, token);
 }
 
-export function getAssistantProviders() {
-  return apiFetch<ProvidersResponseDto>("/api/assistant/providers");
+export function getAssistantProviders(token?: string | null) {
+  return apiFetch<ProvidersResponseDto>("/api/assistant/providers", token ? { headers: { Authorization: `Bearer ${token}` } } : undefined);
 }
 
 // ---------- Categories ----------

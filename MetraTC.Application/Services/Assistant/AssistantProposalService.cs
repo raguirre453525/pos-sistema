@@ -32,18 +32,24 @@ public class AssistantProposalService
         _logger = logger;
     }
 
-    public async Task<ProposalResponse?> BuildProposalAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
+    public async Task<ProposalResponse?> BuildProposalAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, Guid businessId, CancellationToken ct)
     {
+        if (!AssistantProductExtractor.HasInventoryWriteIntent(message)) return null;
         var rawList = await _extractor.ExtractAsync(message, history, inventoryContext, ct);
         if (rawList == null || rawList.Count == 0) return null;
-        return await BuildFromRawsAsync(rawList, ct);
+        if (!AssistantProductExtractor.TryNormalizeStockDirections(message, rawList, out var normalizedRaws))
+            return null;
+        return await BuildFromRawsAsync(normalizedRaws, businessId, ct);
     }
 
-    public async Task<ProposalResponse?> TryPatchPendingAsync(ProposalResponse pending, string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
+    public async Task<ProposalResponse?> TryPatchPendingAsync(ProposalResponse pending, string message, IReadOnlyList<ChatMessage> history, string inventoryContext, Guid businessId, CancellationToken ct)
     {
-        if (pending == null || !pending.HasMissingData) return null;
+        if (pending == null || !pending.HasMissingData || AssistantProductExtractor.IsReadOnlyRequest(message)) return null;
         var newRaws = await _extractor.ExtractAsync(message, history, inventoryContext, ct);
         if (newRaws == null || newRaws.Count == 0) return null;
+        if (!AssistantProductExtractor.TryNormalizeStockDirections(message, newRaws, out var normalizedNewRaws))
+            return null;
+        newRaws = normalizedNewRaws;
 
         // Helpers para comparar nombres tolerante
         string Norm(string? s) => (s ?? "").Trim().ToLowerInvariant();
@@ -111,6 +117,11 @@ public class AssistantProposalService
             if (matched >= 2) return true;
             return false;
         }
+
+        var hasStockMovementIntent = AssistantProductExtractor.HasStockMovementIntent(message);
+        if (hasStockMovementIntent && pending.Proposals.Count > 1 &&
+            !pending.Proposals.Any(p => MessageMentionsProduct(message, p.Name)))
+            return null;
 
         // Ambigüedad: 2+ productos faltan y usuario manda un solo sku/precio sin decir producto
         var missingProducts = pending.Proposals.Where(p => p.MissingFields.Any(f => f == "Sku" || f == "Price")).ToList();
@@ -189,11 +200,13 @@ public class AssistantProposalService
             if (bestIdx >= 0)
             {
                 var pr = patchedRaws[bestIdx];
+                var applyStockDelta = hasStockMovementIntent &&
+                    (pending.Proposals.Count == 1 || MessageMentionsProduct(message, pending.Proposals[bestIdx].Name));
                 var merged = new RawProductExtract(
                     Name: !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
                     Sku: !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
                     Price: nr.Price ?? pr.Price,
-                    StockDelta: nr.StockDelta ?? pr.StockDelta,
+                    StockDelta: applyStockDelta ? nr.StockDelta ?? pr.StockDelta : pr.StockDelta,
                     Barcode: !string.IsNullOrWhiteSpace(nr.Barcode) ? nr.Barcode : pr.Barcode,
                     Description: !string.IsNullOrWhiteSpace(nr.Description) ? nr.Description : pr.Description,
                     CategoryNames: nr.CategoryNames ?? pr.CategoryNames
@@ -219,6 +232,8 @@ public class AssistantProposalService
                     var idx = missingIndices[0];
                     if (!usedIndices.Contains(idx))
                     {
+                        var applyStockDelta = hasStockMovementIntent &&
+                            (pending.Proposals.Count == 1 || MessageMentionsProduct(message, pending.Proposals[idx].Name));
                         bool ok = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, pending.Proposals[idx].Name) || MessageMentionsProduct(message, pending.Proposals[idx].Name);
                         // For single missing, allow even without explicit mention (inferencia válida)
                         if (string.IsNullOrWhiteSpace(nr.Name)) ok = true;
@@ -229,7 +244,7 @@ public class AssistantProposalService
                                 !string.IsNullOrWhiteSpace(nr.Name) ? nr.Name!.Trim() : pr.Name,
                                 !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
                                 nr.Price ?? pr.Price,
-                                nr.StockDelta ?? pr.StockDelta,
+                                applyStockDelta ? nr.StockDelta ?? pr.StockDelta : pr.StockDelta,
                                 pr.Barcode, pr.Description, nr.CategoryNames ?? pr.CategoryNames);
                             anyPatched = true;
                         }
@@ -239,10 +254,10 @@ public class AssistantProposalService
         }
 
         if (!anyPatched) return null;
-        return await BuildFromRawsAsync(patchedRaws, ct);
+        return await BuildFromRawsAsync(patchedRaws, businessId, ct);
     }
 
-    private async Task<ProposalResponse?> BuildFromRawsAsync(List<RawProductExtract> rawList, CancellationToken ct)
+    private async Task<ProposalResponse?> BuildFromRawsAsync(List<RawProductExtract> rawList, Guid businessId, CancellationToken ct)
     {
         if (rawList == null || rawList.Count == 0) return null;
         var proposals = new List<ProductProposal>();
@@ -257,7 +272,7 @@ public class AssistantProposalService
                 existing = await _db.Products
                     .IgnoreQueryFilters()
                     .Include(p => p.Categories)
-                    .FirstOrDefaultAsync(p => p.Sku.ToLower() == skuNorm, ct);
+                    .FirstOrDefaultAsync(p => p.BusinessId == businessId && p.Sku.ToLower() == skuNorm, ct);
             }
             if (existing == null && !string.IsNullOrWhiteSpace(raw.Name))
             {
@@ -275,16 +290,17 @@ public class AssistantProposalService
                     .IgnoreQueryFilters()
                     .Include(p => p.Categories)
                     .Where(p =>
-                        EF.Functions.Like(p.Name.ToLower(), $"%{nameNorm}%") ||
-                        EF.Functions.Like(p.Name.ToLower(), $"%{nameNormSingular}%") ||
-                        EF.Functions.Like(nameNorm, "%" + p.Name.ToLower() + "%") ||
-                        EF.Functions.Like(nameNormSingular, "%" + p.Name.ToLower() + "%"))
+                        p.BusinessId == businessId &&
+                        (EF.Functions.Like(p.Name.ToLower(), $"%{nameNorm}%") ||
+                         EF.Functions.Like(p.Name.ToLower(), $"%{nameNormSingular}%") ||
+                         EF.Functions.Like(nameNorm, "%" + p.Name.ToLower() + "%") ||
+                         EF.Functions.Like(nameNormSingular, "%" + p.Name.ToLower() + "%")))
                     .ToListAsync(ct);
 
                 // Fallback: if LIKE yielded nothing, broaden to token-based search client-side
                 if (candidates.Count == 0 && tokens.Count > 0)
                 {
-                    var all = await _db.Products.IgnoreQueryFilters().Include(p => p.Categories).ToListAsync(ct);
+                    var all = await _db.Products.IgnoreQueryFilters().Include(p => p.Categories).Where(p => p.BusinessId == businessId).ToListAsync(ct);
                     candidates = all.Where(p =>
                     {
                         var pn = p.Name.ToLowerInvariant();
@@ -349,6 +365,10 @@ public class AssistantProposalService
             Guid? existingId = existing?.Id;
             decimal? currentPrice = existing?.Price;
             decimal? currentStock = existing?.Stock;
+            var proposedStockDelta = exists && raw.StockDelta == 0 ? null : raw.StockDelta;
+
+            if (exists && !HasActionableExistingChanges(currentPrice, raw.Price, proposedStockDelta, raw.CategoryNames?.Count > 0))
+                continue;
 
             var missing = new List<string>();
             string action;
@@ -383,7 +403,7 @@ public class AssistantProposalService
                 Name: nameVal,
                 Sku: raw.Sku?.Trim()?.ToUpperInvariant(),
                 Price: raw.Price,
-                StockDelta: raw.StockDelta,
+                StockDelta: proposedStockDelta,
                 Barcode: raw.Barcode,
                 Description: raw.Description,
                 CategoryNames: raw.CategoryNames,
@@ -406,6 +426,11 @@ public class AssistantProposalService
         return new ProposalResponse(proposals, natural, needsConfirmation, hasMissing);
     }
 
+    public static bool HasActionableExistingChanges(decimal? currentPrice, decimal? requestedPrice, decimal? stockDelta, bool hasCategoryChanges) =>
+        stockDelta.GetValueOrDefault() != 0 ||
+        requestedPrice.HasValue && requestedPrice != currentPrice ||
+        hasCategoryChanges;
+
     private string BuildNaturalReply(List<ProductProposal> proposals)
     {
         var sb = new StringBuilder();
@@ -415,15 +440,19 @@ public class AssistantProposalService
         if (proposals.Count == 1)
         {
             var p = proposals[0];
-            var stockPart = p.StockDelta != null ? $"+{p.StockDelta} unidades" : "sin delta";
-            var currentPart = p.CurrentStock != null ? $" (stock actual: {p.CurrentStock})" : "";
+            var formattedDelta = AssistantInventoryContext.FormatStockChange(p.StockDelta);
+            var stockPart = formattedDelta == "sin delta" ? formattedDelta : $"{formattedDelta} unidades";
+            var currentPart = p.CurrentStock != null ? $" (stock actual: {AssistantInventoryContext.FormatStock(p.CurrentStock.Value)})" : "";
             if (p.Exists && p.MissingFields.Count == 0)
             {
-                sb.AppendLine($"Detecté **{p.Name}**: {stockPart}{currentPart}. ¿Confirmás la reposición? Podés tocar **Confirmar** o **Corregir** abajo, o decímelo escribiendo (\"sí, dale\").");
+                var confirmation = p.StockDelta < 0
+                    ? "¿Confirmás el descuento de stock?"
+                    : p.StockDelta > 0 ? "¿Confirmás la reposición?" : "¿Confirmás los cambios?";
+                sb.AppendLine($"Detecté **{p.Name}**: {stockPart}{currentPart}. {confirmation} Podés tocar **Confirmar** o **Corregir** abajo, o decímelo escribiendo (\"sí, dale\").");
             }
             else if (!p.Exists && p.MissingFields.Count > 0)
             {
-                var deltaStr = p.StockDelta != null ? $" (+{p.StockDelta})" : "";
+                var deltaStr = p.StockDelta is { } delta && delta != 0 ? $" ({AssistantInventoryContext.FormatStockChange(delta)})" : "";
                 sb.AppendLine($"Detecté **{p.Name}**{deltaStr}. No lo encontré en tu inventario — para crearlo necesito: {string.Join(", ", p.MissingFields)}. ¿Me los pasás? Ej: \"SKU CEP200 a $1200\"");
             }
             else if (!p.Exists && p.MissingFields.Count == 0)
@@ -447,10 +476,12 @@ public class AssistantProposalService
         sb.AppendLine("Entendí lo siguiente:");
         foreach (var p in proposals)
         {
-            var estado = p.Exists ? "existe, reponer" : "nuevo, crear";
-            var stock = p.StockDelta != null ? $"+{p.StockDelta}" : "sin delta";
+            var estado = p.Exists
+                ? p.StockDelta < 0 ? "existe, descontar stock" : p.StockDelta > 0 ? "existe, reponer" : "existe, actualizar"
+                : "nuevo, crear";
+            var stock = AssistantInventoryContext.FormatStockChange(p.StockDelta);
             var falt = p.MissingFields.Count > 0 ? $" — faltan: {string.Join(", ", p.MissingFields)}" : "";
-            var cur = p.Exists && p.CurrentStock != null ? $" (actual: {p.CurrentStock})" : "";
+            var cur = p.Exists && p.CurrentStock != null ? $" (actual: {AssistantInventoryContext.FormatStock(p.CurrentStock.Value)})" : "";
             sb.AppendLine($"• {p.Name} — {stock}{cur} ({estado}){falt}");
         }
         sb.AppendLine();
@@ -465,7 +496,7 @@ public class AssistantProposalService
         return sb.ToString().Trim();
     }
 
-    public async Task<string> ExecuteAsync(ProposalResponse proposal, CancellationToken ct)
+    public async Task<string> ExecuteAsync(ProposalResponse proposal, Guid businessId, CancellationToken ct)
     {
         var sb = new StringBuilder();
         foreach (var p in proposal.Proposals)
@@ -480,8 +511,6 @@ public class AssistantProposalService
             {
                 if (!p.Exists)
                 {
-                    // Create - business isolation: assign to primary business (Repuestera El Chorolqui) when assistant has no JWT context
-                    var businessId = await ResolveBusinessIdAsync(ct);
                     var created = await _productService.CreateAsync(new CreateProductDto(
                         Sku: p.Sku!,
                         Name: p.Name,
@@ -506,12 +535,12 @@ public class AssistantProposalService
                             await _categoryService.AssignProductAsync(cat.Id, created.Id);
                         }
                     }
-                    sb.AppendLine($"- ✅ Creado {p.Name} (SKU {p.Sku}) precio {p.Price} stock +{p.StockDelta}");
+                    sb.AppendLine($"- ✅ Creado {p.Name} (SKU {p.Sku}) precio {p.Price} stock {AssistantInventoryContext.FormatStockChange(p.StockDelta)}");
                 }
                 else
                 {
                     var id = p.ExistingId!.Value;
-                    var productEntity = await _db.Products.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id, ct);
+                    var productEntity = await _db.Products.IgnoreQueryFilters().FirstOrDefaultAsync(x => x.Id == id && x.BusinessId == businessId, ct);
                     if (productEntity == null)
                         throw new KeyNotFoundException($"No se encontró ningún producto con el ID: {id}");
                     if (!productEntity.IsActive)
@@ -521,20 +550,22 @@ public class AssistantProposalService
                         _logger.LogInformation("Producto reactivado {ProductId} {Name} vía asistente", id, productEntity.Name);
                     }
                     // Price update if needed
-                    var businessIdForUpdate = productEntity.BusinessId != Guid.Empty ? productEntity.BusinessId : await ResolveBusinessIdAsync(ct);
                     if (p.Price != null && p.Price != p.CurrentPrice)
                     {
                         // Need existing description for Update: keep existing if not provided (reuse reactivated entity)
                         var desc = p.Description ?? productEntity.Description;
                         // Use raw name if provided otherwise existing name
                         var nameForUpdate = !string.IsNullOrWhiteSpace(p.Name) ? p.Name : productEntity.Name;
-                        await _productService.UpdateAsync(id, new UpdateProductDto(nameForUpdate, p.Price.Value, desc, null, null, null), businessIdForUpdate);
+                        await _productService.UpdateAsync(id, new UpdateProductDto(nameForUpdate, p.Price.Value, desc, null, null, null), businessId);
                         sb.AppendLine($"- ✅ Precio actualizado {p.Name}: {p.CurrentPrice} → {p.Price}");
                     }
                     if (p.StockDelta.HasValue && p.StockDelta.Value != 0)
                     {
-                        await _productService.AdjustStockAsync(id, new StockAdjustmentDto(p.StockDelta.Value, "Reposición vía asistente"), businessIdForUpdate);
-                        sb.AppendLine($"- ✅ Stock repuesto {p.Name}: +{p.StockDelta} (antes {p.CurrentStock})");
+                        var delta = p.StockDelta.Value;
+                        var reason = delta < 0 ? "Descuento vía asistente" : "Reposición vía asistente";
+                        var action = delta < 0 ? "Stock descontado" : "Stock repuesto";
+                        await _productService.AdjustStockAsync(id, new StockAdjustmentDto(delta, reason), businessId);
+                        sb.AppendLine($"- ✅ {action} {p.Name}: {AssistantInventoryContext.FormatStockChange(delta)} (antes {AssistantInventoryContext.FormatStock(p.CurrentStock!.Value)})");
                     }
                     else if (p.Price == null || p.Price == p.CurrentPrice)
                     {
@@ -564,15 +595,6 @@ public class AssistantProposalService
         }
         if (sb.Length == 0) return "No se ejecutó ninguna acción.";
         return sb.ToString().Trim();
-    }
-
-    private async Task<Guid> ResolveBusinessIdAsync(CancellationToken ct)
-    {
-        // Assistant runs without HttpContext; fallback to primary business to maintain isolation for existing seed
-        var primary = await _db.Businesses.FirstOrDefaultAsync(b => b.Name.Contains("Chorolqui"), ct);
-        if (primary != null) return primary.Id;
-        var first = await _db.Businesses.FirstOrDefaultAsync(ct);
-        return first?.Id ?? new Guid("11111111-1111-1111-1111-111111111111");
     }
 
     private async Task<Category> EnsureCategoryAsync(string name, CancellationToken ct)

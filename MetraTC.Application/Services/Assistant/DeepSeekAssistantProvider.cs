@@ -16,7 +16,9 @@ public class DeepSeekAssistantProvider : IAssistantProvider
     public const string SystemPrompt =
         "Sos asistente de MetraTC, un POS para comercio minorista. " +
         "Ayudás con inventario, ventas y reportes. Respondé en español rioplatense, breve y útil. " +
-        "Si te preguntan por stock, productos o ventas, explicá cómo consultarlos en el sistema. " +
+        "Si preguntan por stock, responde con los datos reales del contexto cuando estén disponibles; de lo contrario, explica cómo consultarlos en el sistema. " +
+        "Al indicar cantidades de stock, conserva exactamente el valor del contexto: usa punto decimal y no incluyas separadores de miles ni ceros decimales innecesarios. " +
+        "Solo propone cambios de inventario cuando el mensaje actual solicite explícitamente una acción; las consultas informativas no deben generar propuestas ni sugerencias de modificación. " +
         "No inventes datos de stock o ventas si no tenés contexto. Sé conciso y amable. " +
         "NUNCA digas que creaste/modificaste un producto en la base de datos. Solo el sistema puede crear productos tras confirmación explícita del usuario (botón Confirmar o 'sí/dale'). Si el usuario pregunta si creaste algo, responde que solo propones y que debe tocar Confirmar.";
 
@@ -26,15 +28,24 @@ public class DeepSeekAssistantProvider : IAssistantProvider
         _configuration = configuration;
     }
 
-    public async Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
+    internal static string? GetApiKey(IConfiguration configuration)
     {
-        var apiKey = _configuration["Assistant:DeepSeek:ApiKey"];
+        var environmentKey = configuration["DEEPSEEK_API_KEY"];
+        return string.IsNullOrWhiteSpace(environmentKey) ? configuration["Assistant:DeepSeek:ApiKey"] : environmentKey;
+    }
+
+    public Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
+        => GetResponseAsync(message, history, inventoryContext, Array.Empty<AssistantImage>(), ct);
+
+    public async Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, IReadOnlyList<AssistantImage> images, CancellationToken ct)
+    {
+        var apiKey = GetApiKey(_configuration);
         if (string.IsNullOrWhiteSpace(apiKey))
             throw new InvalidOperationException("Configura Assistant:DeepSeek:ApiKey");
 
         var model = _configuration["Assistant:DeepSeek:Model"];
         if (string.IsNullOrWhiteSpace(model))
-            model = "deepseek-v4-flash"; // V4 Flash = deepseek flash (default). Alternatives: deepseek-v4-pro, legacy deepseek-chat/reasoner (retiran 2026-07-24)
+            model = "deepseek-flash";
 
         var systemContent = string.IsNullOrWhiteSpace(inventoryContext)
             ? SystemPrompt
@@ -55,7 +66,20 @@ public class DeepSeekAssistantProvider : IAssistantProvider
             }
         }
 
-        messages.Add(new { role = "user", content = message });
+        object userContent = message;
+        if (images.Count > 0)
+        {
+            var contentParts = new List<object>();
+            if (!string.IsNullOrWhiteSpace(message))
+                contentParts.Add(new { type = "text", text = message });
+            contentParts.AddRange(images.Select(image => (object)new
+            {
+                type = "image_url",
+                image_url = new { url = image.DataUrl }
+            }));
+            userContent = contentParts;
+        }
+        messages.Add(new { role = "user", content = userContent });
 
         var payload = new
         {
@@ -83,38 +107,40 @@ public class DeepSeekAssistantProvider : IAssistantProvider
             throw new HttpRequestException("No se pudo conectar con DeepSeek. Verificá tu conexión.", ex);
         }
 
-        var body = await response.Content.ReadAsStringAsync(ct);
-
-        if (!response.IsSuccessStatusCode)
+        using (response)
         {
-            // Map DeepSeek errors (OpenAI-compatible) to meaningful exceptions for controller
-            if ((int)response.StatusCode == 401)
-                throw new UnauthorizedAccessException("DeepSeek ApiKey inválida. Verificá Assistant:DeepSeek:ApiKey.");
-            if ((int)response.StatusCode == 429)
-                throw new InvalidOperationException("429: DeepSeek rate limit alcanzado. Probá de nuevo en unos segundos.");
-            throw new HttpRequestException($"DeepSeek error {(int)response.StatusCode}: {body}");
-        }
+            if (!response.IsSuccessStatusCode)
+            {
+                // Never include the provider response body in exceptions; the controller logs them.
+                if ((int)response.StatusCode == 401)
+                    throw new UnauthorizedAccessException("DeepSeek ApiKey inválida. Verificá Assistant:DeepSeek:ApiKey.");
+                if ((int)response.StatusCode == 429)
+                    throw new InvalidOperationException("429: DeepSeek rate limit alcanzado. Probá de nuevo en unos segundos.");
+                throw new HttpRequestException($"DeepSeek error {(int)response.StatusCode}.");
+            }
 
-        try
-        {
-            using var doc = JsonDocument.Parse(body);
-            var content = doc.RootElement
-                .GetProperty("choices")[0]
-                .GetProperty("message")
-                .GetProperty("content")
-                .GetString();
+            var body = await response.Content.ReadAsStringAsync(ct);
+            try
+            {
+                using var doc = JsonDocument.Parse(body);
+                var content = doc.RootElement
+                    .GetProperty("choices")[0]
+                    .GetProperty("message")
+                    .GetProperty("content")
+                    .GetString();
 
-            return string.IsNullOrWhiteSpace(content)
-                ? "No recibí respuesta del modelo. Probá de nuevo."
-                : content.Trim();
-        }
-        catch (Exception ex)
-        {
-            throw new InvalidOperationException($"Respuesta inesperada de DeepSeek: {ex.Message}");
+                return string.IsNullOrWhiteSpace(content)
+                    ? "No recibí respuesta del modelo. Probá de nuevo."
+                    : content.Trim();
+            }
+            catch (Exception ex)
+            {
+                throw new InvalidOperationException($"Respuesta inesperada de DeepSeek: {ex.Message}");
+            }
         }
     }
 
     // Compat overload
     public Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, CancellationToken ct)
-        => GetResponseAsync(message, history, string.Empty, ct);
+        => GetResponseAsync(message, history, string.Empty, Array.Empty<AssistantImage>(), ct);
 }

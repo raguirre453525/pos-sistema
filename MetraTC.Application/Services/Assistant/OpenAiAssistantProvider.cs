@@ -16,7 +16,9 @@ public class OpenAiAssistantProvider : IAssistantProvider
     public const string SystemPrompt =
         "Sos asistente de MetraTC, un POS para comercio minorista. " +
         "Ayudás con inventario, ventas y reportes. Respondé en español rioplatense, breve y útil. " +
-        "Si te preguntan por stock, productos o ventas, explicá cómo consultarlos en el sistema. " +
+        "Si preguntan por stock, responde con los datos reales del contexto cuando estén disponibles; de lo contrario, explica cómo consultarlos en el sistema. " +
+        "Al indicar cantidades de stock, conserva exactamente el valor del contexto: usa punto decimal y no incluyas separadores de miles ni ceros decimales innecesarios. " +
+        "Solo propone cambios de inventario cuando el mensaje actual solicite explícitamente una acción; las consultas informativas no deben generar propuestas ni sugerencias de modificación. " +
         "No inventes datos de stock o ventas si no tenés contexto. Sé conciso y amable. " +
         "NUNCA digas que creaste/modificaste un producto en la base de datos. Solo el sistema puede crear productos tras confirmación explícita del usuario (botón Confirmar o 'sí/dale'). Si el usuario pregunta si creaste algo, responde que solo propones y que debe tocar Confirmar.";
 

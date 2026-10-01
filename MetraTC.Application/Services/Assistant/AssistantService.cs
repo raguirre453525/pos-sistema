@@ -17,7 +17,8 @@ public class AssistantService : IAssistantService
     private readonly IMemoryCache _cache;
     private readonly ILogger<AssistantService> _logger;
 
-    private const string CacheKey = "assistant:lastProposal";
+    private static string GetCacheKey(Guid businessId, Guid userId)
+        => $"assistant:lastProposal:{businessId}:{userId}";
 
     public AssistantService(
         IConfiguration configuration,
@@ -40,7 +41,7 @@ public class AssistantService : IAssistantService
     }
 
     public string CurrentProvider =>
-        (_configuration["Assistant:Provider"] ?? "mock").Trim().ToLowerInvariant();
+        (_configuration["Assistant:Provider"] ?? "deepseek").Trim().ToLowerInvariant();
 
     public string[] AvailableProviders => new[] { "mock", "openai", "deepseek", "gemini" };
 
@@ -53,9 +54,17 @@ public class AssistantService : IAssistantService
         return Regex.IsMatch(normalized, @"^(sí|si|dale|confirmo|confirmar|confirmado|hacelo|hace|ejecuta|ejecutá|ok|perfecto)\b");
     }
 
-    public async Task<(string Reply, string Provider, ProposalResponse? Proposal)> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, CancellationToken ct)
+    public async Task<(string Reply, string Provider, ProposalResponse? Proposal)> GetResponseAsync(
+        string message,
+        IReadOnlyList<ChatMessage> history,
+        IReadOnlyList<AssistantImage> images,
+        Guid businessId,
+        Guid userId,
+        bool canConfirmStockAdjustments,
+        CancellationToken ct)
     {
         var providerName = CurrentProvider;
+        var cacheKey = GetCacheKey(businessId, userId);
 
         IAssistantProvider provider = providerName switch
         {
@@ -72,7 +81,7 @@ public class AssistantService : IAssistantService
             throw new InvalidOperationException("Configura Assistant:OpenAI:ApiKey");
         }
 
-        if (providerName == "deepseek" && string.IsNullOrWhiteSpace(_configuration["Assistant:DeepSeek:ApiKey"]))
+        if (providerName == "deepseek" && string.IsNullOrWhiteSpace(DeepSeekAssistantProvider.GetApiKey(_configuration)))
         {
             throw new InvalidOperationException("Configura Assistant:DeepSeek:ApiKey");
         }
@@ -80,7 +89,7 @@ public class AssistantService : IAssistantService
         string inventoryContext;
         try
         {
-            inventoryContext = await _inventoryContext.GetInventoryContextAsync(ct);
+            inventoryContext = await _inventoryContext.GetInventoryContextAsync(businessId, ct);
         }
         catch (Exception ex)
         {
@@ -88,19 +97,38 @@ public class AssistantService : IAssistantService
             inventoryContext = "Inventario no disponible momentáneamente.";
         }
 
-        // Check pending proposal for confirmation flow
-        if (_cache.TryGetValue<ProposalResponse>(CacheKey, out var pending) && pending != null)
+        if (images.Count > 0)
         {
-            if (IsConfirmation(message))
+            if (providerName != "deepseek")
+                throw new NotSupportedException("Las imágenes requieren que el proveedor configurado sea DeepSeek.");
+
+            var imageReply = await _deepSeekProvider.GetResponseAsync(message, history, inventoryContext, images, ct);
+            return (imageReply, provider.Name, null);
+        }
+
+        // Informational questions must not enter proposal, patch, or confirmation flows.
+        if (AssistantProductExtractor.IsReadOnlyRequest(message))
+        {
+            var readOnlyReply = await provider.GetResponseAsync(message, history, inventoryContext, ct);
+            return (readOnlyReply, provider.Name, null);
+        }
+
+        // Check pending proposal for confirmation flow
+        if (_cache.TryGetValue<ProposalResponse>(cacheKey, out var pending) && pending != null)
+        {
+            if (IsConfirmation(message) && !AssistantProductExtractor.HasStockMovementIntent(message))
             {
                 if (pending.HasMissingData)
                 {
                     var missingMsg = pending.NaturalReply + "\n\nFaltan datos obligatorios, no puedo ejecutar aún. Decime los datos que faltan.";
                     return (missingMsg, provider.Name, pending);
                 }
+                if (!CanExecuteProposal(pending, canConfirmStockAdjustments))
+                    return ("Solo un administrador puede confirmar ajustes de stock. La propuesta sigue pendiente.", provider.Name, pending);
+
                 // Execute
-                var result = await _proposalService.ExecuteAsync(pending, ct);
-                _cache.Remove(CacheKey);
+                var result = await _proposalService.ExecuteAsync(pending, businessId, ct);
+                _cache.Remove(cacheKey);
                 var successReply = $"✅ Ejecutado:\n{result}";
                 return (successReply, provider.Name, null);
             }
@@ -111,7 +139,7 @@ public class AssistantService : IAssistantService
                 ProposalResponse? patched = null;
                 try
                 {
-                    patched = await _proposalService.TryPatchPendingAsync(pending, message, history, inventoryContext, ct);
+                    patched = await _proposalService.TryPatchPendingAsync(pending, message, history, inventoryContext, businessId, ct);
                 }
                 catch (Exception ex)
                 {
@@ -122,7 +150,7 @@ public class AssistantService : IAssistantService
                 if (patched != null)
                 {
                     // If patched is complete it still needs confirmation, don't execute automatically
-                    _cache.Set(CacheKey, patched, TimeSpan.FromMinutes(10));
+                    _cache.Set(cacheKey, patched, TimeSpan.FromMinutes(10));
                     return (patched.NaturalReply, provider.Name, patched);
                 }
 
@@ -140,7 +168,7 @@ public class AssistantService : IAssistantService
         ProposalResponse? proposal = null;
         try
         {
-            proposal = await _proposalService.BuildProposalAsync(message, history, inventoryContext, ct);
+            proposal = await _proposalService.BuildProposalAsync(message, history, inventoryContext, businessId, ct);
         }
         catch (Exception ex)
         {
@@ -151,13 +179,13 @@ public class AssistantService : IAssistantService
         if (proposal != null && proposal.Proposals.Count > 0)
         {
             // Cache it (even with missing data, to allow correction loop)
-            _cache.Set(CacheKey, proposal, TimeSpan.FromMinutes(10));
+            _cache.Set(cacheKey, proposal, TimeSpan.FromMinutes(10));
             return (proposal.NaturalReply, provider.Name, proposal);
         }
 
         // No proposal -> normal chat with LLM (if user was trying to correct but extractor returned empty, we keep pending)
         // Block hallucination: if pending has missing data and no new proposal was built, don't call LLM
-        if (_cache.TryGetValue<ProposalResponse>(CacheKey, out var stillPending) && stillPending != null && stillPending.HasMissingData)
+        if (_cache.TryGetValue<ProposalResponse>(cacheKey, out var stillPending) && stillPending != null && stillPending.HasMissingData)
         {
             var reminder = stillPending.NaturalReply + "\n\nDecime los datos exactos que faltan (ej: \"SKU YERBA01 precio 1700\").";
             return (reminder, provider.Name, stillPending);
@@ -166,4 +194,8 @@ public class AssistantService : IAssistantService
         var reply = await provider.GetResponseAsync(message, history, inventoryContext, ct);
         return (reply, provider.Name, null);
     }
+
+    public static bool CanExecuteProposal(ProposalResponse proposal, bool canConfirmStockAdjustments) =>
+        canConfirmStockAdjustments ||
+        !proposal.Proposals.Any(p => p.StockDelta is { } delta && delta != 0m);
 }

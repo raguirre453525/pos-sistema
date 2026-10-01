@@ -24,13 +24,92 @@ public class AssistantProductExtractor
     private readonly ILogger<AssistantProductExtractor> _logger;
 
     private const string ExtractionPrompt =
-        "Sos extractor de productos para MetraTC. Del mensaje del empleado y del historial, extrae TODOS los productos mencionados con: name, sku, price, stockDelta (cantidad a sumar), barcode, description, categoryNames[].\n" +
-        "- stockDelta: si dicen \"10 unidades\", \"me llegaron 5\", \"reponer 20\" \u2192 numero positivo int. Convierte palabras \"uno/dos/tres/cuatro/cinco/seis/siete/ocho/nueve/diez\" a int (ej \"dos jugos\" -> stockDelta 2, \"un jugo\" -> 1).\n" +
+        "Sos extractor de productos para MetraTC. Del mensaje del empleado y del historial, extrae TODOS los productos mencionados con: name, sku, price, stockDelta (ajuste firmado de stock), barcode, description, categoryNames[].\n" +
+        "- stockDelta: cantidad firmada: positiva para sumar/reponer y negativa para descontar/quitar/restar/bajar. Si dicen \"10 unidades\", \"me llegaron 5\", \"reponer 20\" -> positivo; si dicen \"descontar 3\", \"quitar 2\", \"restar 4\" o \"bajar 1\" -> negativo. Convierte palabras \"uno/dos/tres/cuatro/cinco/seis/siete/ocho/nueve/diez\" a int.\n" +
         "- price: si mencionan \"$1500\" o \"a 1500\" \u2192 decimal.\n" +
         "- name: normaliza a singular y capitaliza (ej \"jugos cepita\" -> \"Jugo Cepita\"), sin plural extra ni sufijos de cantidad. Si dicen \"dos jugos cepita\" -> name \"Jugo Cepita\".\n" +
         "- Si no hay dato, null. No inventes sku/price si no estan explicitos.\n" +
         "IMPORTANTE: Si el mensaje actual solo aporta datos faltantes (precio, sku, stock) y el historial menciona el producto (ej \"Yerba Union\"), asocia esos datos al producto del historial y devuelve name/stockDelta del historial completando con los nuevos. Nunca devuelvas name null si el historial tiene el nombre. Si el historial tiene \"Yerba Union con 20 unidades\" y el usuario dice \"sku XXX precio 1700\", devuelve {name:\"Yerba Union\", sku:\"XXX\", price:1700, stockDelta:20}. Si el mensaje dice \"del azucar ledesma, el sku es 9aldj1029 y el precio es 1350\" devuelve name \"Azucar Ledesma\" con esos sku/price y stockDelta del historial.\n" +
         "Responde SOLO JSON: { \"products\": [ { \"name\":..., \"sku\":..., \"price\":..., \"stockDelta\":..., \"barcode\":..., \"description\":..., \"categoryNames\":[...] } ] }";
+
+    private static readonly Regex ExplicitlyReadOnlyPattern = new(
+        @"\b(?:solo|solamente|unicamente|únicamente)\s+(?:consulta|consultar|pregunta|preguntar)\b|\b(?:sin|no)\s+(?:modificar|modifiques|cambiar|cambies|actualizar|actualices|ajustar|ajustes|reponer|repongas|agregar|agregues|sumar|sumes)\s+(?:(?:el|la|su)\s+)?(?:stock|inventario|existencias)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex QuestionPattern = new(
+        @"[¿?]|\b(?:cu[aá]nt[oa]s?|qu[eé]\s+cantidad|stock\s+(?:actual|disponible)|cu[aá]nto\s+stock)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex DirectWritePattern = new(
+        @"^\s*(?:por\s+favor\s+)?(?:crear|crea|creá|agregar|agrega|agregá|agregame|reponer|repone|reponé|reponeme|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|ajustar|ajusta|ajustá|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|actualizar|actualiza|actualizá|cambiar|cambia|cambiá|modificar|modifica|modificá)\b|\b(?:creá|agregá|reponé|sumá|aumentá|incrementá|ajustá|descontá|quitá|restá|bajá|actualizá|cambiá|modificá)\b|\b(?:me\s+llegaron|llegaron)\s+(?:\d+|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b|\b(?:quiero|necesito|pod[eé]s|podr[ií]as|quisiera)\b.{0,40}\b(?:crear|crea|creá|agregar|agrega|agregá|agregues|agregue|reponer|repone|reponé|repongas|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|ajustar|ajusta|ajustá|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|actualizar|actualiza|actualizá|cambiar|cambia|cambiá|modificar|modifica|modificá)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex QuantityWithUnitsPattern = new(
+        @"\b(?:\d+|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+unidades?\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex StockAmountBeforeDecreasePattern = new(
+        @"\b(?:\d+|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\s+(?:unidades?|unidad|u\.|de|del)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex StockIncreasePattern = new(
+        @"\b(?:agregar|agrega|agregá|agregame|reponer|repone|reponé|reponeme|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|me\s+llegaron|llegaron)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex StockCreationPattern = new(
+        @"\b(?:crear|crea|creá)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex StockDecreasePattern = new(
+        @"\b(?:descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    public static bool IsReadOnlyRequest(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return false;
+        if (ExplicitlyReadOnlyPattern.IsMatch(message)) return true;
+        return QuestionPattern.IsMatch(message) && !DirectWritePattern.IsMatch(message);
+    }
+
+    public static bool HasInventoryWriteIntent(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message) || ExplicitlyReadOnlyPattern.IsMatch(message)) return false;
+        if (DirectWritePattern.IsMatch(message)) return true;
+        return !QuestionPattern.IsMatch(message) && QuantityWithUnitsPattern.IsMatch(message);
+    }
+
+    public static bool HasStockMovementIntent(string message) =>
+        !string.IsNullOrWhiteSpace(message) &&
+        (StockDecreasePattern.IsMatch(message) || StockIncreasePattern.IsMatch(message) || QuantityWithUnitsPattern.IsMatch(message));
+
+    public static bool TryNormalizeStockDirections(
+        string message,
+        IReadOnlyList<RawProductExtract> rawProducts,
+        out List<RawProductExtract> normalized)
+    {
+        normalized = rawProducts.ToList();
+        if (string.IsNullOrWhiteSpace(message)) return true;
+
+        var decrease = StockDecreasePattern.Match(message);
+        var increase = StockIncreasePattern.IsMatch(message);
+        var creation = StockCreationPattern.IsMatch(message);
+        if (decrease.Success &&
+            (increase || creation || StockAmountBeforeDecreasePattern.IsMatch(message[..decrease.Index])))
+            return false;
+
+        decimal? sign = decrease.Success
+            ? -1m
+            : increase || creation || QuantityWithUnitsPattern.IsMatch(message) ? 1m : null;
+        if (!sign.HasValue) return true;
+
+        normalized = rawProducts
+            .Select(raw => raw with
+            {
+                StockDelta = raw.StockDelta is { } delta ? sign.Value * Math.Abs(delta) : null
+            })
+            .ToList();
+        return true;
+    }
 
     public AssistantProductExtractor(IConfiguration configuration, HttpClient httpClient, ILogger<AssistantProductExtractor> logger)
     {
@@ -41,7 +120,7 @@ public class AssistantProductExtractor
 
     public async Task<List<RawProductExtract>> ExtractAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
     {
-        var provider = (_configuration["Assistant:Provider"] ?? "mock").Trim().ToLowerInvariant();
+        var provider = (_configuration["Assistant:Provider"] ?? "deepseek").Trim().ToLowerInvariant();
         if (provider == "mock")
             return MockExtract(message, history);
 
@@ -154,7 +233,7 @@ public class AssistantProductExtractor
     {
         if (string.IsNullOrWhiteSpace(segment)) return null;
         // Heuristic: must look like inventory intent -> contains number or sku/price/category keywords
-        var hasIntentKeyword = Regex.IsMatch(segment, @"(crear|creá|agregar|reponer|reponé|stock|sku|precio|categoría|categoria|unidades|unidad)", RegexOptions.IgnoreCase);
+        var hasIntentKeyword = Regex.IsMatch(segment, @"(crear|creá|agregar|agregá|reponer|reponé|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|stock|sku|precio|categoría|categoria|unidades|unidad)", RegexOptions.IgnoreCase);
         var hasNumber = Regex.IsMatch(segment, @"\d");
         if (!hasIntentKeyword && !hasNumber) return null;
 
@@ -202,7 +281,7 @@ public class AssistantProductExtractor
         else
         {
             // "reponer 20", "agregar 5", "con 10"
-            var stockAlt = Regex.Match(segment, @"(?:reponer|reponé|agregar|crear|con|sumar|me\s+llegaron|llegaron)\s*(\d+)", RegexOptions.IgnoreCase);
+            var stockAlt = Regex.Match(segment, @"(?:reponer|repone|reponé|agregar|agrega|agregá|crear|con|sumar|suma|sumá|me\s+llegaron|llegaron|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá)\s*(\d+)", RegexOptions.IgnoreCase);
             if (stockAlt.Success) stockDelta = int.Parse(stockAlt.Groups[1].Value);
             else
             {
@@ -250,6 +329,9 @@ public class AssistantProductExtractor
                 }
             }
         }
+
+        if (stockDelta.HasValue && StockDecreasePattern.IsMatch(segment))
+            stockDelta = -stockDelta.Value;
 
         // CategoryNames: "categoría Almacén" "categoria: Bebidas"
         List<string>? categories = null;
@@ -311,11 +393,11 @@ public class AssistantProductExtractor
         // Remove stock tokens
         cleaned = Regex.Replace(cleaned, @"\d+\s*(?:unidades|unidad|u\.)", "", RegexOptions.IgnoreCase);
         if (stockDelta != null)
-            cleaned = Regex.Replace(cleaned, @"\b" + stockDelta.Value + @"\b", "", RegexOptions.IgnoreCase);
+            cleaned = Regex.Replace(cleaned, @"\b" + Math.Abs(stockDelta.Value) + @"\b", "", RegexOptions.IgnoreCase);
         // Remove category token
         cleaned = Regex.Replace(cleaned, @"categor[ií]a[s]?\s*[:\-]?\s*[A-Za-zÁÉÍÓÚáéíóúÑñ0-9\s]+", "", RegexOptions.IgnoreCase);
         // Remove common verbs
-        cleaned = Regex.Replace(cleaned, @"\b(crear|creá|crea|agregar|agregá|reponer|reponé|repone|sumar|me\s+llegaron|llegaron|con|a|de|el|la|un|una|para|producto|productos)\b", "", RegexOptions.IgnoreCase);
+        cleaned = Regex.Replace(cleaned, @"\b(crear|creá|crea|agregar|agrega|agregá|reponer|reponé|repone|sumar|suma|sumá|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|me\s+llegaron|llegaron|con|a|de|del|el|la|un|una|para|producto|productos)\b", "", RegexOptions.IgnoreCase);
         // Remove punctuation
         cleaned = Regex.Replace(cleaned, @"[^\p{L}\p{N}\s]", " ");
         cleaned = Regex.Replace(cleaned, @"\s+", " ").Trim();
@@ -347,10 +429,10 @@ public class AssistantProductExtractor
     {
         var apiKey = provider == "openai"
             ? _configuration["Assistant:OpenAI:ApiKey"]
-            : _configuration["Assistant:DeepSeek:ApiKey"];
+            : DeepSeekAssistantProvider.GetApiKey(_configuration);
         var model = provider == "openai"
             ? (_configuration["Assistant:OpenAI:Model"] ?? "gpt-4o-mini")
-            : (_configuration["Assistant:DeepSeek:Model"] ?? "deepseek-v4-flash");
+            : (_configuration["Assistant:DeepSeek:Model"] ?? "deepseek-flash");
         var url = provider == "openai"
             ? "https://api.openai.com/v1/chat/completions"
             : "https://api.deepseek.com/chat/completions";
@@ -383,10 +465,10 @@ public class AssistantProductExtractor
         };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
 
-        var response = await _httpClient.SendAsync(request, ct);
-        var body = await response.Content.ReadAsStringAsync(ct);
+        using var response = await _httpClient.SendAsync(request, ct);
         if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"{provider} extraction error {(int)response.StatusCode}: {body}");
+            throw new HttpRequestException($"{provider} extraction error {(int)response.StatusCode}.");
+        var body = await response.Content.ReadAsStringAsync(ct);
 
         // Extract content
         using var doc = JsonDocument.Parse(body);
@@ -437,7 +519,7 @@ public class AssistantProductExtractor
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Failed to parse extraction JSON: {Content}", content);
+                _logger.LogWarning(ex, "Failed to parse extraction JSON");
                 return new List<RawProductExtract>();
             }
         }
