@@ -45,12 +45,12 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
       // autofocus nombre
       setTimeout(() => nameRef.current?.focus(), 50);
       const onKeyDown = (e: KeyboardEvent) => {
-        if (e.key === "Escape" && !loading) onClose();
+        if (e.key === "Escape" && !loading && !showCatModal) onClose();
       };
       window.addEventListener("keydown", onKeyDown);
       return () => window.removeEventListener("keydown", onKeyDown);
     }
-  }, [open, loading, onClose]);
+  }, [open, loading, showCatModal, onClose]);
 
   useEffect(() => {
     return () => {
@@ -197,46 +197,46 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={handleOverlayClick} onKeyDown={handleKeyDown}>
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={handleOverlayClick}>
       <div
-        className="bg-white dark:bg-card border border-slate-200 dark:border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
+        className="bg-white dark:bg-card border border-slate-200 dark:border-border rounded-xl shadow-xl w-full max-w-2xl max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
         aria-label="Nuevo Producto"
       >
         {/* Cabecera limpia */}
-        <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-slate-100 dark:border-border">
+        <div className="flex items-start justify-between gap-3 px-4 pt-4 pb-4 border-b border-slate-100 dark:border-border sm:px-6 sm:pt-6">
           <div className="flex flex-col gap-1">
             <h2 className="text-lg font-semibold text-slate-900 dark:text-foreground">Nuevo Producto</h2>
             <p className="text-sm text-muted-foreground">Completá los datos para agregar un producto al inventario</p>
           </div>
-          <button onClick={onClose} className="rounded-md p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" aria-label="Cerrar">
+          <button onClick={onClose} className="h-11 w-11 shrink-0 rounded-md p-1.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors sm:h-8 sm:w-8" aria-label="Cerrar">
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="flex-1 overflow-y-auto">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+        <form onSubmit={handleSubmit} onKeyDown={handleKeyDown} className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain">
+          <div className="grid grid-cols-1 gap-4 p-4 sm:gap-6 sm:p-6 md:grid-cols-2">
             {/* Columna Izquierda - Datos Principales */}
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Código interno / SKU *</label>
-                <div className="flex h-9 w-full">
+                <div className="flex h-11 w-full sm:h-9">
                   <Input
+                    aria-label="Código interno / SKU"
                     placeholder="Ej: PROD-001"
                     value={sku}
                     onChange={(e) => setSku(e.target.value)}
-                    className="flex-1 h-9 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-l-xl rounded-r-none border-r-0 focus:bg-white font-mono text-sm focus:z-10 focus:ring-1 focus:ring-ring"
+                    className="flex-1 h-11 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-l-xl rounded-r-none border-r-0 focus:bg-white font-mono text-sm focus:z-10 focus:ring-1 focus:ring-ring sm:h-9"
                     autoComplete="off"
                   />
                   <Button
                     type="button"
                     variant="outline"
                     onClick={handleAutogenerateSku}
-                    className="shrink-0 rounded-l-none rounded-r-xl h-9 px-3 text-xs border border-slate-200 dark:border-border -ml-px bg-slate-50 dark:bg-muted/40 hover:bg-slate-100 dark:hover:bg-muted font-medium"
+                    className="shrink-0 rounded-l-none rounded-r-xl h-11 px-3 text-xs border border-slate-200 dark:border-border -ml-px bg-slate-50 dark:bg-muted/40 hover:bg-slate-100 dark:hover:bg-muted font-medium sm:h-9"
                     title="Autogenerar SKU"
-                    tabIndex={-1}
                   >
                     Auto
                   </Button>
@@ -246,13 +246,14 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Código de barras / EAN (opcional)</label>
                 <Input
+                  aria-label="Código de barras / EAN"
                   placeholder="Escanear o ingresar ej: 779..."
                   value={barcode}
                   onChange={(e) => setBarcode(e.target.value)}
                   autoComplete="off"
                   inputMode="numeric"
                   type="text"
-                  className="h-9 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm font-mono"
+                  className="h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm font-mono sm:h-9"
                 />
               </div>
 
@@ -260,11 +261,12 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                 <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Nombre del producto *</label>
                 <Input
                   ref={nameRef}
+                  aria-label="Nombre del producto"
                   placeholder="Ej: Yerba Playadito 1kg"
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   maxLength={50}
-                  className="h-9 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm focus:bg-white"
+                  className="h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm focus:bg-white sm:h-9"
                 />
               </div>
 
@@ -272,7 +274,7 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                 <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Categoría</label>
                 <div className="flex items-center gap-2">
                   <Select value={selectedCategoryId || "__none"} onValueChange={(v) => setSelectedCategoryId(v === "__none" ? "" : v)}>
-                    <SelectTrigger className="flex-1 h-9 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm">
+                    <SelectTrigger aria-label="Categoría" className="flex-1 h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm sm:h-9">
                       <SelectValue placeholder="Sin categoría" />
                     </SelectTrigger>
                     <SelectContent>
@@ -282,7 +284,7 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                       ))}
                     </SelectContent>
                   </Select>
-                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowCatModal(true)} className="shrink-0 gap-1 h-9 rounded-xl">
+                  <Button type="button" variant="ghost" size="sm" onClick={() => setShowCatModal(true)} className="shrink-0 gap-1 h-11 rounded-xl sm:h-8">
                     <Plus className="h-3.5 w-3.5" /> Nueva
                   </Button>
                 </div>
@@ -294,14 +296,14 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                   <button
                     type="button"
                     onClick={() => setUnit("un")}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${unit === "un" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground hover:text-foreground"}`}
+                    className={`min-h-11 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors sm:min-h-0 ${unit === "un" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground hover:text-foreground"}`}
                   >
                     Unidad
                   </button>
                   <button
                     type="button"
                     onClick={() => setUnit("kg")}
-                    className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${unit === "kg" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground hover:text-foreground"}`}
+                    className={`min-h-11 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors sm:min-h-0 ${unit === "kg" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground hover:text-foreground"}`}
                   >
                     Granel-Kg
                   </button>
@@ -312,13 +314,14 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-medium text-slate-600 dark:text-muted-foreground">Descripción (opcional)</label>
+                <label htmlFor="new-product-description" className="text-xs font-medium text-slate-600 dark:text-muted-foreground">Descripción (opcional)</label>
                 <Input
+                  id="new-product-description"
                   placeholder="Detalle breve"
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   maxLength={200}
-                  className="h-9 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm"
+                  className="h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm sm:h-9"
                 />
               </div>
             </div>
@@ -326,37 +329,40 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
             {/* Columna Derecha - Valores Comerciales e Imagen */}
             <div className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Precio de Venta *</label>
+                <label htmlFor="new-product-price" className="text-xs font-semibold text-slate-700 dark:text-foreground">Precio de Venta *</label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-sm">$</span>
                   <Input
+                    id="new-product-price"
                     type="number"
                     step="0.01"
                     min="0"
                     placeholder="0.00"
                     value={price}
                     onChange={(e) => setPrice(e.target.value)}
-                    className="pl-7 h-10 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl font-bold font-mono text-lg tabular-nums focus:bg-white"
+                    className="pl-7 h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl font-bold font-mono text-lg tabular-nums focus:bg-white sm:h-10"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Stock Inicial</label>
+                  <label htmlFor="new-product-stock" className="text-xs font-semibold text-slate-700 dark:text-foreground">Stock Inicial</label>
                   <Input
+                    id="new-product-stock"
                     type="number"
                     min="0"
                     step={isKg ? "0.001" : "1"}
                     placeholder={isKg ? "0.0" : "0"}
                     value={stock}
                     onChange={(e) => setStock(e.target.value)}
-                    className="h-9 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm tabular-nums"
+                    className="h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm tabular-nums sm:h-9"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Stock Mínimo</label>
+                  <label htmlFor="new-product-min-stock" className="text-xs font-semibold text-slate-700 dark:text-foreground">Stock Mínimo</label>
                   <Input
+                    id="new-product-min-stock"
                     type="number"
                     min="0"
                     max="99999"
@@ -364,7 +370,7 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                     placeholder={isKg ? "Ej: 2.5" : "Ej: 5"}
                     value={minStock}
                     onChange={(e) => setMinStock(e.target.value)}
-                    className="h-9 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm tabular-nums"
+                    className="h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm tabular-nums sm:h-9"
                   />
                 </div>
               </div>
@@ -383,7 +389,7 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                     )}
                   </div>
                   <div className="flex-1 flex flex-col gap-2 min-w-0">
-                    <label className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-muted text-sm font-medium cursor-pointer">
+                    <label className="inline-flex items-center justify-center gap-2 h-11 px-3 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-muted text-sm font-medium cursor-pointer sm:h-9">
                       <Upload className="h-4 w-4" />
                       Subir archivo
                       <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" />
@@ -391,11 +397,12 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                     <div className="relative">
                       <Link2 className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
                       <Input
+                        aria-label="URL de imagen"
                         type="url"
                         placeholder="o pegar URL https://..."
                         value={imageUrl}
                         onChange={(e) => setImageUrl(e.target.value)}
-                        className="pl-8 h-9 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm"
+                        className="pl-8 h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm sm:h-9"
                       />
                     </div>
                     {(selectedFile || imageUrl.trim()) && (
@@ -404,7 +411,7 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
                         <button
                           type="button"
                           onClick={() => { setSelectedFile(null); setImageUrl(""); if (previewUrl) { URL.revokeObjectURL(previewUrl); setPreviewUrl(null); } }}
-                          className="text-xs text-red-600 hover:underline shrink-0"
+                          className="min-h-11 min-w-11 shrink-0 px-2 text-xs text-red-600 hover:underline sm:min-h-0 sm:min-w-0"
                         >
                           Quitar
                         </button>
@@ -418,17 +425,17 @@ export default function NewProductModal({ open, onClose, onSuccess, categories, 
           </div>
 
           {error && (
-            <div className="mx-6 mb-2 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm">
+            <div className="mx-4 mb-2 bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm sm:mx-6">
               {error}
             </div>
           )}
 
           {/* Footer fijo */}
-          <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-100 dark:border-border bg-slate-50/50 dark:bg-muted/20 rounded-b-xl sticky bottom-0">
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="rounded-xl px-5">
+          <div className="sticky bottom-0 flex flex-col-reverse gap-2 border-t border-slate-100 bg-slate-50/50 px-4 py-4 dark:border-border dark:bg-muted/20 sm:flex-row sm:justify-end sm:px-6">
+            <Button type="button" variant="outline" onClick={onClose} disabled={loading} className="min-h-11 w-full rounded-xl px-5 sm:min-h-0 sm:w-auto">
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} className="bg-red-600 hover:bg-red-700 text-white font-medium px-5 py-2.5 rounded-xl shadow-sm">
+            <Button type="submit" disabled={loading} className="min-h-11 w-full rounded-xl bg-red-600 px-5 py-2.5 font-medium text-white shadow-sm hover:bg-red-700 sm:min-h-0 sm:w-auto">
               {loading ? "Guardando…" : "Guardar Producto"}
             </Button>
           </div>

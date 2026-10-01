@@ -96,13 +96,14 @@ export const columns: ColumnDef<UserInfo>[] = [
           <DropdownMenuContent align="end">
             <DropdownMenuLabel>Acciones</DropdownMenuLabel>
             <DropdownMenuItem
+              className="max-lg:min-h-11"
               onClick={() => navigator.clipboard.writeText(payment.username)}
             >
               Editar
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-red-500">Eliminar</DropdownMenuItem>
+            <DropdownMenuItem className="text-red-500 max-lg:min-h-11">Eliminar</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>Copiar SKU</DropdownMenuItem>
+            <DropdownMenuItem className="max-lg:min-h-11">Copiar SKU</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       )

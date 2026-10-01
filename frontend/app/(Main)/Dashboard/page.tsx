@@ -114,7 +114,7 @@ export default function Page() {
 
   if (!allowed) {
     return (
-      <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+      <main className="flex w-full min-w-0 max-w-none flex-col gap-6 bg-background p-4 text-foreground">
         <p className="text-sm text-muted-foreground">Redirigiendo…</p>
       </main>
     );
@@ -129,16 +129,16 @@ export default function Page() {
   ];
 
   return (
-    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="flex w-full min-w-0 max-w-none flex-col gap-6 bg-background p-4 text-foreground">
       <h1 className="text-2xl font-semibold tracking-tight text-foreground">Dashboard</h1>
 
       {/* Global filter */}
-      <div className="flex flex-wrap gap-2 items-center">
+      <div className="flex flex-wrap items-center gap-2">
         {pills.map((p) => (
           <button
             key={p.key}
             onClick={() => setRange(p.key)}
-            className={`px-4 py-2 rounded-md text-sm font-medium border transition-colors ${
+            className={`min-h-11 rounded-md border px-4 py-2 text-sm font-medium transition-colors lg:min-h-0 ${
               range === p.key ? "bg-red-500 text-white border-red-500" : "bg-card text-foreground border-border hover:bg-muted"
             }`}
           >
@@ -148,35 +148,35 @@ export default function Page() {
       </div>
 
       {range === "custom" && (
-        <div className="flex flex-wrap gap-3 items-end bg-card p-4 rounded-xl border border-border">
-          <div>
-            <label className="text-sm font-medium">Desde</label>
-            <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="border border-input rounded-md px-3 py-2 text-sm bg-card ml-2" />
+        <div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:flex-wrap sm:items-end">
+          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <label htmlFor="dashboard-from" className="text-sm font-medium">Desde</label>
+            <input id="dashboard-from" type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className="min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm sm:min-h-0 sm:w-auto" />
           </div>
-          <div>
-            <label className="text-sm font-medium">Hasta</label>
-            <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="border border-input rounded-md px-3 py-2 text-sm bg-card ml-2" />
+          <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <label htmlFor="dashboard-to" className="text-sm font-medium">Hasta</label>
+            <input id="dashboard-to" type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className="min-h-11 w-full rounded-md border border-input bg-card px-3 py-2 text-sm sm:min-h-0 sm:w-auto" />
           </div>
           <button
             onClick={fetchDashboard}
-            className="px-4 py-2 bg-red-500 text-white rounded-md text-sm font-medium hover:bg-red-600"
+            className="min-h-11 rounded-md bg-red-500 px-4 py-2 text-sm font-medium text-white hover:bg-red-600 lg:min-h-0"
           >
             Aplicar
           </button>
-          <span className="text-xs text-muted-foreground">Rango: {from} → {to}</span>
+          <span className="w-full text-xs text-muted-foreground sm:w-auto">Rango: {from} → {to}</span>
         </div>
       )}
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 flex items-center justify-between">
+        <div className="flex flex-col items-start justify-between gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-red-700 sm:flex-row sm:items-center">
           <span className="text-sm">{error}</span>
-          <button onClick={fetchDashboard} className="text-sm font-medium underline">Reintentar</button>
+          <button onClick={fetchDashboard} className="min-h-11 text-sm font-medium underline lg:min-h-0">Reintentar</button>
         </div>
       )}
 
       {/* Cards */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-6">
           {[0, 1, 2, 3].map((i) => (
             <div key={i} className="bg-card p-6 rounded-xl border border-border shadow-sm animate-pulse h-28">
               <div className="h-4 bg-muted rounded w-1/2 mb-3" />
@@ -185,36 +185,36 @@ export default function Page() {
           ))}
         </div>
       ) : data ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Link href={reportLink} className="block">
+        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4 lg:gap-6">
+          <Link href={reportLink} className="block min-w-0 [&>div>div]:min-w-0 [&>div>div>h3]:break-words md:[&>div]:p-4 md:[&>div>div>h3]:text-lg">
             <StatCard title={salesTitle} value={String(data.salesCount)} icon={ShoppingBag} color="bg-card-100 text-black-600 border border-border" />
           </Link>
-          <Link href={reportLink} className="block">
+          <Link href={reportLink} className="block min-w-0 [&>div>div]:min-w-0 [&>div>div>h3]:break-words md:[&>div]:p-4 md:[&>div>div>h3]:text-lg">
             <StatCard title="Total facturado" value={`$${Number(data.totalRevenue).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={DollarSign} color="bg-card-100 text-black-600 border border-border" />
           </Link>
-          <Link href={reportLink} className="block">
+          <Link href={reportLink} className="block min-w-0 [&>div>div]:min-w-0 [&>div>div>h3]:break-words md:[&>div]:p-4 md:[&>div>div>h3]:text-lg">
             <StatCard title="Productos vendidos" value={String(data.productsSoldQuantity)} icon={Package} color="bg-card-100 text-black-600 border border-border" />
           </Link>
-          <Link href={reportLink} className="block">
+          <Link href={reportLink} className="block min-w-0 [&>div>div]:min-w-0 [&>div>div>h3]:break-words md:[&>div]:p-4 md:[&>div>div>h3]:text-lg">
             <StatCard title="Ticket promedio" value={`$${Number(data.ticketAverage).toLocaleString("es-AR", { minimumFractionDigits: 2 })}`} icon={CreditCard} color="bg-card-100 text-black-600 border border-border" />
           </Link>
         </div>
       ) : null}
 
       {/* Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-card rounded-xl border border-border shadow-sm p-6 min-h-[380px]">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-3 lg:gap-6">
+        <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6 lg:col-span-2 min-h-[380px]">
           <h3 className="text-lg font-semibold mb-4 text-foreground">VENTAS POR DÍA</h3>
           {loading ? (
-            <div className="h-[300px] animate-pulse bg-muted rounded-xl" />
+            <div className="h-[260px] animate-pulse rounded-xl bg-muted sm:h-[300px]" />
           ) : !hasBarData ? (
-            <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground border border-dashed rounded-xl">Sin ventas en este período</div>
+            <div className="flex h-[260px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground sm:h-[300px]">Sin ventas en este período</div>
           ) : (
-            <div className="h-[300px] w-full">
+            <div className="h-[260px] w-full min-w-0 sm:h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid vertical={false} stroke="var(--border)" />
-                  <XAxis dataKey="name" axisLine={false} tickLine={false} tickMargin={10} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
+                  <XAxis dataKey="name" interval={barData.length > 7 ? "preserveStartEnd" : 0} axisLine={false} tickLine={false} tickMargin={10} tick={{ fill: "var(--muted-foreground)", fontSize: 12 }} />
                   <Tooltip
                     cursor={{ fill: "var(--muted)" }}
                     contentStyle={{ borderRadius: "8px", border: "none", backgroundColor: "var(--background)", color: "var(--foreground)", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
@@ -229,15 +229,15 @@ export default function Page() {
           )}
         </div>
 
-        <div className="lg:col-span-1 bg-card rounded-xl border border-border shadow-sm p-6 min-h-[380px]">
+        <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6 lg:col-span-1 min-h-[380px]">
           <h3 className="text-lg font-semibold mb-4 text-foreground text-center">VENTAS POR CATEGORÍA</h3>
           {loading ? (
-            <div className="h-[300px] animate-pulse bg-muted rounded-xl" />
+            <div className="h-[260px] animate-pulse rounded-xl bg-muted sm:h-[300px]" />
           ) : !hasPieData ? (
-            <div className="h-[300px] flex items-center justify-center text-sm text-muted-foreground border border-dashed rounded-xl">Sin datos</div>
+            <div className="flex h-[260px] items-center justify-center rounded-xl border border-dashed text-sm text-muted-foreground sm:h-[300px]">Sin datos</div>
           ) : (
-            <div className="h-[300px] w-full flex items-center justify-center">
-              <PieResponsiveContainer width="100%" height={300}>
+            <div className="flex h-[260px] w-full min-w-0 items-center justify-center sm:h-[300px]">
+              <PieResponsiveContainer width="100%" height="100%">
                 <PieChart>
                   <PieTooltip
                     contentStyle={{ borderRadius: "8px", border: "none", backgroundColor: "var(--background)", color: "var(--foreground)", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }}
@@ -267,7 +267,7 @@ export default function Page() {
           {hasPieData && (
             <div className="mt-4 flex flex-wrap gap-3 justify-center">
               {pieData.map((c, i) => (
-                <span key={c.category} className="flex items-center gap-2 text-xs">
+                <span key={c.category} className="flex max-w-full items-center gap-2 break-words text-xs">
                   <span className="w-3 h-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
                   {c.category}: ${Number(c.value).toLocaleString("es-AR", { minimumFractionDigits: 2 })} ({c.quantity}u)
                 </span>
@@ -278,21 +278,21 @@ export default function Page() {
       </div>
 
       {/* Ranking + Recent */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+      <div className="grid min-w-0 grid-cols-1 gap-4 lg:grid-cols-2 lg:gap-6">
+        <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
           <h3 className="text-lg font-semibold mb-4 text-foreground">RANKING TOP 5 PRODUCTOS</h3>
           {loading ? (
             <div className="h-40 animate-pulse bg-muted rounded-xl" />
           ) : !data || data.topProducts.length === 0 ? (
             <p className="text-sm text-muted-foreground py-10 text-center border border-dashed rounded-xl">Sin ventas</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
+            <div className="max-w-full overflow-x-auto">
+              <table className="w-full min-w-[25rem] text-sm">
                 <thead>
                   <tr className="text-left text-muted-foreground border-b">
                     <th className="py-2 font-medium">Producto</th>
-                    <th className="py-2 font-medium">Cantidad</th>
-                    <th className="py-2 font-medium">Revenue</th>
+                    <th className="whitespace-nowrap py-2 font-medium">Cantidad</th>
+                    <th className="whitespace-nowrap py-2 font-medium">Revenue</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -302,8 +302,8 @@ export default function Page() {
                         <div className="font-medium truncate max-w-[220px]">{p.name}</div>
                         <div className="text-xs text-muted-foreground font-mono">{p.sku}</div>
                       </td>
-                      <td className="py-3 font-medium">{p.quantity}</td>
-                      <td className="py-3">${Number(p.revenue).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
+                      <td className="whitespace-nowrap py-3 font-medium">{p.quantity}</td>
+                      <td className="whitespace-nowrap py-3">${Number(p.revenue).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -312,7 +312,7 @@ export default function Page() {
           )}
         </div>
 
-        <div className="bg-card rounded-xl border border-border shadow-sm p-6">
+        <div className="min-w-0 rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
           <h3 className="text-lg font-semibold mb-4 text-foreground">ÚLTIMAS VENTAS</h3>
           {loading ? (
             <div className="h-40 animate-pulse bg-muted rounded-xl" />
@@ -321,12 +321,12 @@ export default function Page() {
           ) : (
             <div className="flex flex-col gap-3">
               {data.recentSales.map((s) => (
-                <div key={s.id} className="flex items-center justify-between border border-border rounded-xl px-4 py-3 bg-background">
-                  <div>
+                <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-border bg-background px-3 py-3 sm:px-4">
+                  <div className="min-w-0">
                     <div className="text-sm font-medium">{new Date(s.date).toLocaleDateString("es-AR")} {new Date(s.date).toLocaleTimeString("es-AR", { hour: "2-digit", minute: "2-digit" })}</div>
                     <div className="text-xs text-muted-foreground font-mono">{s.id.slice(0, 8)} · {s.paymentMethod} · {s.items.reduce((a, i) => a + i.quantity, 0)} items</div>
                   </div>
-                  <div className="text-sm font-semibold">${Number(s.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</div>
+                  <div className="shrink-0 whitespace-nowrap text-right text-sm font-semibold">${Number(s.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</div>
                 </div>
               ))}
             </div>

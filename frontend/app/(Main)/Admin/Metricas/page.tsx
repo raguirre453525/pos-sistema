@@ -91,7 +91,7 @@ export default function MetricasPage() {
 
   return (
     <main className="w-full min-w-full max-w-none p-4 md:p-6 flex flex-col gap-6 bg-background text-foreground">
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex flex-col items-stretch justify-between gap-3 sm:flex-row sm:items-center">
         <div className="flex flex-col gap-1">
           <h1 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
             <BarChart3 className="h-6 w-6" /> Métricas Globales
@@ -103,7 +103,7 @@ export default function MetricasPage() {
           size="sm"
           onClick={() => void fetchAll()}
           disabled={loading || bizLoading}
-          className="h-8 rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50 gap-1.5 shrink-0"
+          className="h-11 w-full sm:h-8 sm:w-auto rounded-lg border-slate-200 text-slate-600 hover:bg-slate-50 gap-1.5 shrink-0"
         >
           <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} /> Actualizar datos
         </Button>
@@ -184,7 +184,7 @@ export default function MetricasPage() {
 
       {/* Resumen de actividad por comercio */}
       <div className="bg-white dark:bg-card border border-slate-200/80 rounded-xl shadow-sm overflow-hidden">
-        <div className="px-4 py-3 border-b bg-slate-50/50 flex items-center justify-between">
+        <div className="px-4 py-3 border-b bg-slate-50/50 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
           <h2 className="text-sm font-semibold text-slate-700 dark:text-slate-200">Resumen de actividad por comercio</h2>
           <span className="text-xs text-muted-foreground">{tableRows ? `${tableRows.length} comercios` : "—"}</span>
         </div>

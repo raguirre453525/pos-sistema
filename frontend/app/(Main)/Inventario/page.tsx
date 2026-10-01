@@ -855,15 +855,15 @@ function InventarioPageContent() {
   }
 
   return (
-    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-0 max-w-none p-3 flex flex-col gap-4 bg-background text-foreground sm:gap-6 sm:p-4">
       {/* 1. Cabecera y Jerarquía de Acciones */}
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-4">
+        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
           <h1 className="text-2xl font-semibold tracking-tight text-foreground">Inventario</h1>
           <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-xl border border-border">
             <button
               onClick={() => handleTabChange("productos")}
-              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === "productos" ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900" : "text-muted-foreground hover:text-foreground"}`}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors sm:px-4 lg:min-h-0 ${activeTab === "productos" ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Package className="h-4 w-4" />
               Productos
@@ -873,7 +873,7 @@ function InventarioPageContent() {
             </button>
             <button
               onClick={() => handleTabChange("categorias")}
-              className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${activeTab === "categorias" ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900" : "text-muted-foreground hover:text-foreground"}`}
+              className={`inline-flex min-h-11 items-center gap-2 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors sm:px-4 lg:min-h-0 ${activeTab === "categorias" ? "bg-slate-900 text-white shadow-sm dark:bg-white dark:text-slate-900" : "text-muted-foreground hover:text-foreground"}`}
             >
               <Tag className="h-4 w-4" />
               Categorías
@@ -883,13 +883,13 @@ function InventarioPageContent() {
             </button>
           </div>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex w-full flex-wrap items-center gap-2 lg:w-auto lg:shrink-0">
           {activeTab === "productos" && (
             <>
               {flags.permitirAjusteInflacion && (
                 <Button
                   onClick={openBulk}
-                  className="border border-slate-300 bg-white hover:bg-slate-50 text-slate-800 font-medium px-4 py-2 rounded-xl shadow-sm flex items-center gap-2"
+                  className="min-h-11 w-full gap-2 border border-slate-300 bg-white px-4 py-2 font-medium text-slate-800 shadow-sm hover:bg-slate-50 sm:w-auto lg:min-h-0"
                   variant="outline"
                 >
                   <Percent className="h-4 w-4" />
@@ -898,7 +898,7 @@ function InventarioPageContent() {
               )}
               <Button
                 onClick={() => setShowNewProduct(true)}
-                className="bg-red-600 hover:bg-red-700 text-white font-medium px-4 py-2 rounded-xl shadow-sm flex items-center gap-2"
+                className="min-h-11 w-full gap-2 bg-red-600 px-4 py-2 font-medium text-white shadow-sm hover:bg-red-700 sm:w-auto lg:min-h-0"
               >
                 <PackagePlus className="h-4 w-4" />
                 Nuevo Producto
@@ -911,31 +911,31 @@ function InventarioPageContent() {
       {activeTab === "productos" ? (
         <>
           {/* 2. KPIs / Métricas en Fila */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 xl:grid-cols-4">
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-4 sm:p-5 flex flex-col gap-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Total de Productos</span>
-              <span className="text-2xl font-bold text-slate-900 dark:text-foreground tabular-nums">{totalProducts}</span>
+              <span className="text-xl font-bold text-slate-900 dark:text-foreground tabular-nums sm:text-2xl">{totalProducts}</span>
               <span className="text-xs text-slate-500 dark:text-muted-foreground">SKUs activos</span>
             </div>
-            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-4 sm:p-5 flex flex-col gap-1">
               <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Valor Total de Stock</span>
-              <span className="text-2xl font-bold text-slate-900 dark:text-foreground font-mono tabular-nums">${totalValue.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+              <span className="text-xl font-bold text-slate-900 dark:text-foreground font-mono tabular-nums sm:text-2xl">${totalValue.toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
               <span className="text-xs text-slate-500 dark:text-muted-foreground">Valorizado a precio de venta</span>
             </div>
-            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-4 sm:p-5 flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Stock Crítico / Bajo</span>
                 {lowStockCount > 0 && <span className="bg-amber-50 text-amber-700 border border-amber-200 text-xs font-semibold px-2 py-0.5 rounded-full">{lowStockCount}</span>}
               </div>
-              <span className="text-2xl font-bold text-amber-700 dark:text-amber-400 tabular-nums">{lowStockCount}</span>
+              <span className="text-xl font-bold text-amber-700 dark:text-amber-400 tabular-nums sm:text-2xl">{lowStockCount}</span>
               <span className="text-xs text-slate-500 dark:text-muted-foreground">Por debajo del mínimo</span>
             </div>
-            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-5 flex flex-col gap-1">
+            <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-4 sm:p-5 flex flex-col gap-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Sin Stock</span>
                 {outOfStockCount > 0 && <span className="bg-red-50 text-red-700 border border-red-200 text-xs font-semibold px-2 py-0.5 rounded-full">{outOfStockCount}</span>}
               </div>
-              <span className="text-2xl font-bold text-red-700 dark:text-red-400 tabular-nums">{outOfStockCount}</span>
+              <span className="text-xl font-bold text-red-700 dark:text-red-400 tabular-nums sm:text-2xl">{outOfStockCount}</span>
               <span className="text-xs text-slate-500 dark:text-muted-foreground">0 unidades</span>
             </div>
           </div>
@@ -943,7 +943,7 @@ function InventarioPageContent() {
           {error && (
             <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center">
               <span>{error}</span>
-              <Button variant="outline" size="sm" onClick={fetchProducts}>
+                <Button variant="outline" size="sm" onClick={fetchProducts} className="h-11 sm:h-8">
                 Reintentar
               </Button>
             </div>
@@ -951,18 +951,18 @@ function InventarioPageContent() {
 
           {/* 3. Filtros y Búsqueda - Barra unificada */}
           <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-3 flex flex-col lg:flex-row gap-3 lg:items-center">
-            <div className="relative flex-1 min-w-[240px]">
+            <div className="relative w-full min-w-0 flex-1 lg:min-w-[240px]">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
               <Input
                 placeholder="Buscar por nombre o SKU..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-10 h-10 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-xl text-sm placeholder:text-slate-400 focus:bg-white dark:focus:bg-card focus:border-slate-300 transition-colors"
+                className="pl-10 h-11 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-xl text-sm placeholder:text-slate-400 focus:bg-white dark:focus:bg-card focus:border-slate-300 transition-colors lg:h-10"
               />
             </div>
 
             <Select value={selectedCategoryId} onValueChange={setSelectedCategoryId}>
-              <SelectTrigger className="w-full lg:w-[180px] h-10 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm">
+              <SelectTrigger className="w-full lg:w-[180px] h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm lg:h-10">
                 <SelectValue placeholder="Todas" />
               </SelectTrigger>
               <SelectContent>
@@ -980,7 +980,7 @@ function InventarioPageContent() {
             )}
 
             <Select value={stockFilter} onValueChange={(v) => setStockFilter(v as typeof stockFilter)}>
-              <SelectTrigger className="w-full lg:w-[180px] h-10 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm">
+              <SelectTrigger className="w-full lg:w-[180px] h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm lg:h-10">
                 <SelectValue placeholder="Stock" />
               </SelectTrigger>
               <SelectContent>
@@ -992,7 +992,7 @@ function InventarioPageContent() {
             </Select>
 
             <Select value={sortBy} onValueChange={(v) => setSortBy(v as typeof sortBy)}>
-              <SelectTrigger className="w-full lg:w-[200px] h-10 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm">
+              <SelectTrigger className="w-full lg:w-[200px] h-11 bg-white dark:bg-card border-slate-200 dark:border-border rounded-xl text-sm lg:h-10">
                 <SelectValue placeholder="Orden" />
               </SelectTrigger>
               <SelectContent>
@@ -1006,7 +1006,7 @@ function InventarioPageContent() {
             </Select>
 
             {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearFilters} className="gap-1 rounded-xl shrink-0">
+              <Button variant="outline" size="sm" onClick={clearFilters} className="h-11 w-full gap-1 rounded-xl sm:w-auto lg:h-8">
                 <X className="h-3.5 w-3.5" /> Limpiar
               </Button>
             )}
@@ -1015,7 +1015,7 @@ function InventarioPageContent() {
           {catActionError && <p className="text-sm text-amber-700 border border-amber-200 bg-amber-50 rounded p-2">{catActionError}</p>}
 
           {/* 4. Tabla de Productos Profesional */}
-          <div className="bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl overflow-hidden">
+          <div className="min-w-0 overflow-hidden rounded-xl border border-slate-200/80 bg-white shadow-sm dark:border-border dark:bg-card">
             <div className="px-4 py-3 flex items-center justify-between border-b border-slate-200/60 dark:border-border bg-white dark:bg-card">
               <h3 className="text-sm font-semibold text-foreground">
                 Productos <span className="text-sm font-normal text-muted-foreground">({filteredProducts.length}/{products.length})</span>
@@ -1030,21 +1030,21 @@ function InventarioPageContent() {
                 <AlertTriangle className="h-8 w-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">Sin productos que coincidan con los filtros</p>
                 {hasActiveFilters && (
-                  <Button variant="outline" size="sm" onClick={clearFilters}>
+                  <Button variant="outline" size="sm" onClick={clearFilters} className="h-11 sm:h-8">
                     Limpiar filtros
                   </Button>
                 )}
                 {products.length === 0 && !hasActiveFilters && <p className="text-xs text-muted-foreground">No hay productos cargados.</p>}
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto overscroll-x-contain">
+                <table className="w-full min-w-[560px] text-sm">
                   <thead className="bg-slate-50 dark:bg-muted/40 border-b border-slate-200 dark:border-border">
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Producto</th>
                       <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Precio</th>
                       <th className="text-center px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase">Stock</th>
-                      <th className="text-right px-4 py-3 text-xs font-semibold text-slate-500 dark:text-muted-foreground tracking-wider uppercase w-[60px]">Acciones</th>
+                      <th className="w-[72px] px-4 py-3 text-right text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-muted-foreground">Acciones</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100 dark:divide-border">
@@ -1094,15 +1094,15 @@ function InventarioPageContent() {
                           <td className="px-4 py-3 text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                                <Button variant="ghost" size="icon" className="h-8 w-8 rounded-lg hover:bg-slate-100 dark:hover:bg-muted">
+                                <Button variant="ghost" size="icon" aria-label={`Acciones de ${p.name}`} className="h-11 w-11 rounded-lg hover:bg-slate-100 dark:hover:bg-muted sm:h-8 sm:w-8">
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                                <DropdownMenuItem onClick={() => setSelectedProduct(p)}>
+                                <DropdownMenuItem onClick={() => setSelectedProduct(p)} className="min-h-11 sm:min-h-8">
                                   <Pencil className="h-4 w-4 mr-2" /> Ver detalle
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="text-red-600 focus:text-red-600" onClick={() => handleDelete(p)}>
+                                <DropdownMenuItem className="min-h-11 text-red-600 focus:text-red-600 sm:min-h-8" onClick={() => handleDelete(p)}>
                                   <Trash2 className="h-4 w-4 mr-2" /> Eliminar
                                 </DropdownMenuItem>
                               </DropdownMenuContent>
@@ -1116,7 +1116,10 @@ function InventarioPageContent() {
               </div>
             )}
             <div className="px-4 py-2 border-t border-slate-100 dark:border-border bg-slate-50/50 dark:bg-muted/20">
-              <p className="text-xs text-muted-foreground">Click en una fila para ver detalle, historial y edición rápida.</p>
+              <p className="text-xs text-muted-foreground">
+                <span className="sm:hidden">Deslizá horizontalmente para ver acciones; tocá una fila para abrir el detalle.</span>
+                <span className="hidden sm:inline">Click en una fila para ver detalle, historial y edición rápida.</span>
+              </p>
             </div>
           </div>
         </>
@@ -1131,7 +1134,7 @@ function InventarioPageContent() {
               </h2>
               <p className="text-sm text-muted-foreground">Gestioná las categorías de productos</p>
             </div>
-            <Button onClick={openCreateFromTab} aria-label="Nueva categoría" className="gap-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl shadow-sm font-medium">
+            <Button onClick={openCreateFromTab} aria-label="Nueva categoría" className="h-11 w-full gap-1.5 rounded-xl bg-red-600 font-medium text-white shadow-sm hover:bg-red-700 sm:w-auto lg:h-9">
               <Plus className="h-4 w-4" />
               Nueva categoría
             </Button>
@@ -1143,20 +1146,20 @@ function InventarioPageContent() {
           {catBannerError && (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-3 text-sm flex justify-between items-center gap-2">
               <span>{catBannerError}</span>
-              <button onClick={() => setCatBannerError(null)} className="text-xs underline shrink-0">
+              <button onClick={() => setCatBannerError(null)} className="min-h-11 min-w-11 shrink-0 px-2 text-xs underline sm:min-h-0 sm:min-w-0">
                 Cerrar
               </button>
             </div>
           )}
 
-          <div className="flex items-center gap-2 bg-white dark:bg-card border border-slate-200/80 dark:border-border shadow-sm rounded-xl p-3">
-            <div className="relative flex-1 max-w-md">
+          <div className="flex items-center gap-2 rounded-xl border border-slate-200/80 bg-white p-3 shadow-sm dark:border-border dark:bg-card">
+            <div className="relative w-full min-w-0 max-w-md flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 placeholder="Buscar por nombre o descripción..."
                 value={catSearchTerm}
                 onChange={(e) => setCatSearchTerm(e.target.value)}
-                className="pl-9 h-10 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-xl focus:bg-white dark:focus:bg-card"
+                className="pl-9 h-11 bg-slate-50 dark:bg-muted/40 border-slate-200 dark:border-border rounded-xl focus:bg-white dark:focus:bg-card sm:h-10"
               />
             </div>
             <span className="text-xs text-muted-foreground hidden sm:inline">
@@ -1181,7 +1184,7 @@ function InventarioPageContent() {
           ) : catError ? (
             <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 flex items-center justify-between gap-2">
               <span className="text-sm">{catError}</span>
-              <Button variant="outline" size="sm" onClick={() => void refreshCategoriesAndMap()}>
+              <Button variant="outline" size="sm" onClick={() => refreshCategoriesAndMap()} className="h-11 sm:h-8">
                 Reintentar
               </Button>
             </div>
@@ -1189,7 +1192,7 @@ function InventarioPageContent() {
             <div className="bg-card border rounded-xl p-8 text-center flex flex-col items-center gap-3">
               <Tag className="h-10 w-10 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">Sin categorías — creá la primera</p>
-              <Button onClick={openCreateFromTab} size="sm">
+              <Button onClick={openCreateFromTab} size="sm" className="h-11 sm:h-8">
                 <Plus className="h-4 w-4 mr-1" />
                 Nueva categoría
               </Button>
@@ -1213,7 +1216,7 @@ function InventarioPageContent() {
                       </span>
                     </div>
                     <div className="flex gap-1 shrink-0">
-                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${cat.name}`} onClick={() => openEditFromTab(cat)} className="h-7 w-7 rounded-lg text-slate-400 hover:text-slate-700 dark:text-slate-500 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-muted">
+                      <Button variant="ghost" size="icon-sm" aria-label={`Editar ${cat.name}`} onClick={() => openEditFromTab(cat)} className="h-11 w-11 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:text-slate-500 dark:hover:bg-muted dark:hover:text-slate-200 sm:h-7 sm:w-7">
                         <Pencil className="h-4 w-4" />
                       </Button>
                       <Button
@@ -1221,7 +1224,7 @@ function InventarioPageContent() {
                         size="icon-sm"
                         aria-label={`Eliminar ${cat.name}`}
                         onClick={() => confirmDeleteCat(cat)}
-                        className="h-7 w-7 rounded-lg text-slate-400 hover:text-red-600 dark:text-slate-500 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/30"
+                        className="h-11 w-11 rounded-lg text-slate-400 hover:bg-red-50 hover:text-red-600 dark:text-slate-500 dark:hover:bg-red-950/30 dark:hover:text-red-400 sm:h-7 sm:w-7"
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -1241,9 +1244,9 @@ function InventarioPageContent() {
       {selectedProduct && activeTab === "productos" && (
         <div className="fixed inset-0 z-40 flex">
           <div className="flex-1 bg-black/40" onClick={() => setSelectedProduct(null)} aria-hidden />
-          <div className="w-full max-w-[480px] bg-card border-l border-border shadow-xl flex flex-col h-full overflow-hidden">
+          <div role="dialog" aria-modal="true" aria-label={`Detalle del producto ${selectedProduct.name}`} className="flex h-full w-full min-w-0 max-w-[480px] flex-col overflow-hidden border-l border-border bg-card shadow-xl">
             {/* Cabecera compacta: nombre, SKU, precio y stock */}
-            <div className="p-5 border-b border-border shrink-0 bg-card sticky top-0 z-10">
+            <div className="sticky top-0 z-10 shrink-0 border-b border-border bg-card p-4 sm:p-5">
               <div className="flex justify-between items-start gap-3">
                 <div className="flex-1 min-w-0">
                   <h2 className="text-base font-semibold truncate text-foreground">{selectedProduct.name}</h2>
@@ -1276,7 +1279,7 @@ function InventarioPageContent() {
                     })()}
                   </div>
                 </div>
-                <Button variant="ghost" size="icon" onClick={() => setSelectedProduct(null)} aria-label="Cerrar" className="shrink-0 rounded-lg">
+                <Button variant="ghost" size="icon" onClick={() => setSelectedProduct(null)} aria-label="Cerrar" autoFocus className="h-11 w-11 shrink-0 rounded-lg sm:h-9 sm:w-9">
                   <X className="h-5 w-5" />
                 </Button>
               </div>
@@ -1284,38 +1287,38 @@ function InventarioPageContent() {
               <div className="mt-4 bg-muted p-1 rounded-xl flex gap-1">
                 <button
                   onClick={() => setDrawerTab("datos")}
-                  className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-xl transition-colors ${drawerTab === "datos" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`min-h-11 flex-1 py-1.5 px-3 text-xs font-medium rounded-xl transition-colors sm:min-h-0 ${drawerTab === "datos" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Datos y Precios
                 </button>
                 <button
                   onClick={() => setDrawerTab("historial")}
-                  className={`flex-1 py-1.5 px-3 text-xs font-medium rounded-xl transition-colors ${drawerTab === "historial" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`min-h-11 flex-1 py-1.5 px-3 text-xs font-medium rounded-xl transition-colors sm:min-h-0 ${drawerTab === "historial" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Historial y Stock
                 </button>
               </div>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 pb-2 flex flex-col gap-6">
+            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto overscroll-y-contain p-4 pb-2 flex flex-col gap-6 sm:p-6">
               {drawerTab === "datos" ? (
                 <>
                   {/* Datos y Precios - ordered form */}
                   <section className="flex flex-col gap-4">
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Nombre del producto</label>
-                      <Input value={quickName} onChange={(e) => setQuickName(e.target.value)} maxLength={50} placeholder="Nombre del producto" className="h-9 bg-card border-input rounded-xl text-sm" />
+                        <Input value={quickName} onChange={(e) => setQuickName(e.target.value)} maxLength={50} placeholder="Nombre del producto" className="h-11 bg-card border-input rounded-xl text-sm sm:h-9" />
                     </div>
 
                     <div className="grid grid-cols-1 gap-3">
                       <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Código interno (SKU)</label>
-                        <Input value={selectedProduct.sku} disabled className="h-9 bg-muted/40 border-input rounded-xl text-sm font-mono tabular-nums opacity-70" />
+                        <Input value={selectedProduct.sku} disabled className="h-11 bg-muted/40 border-input rounded-xl text-sm font-mono tabular-nums opacity-70 sm:h-9" />
                         <p className="text-[11px] text-muted-foreground">No editable tras creación</p>
                       </div>
                       <div className="flex flex-col gap-1.5">
                         <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Código de barras (EAN)</label>
-                        <Input value={selectedProduct.barcode ?? ""} disabled placeholder="Sin código de barras" className="h-9 bg-muted/40 border-input rounded-xl text-sm font-mono tabular-nums opacity-70" />
+                        <Input value={selectedProduct.barcode ?? ""} disabled placeholder="Sin código de barras" className="h-11 bg-muted/40 border-input rounded-xl text-sm font-mono tabular-nums opacity-70 sm:h-9" />
                         <p className="text-[11px] text-muted-foreground">No editable tras creación</p>
                       </div>
                     </div>
@@ -1324,14 +1327,14 @@ function InventarioPageContent() {
                       <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Precio de venta</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 font-mono text-sm">$</span>
-                        <Input type="number" step="0.01" min="0" value={quickPrice} onChange={(e) => setQuickPrice(e.target.value)} placeholder="0.00" className="pl-7 h-10 bg-card border-input rounded-xl font-bold font-mono tabular-nums text-[15px]" />
+                        <Input type="number" step="0.01" min="0" value={quickPrice} onChange={(e) => setQuickPrice(e.target.value)} placeholder="0.00" className="pl-7 h-11 bg-card border-input rounded-xl font-bold font-mono tabular-nums text-[15px] sm:h-10" />
                       </div>
                     </div>
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Modo de venta</label>
                       <Select value={quickUnit || "un"} onValueChange={(v) => setQuickUnit(v as "un" | "kg")}>
-                        <SelectTrigger className="h-9 bg-card border-input rounded-xl text-sm">
+                        <SelectTrigger className="h-11 bg-card border-input rounded-xl text-sm sm:h-9">
                           <SelectValue placeholder="Modo de venta" />
                         </SelectTrigger>
                         <SelectContent>
@@ -1353,7 +1356,7 @@ function InventarioPageContent() {
                           {selectedCats.map((c) => (
                             <span key={c.id} className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-1 text-xs font-medium">
                               {c.name}
-                              <button onClick={() => handleRemove(selectedProduct, c.id)} className="ml-1 hover:text-red-600" aria-label={`Quitar ${c.name}`}>
+                              <button onClick={() => handleRemove(selectedProduct, c.id)} className="ml-1 inline-flex h-11 w-11 items-center justify-center rounded-full hover:text-red-600 sm:h-5 sm:w-5" aria-label={`Quitar ${c.name}`}>
                                 <X className="h-3 w-3" />
                               </button>
                             </span>
@@ -1362,7 +1365,7 @@ function InventarioPageContent() {
                       )}
                       <div className="flex gap-2">
                         <Select value={assignCatId} onValueChange={setAssignCatId}>
-                          <SelectTrigger className="flex-1 h-9 border-input bg-card rounded-xl text-sm">
+                          <SelectTrigger className="flex-1 h-11 border-input bg-card rounded-xl text-sm sm:h-9">
                             <SelectValue placeholder="Asignar categoría…" />
                           </SelectTrigger>
                           <SelectContent>
@@ -1379,18 +1382,18 @@ function InventarioPageContent() {
                             )}
                           </SelectContent>
                         </Select>
-                        <Button variant="outline" onClick={handleDrawerAssign} disabled={!assignCatId || assignCatId === "__none"} className="shrink-0 rounded-xl h-9">
+                        <Button variant="outline" onClick={handleDrawerAssign} disabled={!assignCatId || assignCatId === "__none"} className="h-11 shrink-0 rounded-xl sm:h-9">
                           Asignar
                         </Button>
                       </div>
-                      <Button variant="outline" size="sm" onClick={() => { setEditingCategory(null); setCatModalOrigin("drawer"); setShowCatModal(true); }} className="gap-1.5 w-fit rounded-xl h-8 text-xs">
+                      <Button variant="outline" size="sm" onClick={() => { setEditingCategory(null); setCatModalOrigin("drawer"); setShowCatModal(true); }} className="h-11 w-fit gap-1.5 rounded-xl text-xs sm:h-8">
                         <Plus className="h-3.5 w-3.5" /> Nueva categoría
                       </Button>
                     </div>
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-semibold text-slate-700 dark:text-foreground">Stock mínimo de alerta</label>
-                      <Input type="number" min="0" max="99999" step={quickUnit === "kg" ? "0.001" : "1"} value={quickMinStock} onChange={(e) => setQuickMinStock(e.target.value)} placeholder={quickUnit === "kg" ? "Ej: 2.5" : "Ej: 5"} className="h-9 bg-card border-input rounded-xl text-sm tabular-nums" />
+                        <Input type="number" min="0" max="99999" step={quickUnit === "kg" ? "0.001" : "1"} value={quickMinStock} onChange={(e) => setQuickMinStock(e.target.value)} placeholder={quickUnit === "kg" ? "Ej: 2.5" : "Ej: 5"} className="h-11 bg-card border-input rounded-xl text-sm tabular-nums sm:h-9" />
                     </div>
 
                     <div className="flex flex-col gap-2">
@@ -1408,17 +1411,17 @@ function InventarioPageContent() {
                           )}
                         </div>
                         <div className="flex-1 flex flex-col gap-2 min-w-0">
-                          <label className="inline-flex items-center justify-center gap-2 h-9 px-3 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-muted text-sm font-medium cursor-pointer">
+                          <label className="inline-flex items-center justify-center gap-2 h-11 px-3 rounded-xl border border-slate-200 dark:border-border bg-white dark:bg-card hover:bg-slate-50 dark:hover:bg-muted text-sm font-medium cursor-pointer sm:h-9">
                             Subir archivo
                             <input type="file" accept="image/*" onChange={(e) => { const f = e.target.files?.[0] ?? null; setQuickError(null); if (f) { if (f.size > 5*1024*1024) { setQuickError("Archivo muy grande (máximo 5MB)"); (e.target as HTMLInputElement).value=""; return; } if (f.type && !f.type.startsWith("image/")) { setQuickError("Formato no soportado (solo imágenes)"); (e.target as HTMLInputElement).value=""; return; } } setQuickSelectedFile(f); if (quickPreviewUrl) URL.revokeObjectURL(quickPreviewUrl); if (f) setQuickPreviewUrl(URL.createObjectURL(f)); else setQuickPreviewUrl(null); }} className="hidden" />
                           </label>
                           <div className="relative">
-                            <Input type="url" value={quickImageUrl} onChange={(e) => setQuickImageUrl(e.target.value)} placeholder="o pegar URL https://..." className="h-9 bg-card border-input rounded-xl text-sm pr-8" />
+                          <Input type="url" value={quickImageUrl} onChange={(e) => setQuickImageUrl(e.target.value)} placeholder="o pegar URL https://..." className="h-11 bg-card border-input rounded-xl pr-8 text-sm sm:h-9" />
                           </div>
                           {(quickSelectedFile || quickImageUrl.trim()) && (
                             <div className="flex items-center gap-2">
                               <span className="text-xs text-muted-foreground truncate flex-1">{quickSelectedFile?.name || quickImageUrl.trim()}</span>
-                              <button type="button" onClick={() => { setQuickSelectedFile(null); setQuickImageUrl(""); if (quickPreviewUrl) { URL.revokeObjectURL(quickPreviewUrl); setQuickPreviewUrl(null); } }} className="text-xs text-red-600 hover:underline shrink-0">
+                              <button type="button" onClick={() => { setQuickSelectedFile(null); setQuickImageUrl(""); if (quickPreviewUrl) { URL.revokeObjectURL(quickPreviewUrl); setQuickPreviewUrl(null); } }} className="min-h-11 min-w-11 shrink-0 px-2 text-xs text-red-600 hover:underline sm:min-h-0 sm:min-w-0">
                                 Quitar
                               </button>
                             </div>
@@ -1430,7 +1433,7 @@ function InventarioPageContent() {
 
                     <div className="flex flex-col gap-1.5">
                       <label className="text-xs font-medium text-slate-600 dark:text-muted-foreground">Descripción</label>
-                      <Input value={quickDesc} onChange={(e) => setQuickDesc(e.target.value)} maxLength={500} placeholder="Descripción (opcional)" className="h-9 bg-card border-input rounded-xl text-sm" />
+                      <Input value={quickDesc} onChange={(e) => setQuickDesc(e.target.value)} maxLength={500} placeholder="Descripción (opcional)" className="h-11 bg-card border-input rounded-xl text-sm sm:h-9" />
                     </div>
 
                     {quickError && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded-xl p-2">{quickError}</p>}
@@ -1438,14 +1441,14 @@ function InventarioPageContent() {
 
                     <div className="pt-2 border-t border-border mt-1 pb-4">
                       {!drawerDeleteConfirm ? (
-                        <button onClick={() => setDrawerDeleteConfirm(true)} className="text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 text-xs py-2 rounded-lg text-center cursor-pointer transition-colors w-full block font-medium">
+                        <button onClick={() => setDrawerDeleteConfirm(true)} className="min-h-11 w-full rounded-lg py-2 text-center text-xs font-medium text-red-600 transition-colors hover:bg-red-50 dark:hover:bg-red-950/30">
                           Eliminar este producto
                         </button>
                       ) : (
                         <div className="flex flex-col gap-2 bg-red-50 dark:bg-red-950/20 border border-red-200 dark:border-red-900 rounded-xl p-3">
                           <p className="text-xs text-red-700 dark:text-red-300 font-medium text-center">¿Eliminar {selectedProduct.name}? Esta acción no se puede deshacer.</p>
                           <div className="flex gap-2">
-                            <Button variant="outline" size="sm" onClick={() => setDrawerDeleteConfirm(false)} className="flex-1 rounded-lg h-8 text-xs">
+                            <Button variant="outline" size="sm" onClick={() => setDrawerDeleteConfirm(false)} className="h-11 flex-1 rounded-lg text-xs sm:h-8">
                               Cancelar
                             </Button>
                             <Button
@@ -1465,7 +1468,7 @@ function InventarioPageContent() {
                                   setQuickError(msg);
                                 }
                               }}
-                              className="flex-1 rounded-lg h-8 text-xs"
+                              className="h-11 flex-1 rounded-lg text-xs sm:h-8"
                             >
                               Sí, eliminar
                             </Button>
@@ -1481,7 +1484,7 @@ function InventarioPageContent() {
                   <section className="border rounded-xl p-4 bg-muted/20 flex flex-col gap-3">
                     <h3 className="text-sm font-semibold">Ajuste rápido de stock</h3>
                     <div className="flex flex-col gap-3">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="flex flex-col gap-1">
                           <label className="text-xs font-medium text-muted-foreground">Cantidad</label>
                           <Input
@@ -1491,20 +1494,20 @@ function InventarioPageContent() {
                             value={drawerDelta}
                             onChange={(e) => setDrawerDelta(e.target.value)}
                             placeholder={(selectedProduct.isSoldByWeight === true || (selectedProduct.unit ?? "").toLowerCase() === "kg") ? "Ej: 1.5" : "Ej: 5"}
-                            className="h-9 bg-card border-input rounded-xl tabular-nums"
+                            className="h-11 bg-card border-input rounded-xl tabular-nums sm:h-9"
                           />
                         </div>
                         <div className="flex flex-col gap-1">
                           <label className="text-xs font-medium text-muted-foreground">Motivo</label>
-                          <Input value={drawerReason} onChange={(e) => setDrawerReason(e.target.value)} maxLength={250} placeholder="Ej: Recepción" className="h-9 bg-card border-input rounded-xl text-sm" />
+                          <Input value={drawerReason} onChange={(e) => setDrawerReason(e.target.value)} maxLength={250} placeholder="Ej: Recepción" className="h-11 bg-card border-input rounded-xl text-sm sm:h-9" />
                         </div>
                       </div>
                       {drawerAdjustError && <p className="text-xs text-red-600 border border-red-200 bg-red-50 rounded-lg p-2">{drawerAdjustError}</p>}
                       <div className="grid grid-cols-2 gap-2">
-                        <Button onClick={() => handleDrawerStockAdjust(1)} disabled={drawerAdjustLoading} className="bg-green-600 hover:bg-green-700 text-white rounded-xl h-9 text-sm font-medium">
+                        <Button onClick={() => handleDrawerStockAdjust(1)} disabled={drawerAdjustLoading} className="h-11 rounded-xl bg-green-600 text-sm font-medium text-white hover:bg-green-700 sm:h-9">
                           + Sumar
                         </Button>
-                        <Button onClick={() => handleDrawerStockAdjust(-1)} disabled={drawerAdjustLoading} className="bg-red-600 hover:bg-red-700 text-white rounded-xl h-9 text-sm font-medium">
+                        <Button onClick={() => handleDrawerStockAdjust(-1)} disabled={drawerAdjustLoading} className="h-11 rounded-xl bg-red-600 text-sm font-medium text-white hover:bg-red-700 sm:h-9">
                           − Restar
                         </Button>
                       </div>
@@ -1518,14 +1521,14 @@ function InventarioPageContent() {
                       </h3>
                       <span className="text-xs text-muted-foreground tabular-nums">{kardexMerged.length} mov.</span>
                     </div>
-                    <div className="bg-muted p-1 rounded-lg flex gap-1 w-fit">
-                      <button onClick={() => setDrawerKardexFilter("todos")} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${drawerKardexFilter === "todos" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                    <div className="bg-muted p-1 rounded-lg flex flex-wrap gap-1 w-fit max-w-full">
+                      <button onClick={() => setDrawerKardexFilter("todos")} className={`min-h-11 px-3 py-1 text-xs font-medium rounded-md transition-colors sm:min-h-0 ${drawerKardexFilter === "todos" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                         Todos
                       </button>
-                      <button onClick={() => setDrawerKardexFilter("stock")} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${drawerKardexFilter === "stock" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                      <button onClick={() => setDrawerKardexFilter("stock")} className={`min-h-11 px-3 py-1 text-xs font-medium rounded-md transition-colors sm:min-h-0 ${drawerKardexFilter === "stock" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                         Solo Stock
                       </button>
-                      <button onClick={() => setDrawerKardexFilter("precios")} className={`px-3 py-1 text-xs font-medium rounded-md transition-colors ${drawerKardexFilter === "precios" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                      <button onClick={() => setDrawerKardexFilter("precios")} className={`min-h-11 px-3 py-1 text-xs font-medium rounded-md transition-colors sm:min-h-0 ${drawerKardexFilter === "precios" ? "bg-white dark:bg-card shadow-sm border border-border text-foreground" : "text-muted-foreground hover:text-foreground"}`}>
                         Solo Precios
                       </button>
                     </div>
@@ -1607,7 +1610,7 @@ function InventarioPageContent() {
             </div>
             {drawerTab === "datos" && (
               <div className="sticky bottom-0 bg-white/95 dark:bg-card/95 backdrop-blur border-t border-slate-200 dark:border-border p-4 shrink-0">
-                <Button onClick={handleQuickSave} disabled={quickLoading} className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 font-medium">
+                <Button onClick={handleQuickSave} disabled={quickLoading} className="min-h-11 w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 font-medium sm:min-h-0">
                   {quickLoading ? "Guardando…" : "Guardar Cambios"}
                 </Button>
               </div>
@@ -1615,19 +1618,19 @@ function InventarioPageContent() {
           </div>
           {drawerConfirmOpen && (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setDrawerConfirmOpen(false)}>
-              <div className="bg-white dark:bg-card border rounded-xl shadow-lg p-5 w-full max-w-sm flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+              <div role="dialog" aria-modal="true" aria-label="Confirmar ajuste de stock" className="flex max-h-[calc(100dvh-2rem)] w-full max-w-sm flex-col gap-4 overflow-y-auto overscroll-y-contain rounded-xl border bg-white p-5 shadow-lg dark:bg-card" onClick={(e) => e.stopPropagation()}>
                 <h3 className="text-sm font-semibold">Confirmar ajuste</h3>
                 <p className="text-sm text-muted-foreground">
                   ¿Confirmás registrar {drawerConfirmSign > 0 ? `+${drawerConfirmAmount}` : `-${drawerConfirmAmount}`} unidades en el stock con motivo &apos;{drawerReason.trim() || "Ajuste manual"}&apos;?
                 </p>
-                <div className="flex justify-end gap-2">
-                  <Button variant="outline" onClick={() => setDrawerConfirmOpen(false)} disabled={drawerAdjustLoading} className="rounded-xl">
+                <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                  <Button autoFocus variant="outline" onClick={() => setDrawerConfirmOpen(false)} disabled={drawerAdjustLoading} className="h-11 w-full rounded-xl sm:h-9 sm:w-auto">
                     Cancelar
                   </Button>
                   <Button
                     onClick={confirmDrawerStockAdjust}
                     disabled={drawerAdjustLoading}
-                    className={`rounded-xl text-white ${drawerConfirmSign > 0 ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
+                    className={`h-11 w-full rounded-xl text-white sm:h-9 sm:w-auto ${drawerConfirmSign > 0 ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}`}
                   >
                     {drawerAdjustLoading ? "Guardando…" : "Confirmar"}
                   </Button>
@@ -1640,7 +1643,7 @@ function InventarioPageContent() {
 
       {deleteConfirmId && deleteTarget && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-card border border-border rounded-xl shadow-lg p-6 w-full max-w-md flex flex-col gap-4">
+          <div role="dialog" aria-modal="true" aria-label={`Eliminar categoría ${deleteTarget.name}`} className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col gap-4 overflow-y-auto overscroll-y-contain rounded-xl border border-border bg-card p-4 shadow-lg sm:p-6">
             <h3 className="text-lg font-semibold">¿Eliminar &quot;{deleteTarget.name}&quot;?</h3>
             <p className="text-sm text-muted-foreground">Se desactivará la categoría. Esta acción no elimina los productos asociados.</p>
             {deleteTarget.productCount > 0 && (
@@ -1650,11 +1653,11 @@ function InventarioPageContent() {
               </p>
             )}
             {deleteError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-2 text-sm">{deleteError}</div>}
-            <div className="flex justify-end gap-2 mt-1">
-              <Button variant="outline" onClick={() => setDeleteConfirmId(null)} disabled={deleteLoading}>
+            <div className="mt-1 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+              <Button autoFocus variant="outline" onClick={() => setDeleteConfirmId(null)} disabled={deleteLoading} className="h-11 w-full sm:h-9 sm:w-auto">
                 Cancelar
               </Button>
-              <Button variant="destructive" onClick={handleDeleteCategory} disabled={deleteLoading}>
+              <Button variant="destructive" onClick={handleDeleteCategory} disabled={deleteLoading} className="h-11 w-full sm:h-9 sm:w-auto">
                 {deleteLoading ? "Eliminando..." : "Eliminar"}
               </Button>
             </div>
@@ -1678,21 +1681,21 @@ function InventarioPageContent() {
       {/* 5. Modal Ajuste Masivo - con redondeo comercial */}
       {showBulk && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white dark:bg-card border border-slate-200 dark:border-border rounded-xl shadow-xl w-full max-w-4xl max-h-[88vh] overflow-y-auto flex flex-col gap-3 p-6">
+          <div role="dialog" aria-modal="true" aria-label="Ajuste masivo de precios" className="flex max-h-[calc(100dvh-2rem)] w-full max-w-4xl flex-col gap-3 overflow-y-auto overscroll-y-contain rounded-xl border border-slate-200 bg-white p-4 shadow-xl dark:border-border dark:bg-card sm:p-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-slate-700 dark:text-foreground" /> Ajuste masivo de precios
               </h3>
-              <button onClick={() => setShowBulk(false)} className="rounded-md p-1 hover:bg-muted">
+              <button autoFocus onClick={() => setShowBulk(false)} aria-label="Cerrar ajuste masivo" className="h-11 w-11 rounded-md p-1 hover:bg-muted sm:h-8 sm:w-8">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">Categoría objetivo</label>
                 <Select value={bulkCategoryId} onValueChange={setBulkCategoryId}>
-                  <SelectTrigger className="w-full border-slate-200 dark:border-border bg-white dark:bg-card rounded-xl h-10">
+                  <SelectTrigger className="w-full border-slate-200 dark:border-border bg-white dark:bg-card rounded-xl h-11 sm:h-10">
                     <SelectValue placeholder="Seleccionar categoría" />
                   </SelectTrigger>
                   <SelectContent>
@@ -1708,7 +1711,7 @@ function InventarioPageContent() {
               <div className="flex flex-col gap-2">
                 <label className="text-sm font-medium">Redondeo comercial</label>
                 <Select value={bulkRounding} onValueChange={(v) => setBulkRounding(v as typeof bulkRounding)}>
-                  <SelectTrigger className="w-full border-slate-200 dark:border-border bg-white dark:bg-card rounded-xl h-10">
+                  <SelectTrigger className="w-full border-slate-200 dark:border-border bg-white dark:bg-card rounded-xl h-11 sm:h-10">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -1728,7 +1731,7 @@ function InventarioPageContent() {
                   role="tab"
                   aria-selected={bulkMode === "percent"}
                   onClick={() => setBulkMode("percent")}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${bulkMode === "percent" ? "bg-white dark:bg-card shadow-sm border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`min-h-11 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors sm:min-h-0 ${bulkMode === "percent" ? "bg-white dark:bg-card shadow-sm border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Porcentaje (%)
                 </button>
@@ -1737,7 +1740,7 @@ function InventarioPageContent() {
                   role="tab"
                   aria-selected={bulkMode === "fixed"}
                   onClick={() => setBulkMode("fixed")}
-                  className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${bulkMode === "fixed" ? "bg-white dark:bg-card shadow-sm border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                  className={`min-h-11 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors sm:min-h-0 ${bulkMode === "fixed" ? "bg-white dark:bg-card shadow-sm border text-foreground" : "text-muted-foreground hover:text-foreground"}`}
                 >
                   Monto fijo ($)
                 </button>
@@ -1754,7 +1757,7 @@ function InventarioPageContent() {
                   onChange={(e) => setBulkValue(e.target.value)}
                   placeholder={bulkMode === "percent" ? "Ej: 10" : "Ej: 500"}
                   aria-label={bulkMode === "percent" ? "Porcentaje de aumento" : "Monto fijo a sumar"}
-                  className={`rounded-xl h-10 bg-slate-50 dark:bg-muted/40 focus:bg-white border-slate-200 dark:border-border ${bulkMode === "percent" ? (bulkValue !== "" && bulkValue !== "0" ? "pr-14" : "pr-8") : bulkValue !== "" && bulkValue !== "0" ? "pl-8 pr-10" : "pl-8"}`}
+                  className={`rounded-xl h-11 bg-slate-50 dark:bg-muted/40 focus:bg-white border-slate-200 dark:border-border sm:h-10 ${bulkMode === "percent" ? (bulkValue !== "" && bulkValue !== "0" ? "pr-14" : "pr-8") : bulkValue !== "" && bulkValue !== "0" ? "pl-8 pr-10" : "pl-8"}`}
                 />
                 {bulkMode === "percent" && (
                   <span className={`absolute top-1/2 -translate-y-1/2 text-slate-500 text-sm font-mono pointer-events-none ${bulkValue !== "" && bulkValue !== "0" ? "right-8" : "right-3"}`}>%</span>
@@ -1763,7 +1766,7 @@ function InventarioPageContent() {
                   <button
                     type="button"
                     onClick={() => setBulkValue("")}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 h-6 w-6 rounded-full hover:bg-slate-100 dark:hover:bg-muted flex items-center justify-center text-slate-400 hover:text-slate-600 dark:text-muted-foreground"
+                    className="absolute right-2 top-1/2 inline-flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 hover:bg-slate-100 hover:text-slate-600 dark:text-muted-foreground dark:hover:bg-muted sm:h-6 sm:w-6"
                     aria-label="Limpiar valor"
                   >
                     <X className="h-3.5 w-3.5" />
@@ -1778,7 +1781,7 @@ function InventarioPageContent() {
                         key={v}
                         type="button"
                         onClick={() => setBulkValue(String((parseFloat(bulkValue) || 0) + v))}
-                        className="px-2 py-1 rounded-full border bg-white hover:bg-slate-50 text-xs font-medium dark:bg-card dark:hover:bg-muted"
+                        className="min-h-11 min-w-[44px] rounded-full border bg-white px-2 py-1 text-xs font-medium hover:bg-slate-50 dark:bg-card dark:hover:bg-muted sm:min-h-0 sm:min-w-0"
                       >
                         +{v}%
                       </button>
@@ -1788,7 +1791,7 @@ function InventarioPageContent() {
                         key={v}
                         type="button"
                         onClick={() => setBulkValue(String((parseFloat(bulkValue) || 0) + v))}
-                        className="px-2 py-1 rounded-full border bg-white hover:bg-slate-50 text-xs font-medium dark:bg-card dark:hover:bg-muted"
+                        className="min-h-11 min-w-[44px] rounded-full border bg-white px-2 py-1 text-xs font-medium hover:bg-slate-50 dark:bg-card dark:hover:bg-muted sm:min-h-0 sm:min-w-0"
                       >
                         +{v >= 1000 ? `${v / 1000}K` : v}
                       </button>
@@ -1798,17 +1801,19 @@ function InventarioPageContent() {
 
             <div className="flex flex-col gap-1">
               <label className="text-sm font-medium">Motivo (opcional)</label>
-              <Input value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} maxLength={500} placeholder="Ej: Inflación agosto 2026 — si queda vacío se autocompleta" className="rounded-xl h-9" />
+              <Input value={bulkReason} onChange={(e) => setBulkReason(e.target.value)} maxLength={500} placeholder="Ej: Inflación agosto 2026 — si queda vacío se autocompleta" className="rounded-xl h-11 sm:h-9" />
               <span className="text-xs text-muted-foreground text-right">{bulkReason.trim().length}/500</span>
             </div>
 
-            <div className="border border-slate-200 dark:border-border rounded-lg bg-white dark:bg-card overflow-hidden">
-              <div className="overflow-y-auto max-h-[340px] pr-3 [scrollbar-width:thin] [scrollbar-gutter:stable]" style={{ scrollbarGutter: "stable" as const }}>
-              <table className="w-full table-auto text-sm">
+            <div className="min-w-0 overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-border dark:bg-card">
+              <div className="max-h-[340px] overflow-x-auto overflow-y-auto overscroll-x-contain pr-3 [scrollbar-width:thin] [scrollbar-gutter:stable]" style={{ scrollbarGutter: "stable" as const }}>
+              <table className="w-full min-w-[640px] table-auto text-sm">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-muted/50 z-10 border-b border-slate-200 dark:border-border">
                     <tr>
                       <th className="p-2 text-left w-10">
-                        <input type="checkbox" checked={bulkAllChecked} onChange={(e) => { const checked = e.target.checked; const next: Record<string, boolean> = {}; bulkPreview.forEach((b) => (next[b.id] = checked)); setBulkSelected(next); }} />
+                        <label className="inline-flex min-h-11 min-w-11 items-center justify-center sm:min-h-0 sm:min-w-0">
+                          <input aria-label="Seleccionar todos los productos" type="checkbox" checked={bulkAllChecked} onChange={(e) => { const checked = e.target.checked; const next: Record<string, boolean> = {}; bulkPreview.forEach((b) => (next[b.id] = checked)); setBulkSelected(next); }} />
+                        </label>
                       </th>
                       <th className="p-2 text-left text-xs font-semibold text-slate-500 tracking-wider uppercase">SKU</th>
                       <th className="p-2 text-left text-xs font-semibold text-slate-500 tracking-wider uppercase">Producto</th>
@@ -1832,7 +1837,9 @@ function InventarioPageContent() {
                         return (
                           <tr key={b.id} className={`border-t border-slate-100 dark:border-border ${!checked ? "opacity-50" : ""}`}>
                             <td className="p-2">
-                              <input type="checkbox" checked={checked} onChange={(e) => setBulkSelected((prev) => ({ ...prev, [b.id]: e.target.checked }))} />
+                              <label className="inline-flex min-h-11 min-w-11 items-center justify-center sm:min-h-0 sm:min-w-0">
+                                <input aria-label={`Seleccionar ${b.name}`} type="checkbox" checked={checked} onChange={(e) => setBulkSelected((prev) => ({ ...prev, [b.id]: e.target.checked }))} />
+                              </label>
                             </td>
                             <td className="p-2 font-mono text-xs">{b.sku}</td>
                             <td className="p-2 truncate max-w-[180px]" title={b.name}>
@@ -1858,11 +1865,11 @@ function InventarioPageContent() {
               <div className="text-sm"><span className="font-semibold">Afectados:</span> {bulkPreviewFiltered.length} de {bulkPreview.length}</div>
               {bulkError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-md p-2 text-sm">{bulkError}</div>}
               {bulkSuccess && <div className="bg-green-50 border border-green-200 text-green-700 rounded-md p-2 text-sm">{bulkSuccess}</div>}
-              <div className="flex justify-end gap-2">
-                <Button variant="outline" onClick={() => setShowBulk(false)} disabled={bulkLoading} className="rounded-xl">
+              <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+                <Button variant="outline" onClick={() => setShowBulk(false)} disabled={bulkLoading} className="h-11 w-full rounded-xl sm:h-9 sm:w-auto">
                   Cerrar
                 </Button>
-                <Button onClick={handleBulkConfirm} disabled={bulkLoading || bulkPreviewFiltered.length === 0 || !bulkHasAdjustment || bulkReason.trim().length > 500} className="bg-red-600 hover:bg-red-700 text-white rounded-xl">
+                <Button onClick={handleBulkConfirm} disabled={bulkLoading || bulkPreviewFiltered.length === 0 || !bulkHasAdjustment || bulkReason.trim().length > 500} className="h-11 w-full rounded-xl bg-red-600 text-white hover:bg-red-700 sm:h-9 sm:w-auto">
                   {bulkLoading ? "Aplicando..." : `Confirmar ajuste (${bulkPreviewFiltered.length})`}
                 </Button>
               </div>

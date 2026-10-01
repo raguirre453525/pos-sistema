@@ -1,30 +1,23 @@
-﻿import Link from "next/link"
-import { Button } from "@/components/ui/button"
+﻿import Link from "next/link";
+import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { NewProductForm } from "@/components/Inventario/Forms/NewProductForm"
-import { ImageForm } from "@/components/Inventario/Forms/ImageForm"
+import { NewProductForm } from "@/components/Inventario/Forms/NewProductForm";
 
-const page = () => {
+export default function CreateProductPage() {
   return (
-    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
-        <Link href={"/Inventario"}><Button variant="outline" size="icon" className="rounded-md">
-        <ArrowLeft />
-      </Button></Link>
-      <h1 className="text-foreground text-2xl">Crear producto</h1>
-      
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2 bg-card h-96 rounded-xl border border-border shadow-sm p-6">
-            <NewProductForm />
-          </div>
-          <div className="lg:col-span-1 bg-card h-96 rounded-xl border border-border shadow-sm p-6">
-            <ImageForm />
-          </div>
+    <main className="flex w-full min-w-0 max-w-none flex-col gap-4 bg-background p-3 text-foreground sm:gap-6 sm:p-4">
+      <div className="flex items-center gap-3">
+        <Button asChild variant="outline" size="icon" className="h-11 w-11 rounded-md sm:h-9 sm:w-9">
+          <Link href="/Inventario" aria-label="Volver a Inventario">
+            <ArrowLeft />
+          </Link>
+        </Button>
+        <h1 className="text-2xl font-semibold tracking-tight">Crear producto</h1>
       </div>
-    
+
+      <div className="w-full max-w-5xl rounded-xl border border-border bg-card p-4 shadow-sm sm:p-6">
+        <NewProductForm />
+      </div>
     </main>
-  )
+  );
 }
-
-export default page
-
-

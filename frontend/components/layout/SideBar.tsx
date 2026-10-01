@@ -22,12 +22,13 @@ const ADMIN_NAV = [
 
 
 
-const SideBar = () => {
+const SideBar = ({ isMobileNavOpen }: { isMobileNavOpen: boolean }) => {
 
   const pathname = usePathname()
   const { role } = useAuth();
   const { flags } = useFeatureFlags();
   const [isExpanded, setIsExpanded] = useState(true)
+  const displayExpanded = isExpanded || isMobileNavOpen;
 
   const filteredNav = useMemo(() => {
     if (role === "SuperAdmin") {
@@ -60,15 +61,17 @@ const SideBar = () => {
 
   return (
     <ul
-      className={`h-full bg-white dark:bg-card border-r border-slate-200/80 dark:border-border shadow-sm flex flex-col transition-all duration-300 ease-in-out shrink-0 overflow-hidden left-0 ml-0 ${
-        isExpanded ? "w-64 p-4 gap-4" : "w-16 p-2 gap-2"
+      className={`absolute top-16 bottom-0 left-0 z-50 flex h-auto w-64 flex-col gap-4 overflow-y-auto bg-white dark:bg-card border-r border-slate-200/80 dark:border-border shadow-sm transition-all duration-300 ease-in-out p-4 md:relative md:top-auto md:bottom-auto md:z-auto md:h-full md:shrink-0 md:overflow-hidden ${
+        isMobileNavOpen ? "visible translate-x-0" : "invisible -translate-x-full md:visible md:translate-x-0"
+      } ${
+        isExpanded ? "md:w-64 md:p-4 md:gap-4" : "md:w-16 md:p-2 md:gap-2"
       }`}
     >
       <li className="flex flex-col gap-1 flex-1 min-h-0">
-        <SideBarLogo isExpanded={isExpanded} />
+        <SideBarLogo isExpanded={displayExpanded} />
 
         {/* SuperAdmin active uses bg-slate-900 text-white dark:bg-white dark:text-slate-900 (or bg-indigo-600) — not red */}
-        <nav className={`flex flex-col ${isExpanded ? "gap-1" : "gap-1.5 items-center"}`}>
+        <nav id="main-navigation" aria-label="Navegación principal" className={`flex flex-col ${displayExpanded ? "gap-1" : "gap-1.5 items-center"}`}>
           {filteredNav.map((navigation) => {
             const isActive = pathname === navigation.path;
             const isSuperAdminActive = role === "SuperAdmin" && isActive;
@@ -79,7 +82,7 @@ const SideBar = () => {
                 key={navigation.path}
                 {...navigation}
                 isActive={isActive}
-                isExpanded={isExpanded}
+                isExpanded={displayExpanded}
                 isSuperAdmin={role === "SuperAdmin"}
               />
             );
@@ -88,16 +91,16 @@ const SideBar = () => {
 
         <div
           className={`mt-auto pt-3 border-t border-border flex ${
-            isExpanded ? "items-center justify-between" : "flex-col items-center gap-2"
+            displayExpanded ? "items-center justify-between" : "flex-col items-center gap-2"
           }`}
         >
           {/* Orden: colapsado = toggle arriba, luna abajo centrados. Expandido = luna izq, toggle der */}
-          {isExpanded ? (
+          {displayExpanded ? (
             <>
               <ModeToggle />
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                className="hidden size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex lg:size-8"
                 title="Ocultar menú"
                 aria-label="Ocultar menú"
               >
@@ -108,7 +111,7 @@ const SideBar = () => {
             <>
               <button
                 onClick={() => setIsExpanded(!isExpanded)}
-                className="w-8 h-8 flex items-center justify-center rounded-md hover:bg-muted transition-colors text-muted-foreground hover:text-foreground"
+                className="hidden size-11 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:flex lg:size-8"
                 title="Expandir menú"
                 aria-label="Expandir menú"
               >

@@ -51,7 +51,7 @@ export default function Login() {
     const isBusy = submitting || authLoading;
 
     return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4 overflow-hidden">
+        <div className="min-h-svh flex items-center justify-center bg-background p-4">
             <div className="max-w-7xl w-full flex flex-col md:flex-row items-center gap-12 md:gap-20">
 
                 <div

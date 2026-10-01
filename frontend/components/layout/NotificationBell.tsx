@@ -54,7 +54,7 @@ export default function NotificationBell() {
       }}
     >
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" aria-label="Notificaciones" className="relative rounded-full">
+        <Button variant="ghost" size="icon" aria-label="Notificaciones" className="relative rounded-full size-11 lg:size-9">
           <Bell className="h-5 w-5" />
           {count > 0 && (
             <span className="absolute -top-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-[11px] font-bold leading-none text-white">

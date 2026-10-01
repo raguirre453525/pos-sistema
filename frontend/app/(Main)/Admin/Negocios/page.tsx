@@ -223,7 +223,7 @@ export default function NegociosPage() {
           </h1>
           <p className="text-sm text-muted-foreground">Gestión de comercios — Panel Maestro SuperAdmin</p>
         </div>
-        <Button onClick={() => { setShowNewModal(true); setFormError(null); }} className="bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 gap-2 shrink-0">
+        <Button onClick={() => { setShowNewModal(true); setFormError(null); }} className="h-11 md:h-9 bg-slate-900 hover:bg-slate-800 dark:bg-white dark:hover:bg-slate-100 text-white dark:text-slate-900 gap-2 shrink-0">
           <Plus className="w-4 h-4" /> Nuevo Comercio
         </Button>
       </div>
@@ -268,7 +268,7 @@ export default function NegociosPage() {
                   value={filterQ}
                   onChange={(e) => setFilterQ(e.target.value)}
                   placeholder="Filtrar por nombre o CUIT..."
-                  className="pl-9 h-9 bg-white dark:bg-card border-slate-200 rounded-lg"
+                  className="pl-9 h-11 md:h-9 bg-white dark:bg-card border-slate-200 rounded-lg"
                 />
               </div>
               <span className="text-xs text-muted-foreground">Filtrados: {filteredBusinesses.length} de {businesses.length}</span>
@@ -316,7 +316,7 @@ export default function NegociosPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => router.push(`/Admin/Licencias?businessId=${b.id}`)}
-                              className="border border-slate-300 bg-white text-slate-950 hover:bg-slate-100 hover:text-slate-950 rounded-lg gap-1.5"
+                              className="h-11 md:h-8 border border-slate-300 bg-white text-slate-950 hover:bg-slate-100 hover:text-slate-950 rounded-lg gap-1.5"
                             >
                               <SlidersHorizontal className="h-3.5 w-3.5" /> Licencias
                             </Button>
@@ -328,7 +328,7 @@ export default function NegociosPage() {
                                 disabled={togglingId === b.id}
                                 title="Suspender comercio"
                                 aria-label="Suspender comercio"
-                                className="h-7 px-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-700 text-xs font-medium gap-1.5"
+                                className="h-11 md:h-7 px-2.5 rounded-lg border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-700 text-xs font-medium gap-1.5"
                               >
                                 {togglingId === b.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -345,7 +345,7 @@ export default function NegociosPage() {
                                 disabled={togglingId === b.id}
                                 title="Activar comercio"
                                 aria-label="Activar comercio"
-                                className="h-7 px-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700 text-xs font-medium gap-1.5"
+                                className="h-11 md:h-7 px-2.5 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-700 text-xs font-medium gap-1.5"
                               >
                                 {togglingId === b.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -373,7 +373,7 @@ export default function NegociosPage() {
           <div className="bg-white dark:bg-card rounded-xl border shadow-xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col" onClick={(e) => e.stopPropagation()}>
             <div className="p-5 border-b flex items-center justify-between shrink-0">
               <h2 className="font-semibold text-lg">Nuevo Comercio</h2>
-              <Button variant="ghost" size="icon" onClick={() => { if (!creating) { setShowNewModal(false); } }} disabled={creating}><X className="h-4 w-4" /></Button>
+              <Button variant="ghost" size="icon" onClick={() => { if (!creating) { setShowNewModal(false); } }} disabled={creating} className="size-11 md:size-9"><X className="h-4 w-4" /></Button>
             </div>
             <div className="overflow-y-auto p-5 flex flex-col gap-6">
               {/* Datos del Negocio */}
@@ -381,14 +381,14 @@ export default function NegociosPage() {
                 <h3 className="text-sm font-semibold tracking-wide uppercase text-slate-700 dark:text-slate-300">Datos del Negocio</h3>
                 <div className="flex flex-col gap-1.5">
                   <Label>Nombre *</Label>
-                  <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={150} placeholder="Ej: Kiosco Central" className="mt-1" disabled={creating} />
+                  <Input value={name} onChange={(e) => setName(e.target.value)} maxLength={150} placeholder="Ej: Kiosco Central" className="mt-1 h-11 md:h-8" disabled={creating} />
                   <span className="text-xs text-muted-foreground text-right">{name.length}/150</span>
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>CUIT (opcional, máx 20)</Label>
-                  <Input value={cuit} onChange={(e) => setCuit(e.target.value)} maxLength={20} placeholder="Ej: 30-12345678-9" className="mt-1" disabled={creating} />
+                  <Input value={cuit} onChange={(e) => setCuit(e.target.value)} maxLength={20} placeholder="Ej: 30-12345678-9" className="mt-1 h-11 md:h-8" disabled={creating} />
                 </div>
-                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                <label className="flex min-h-11 items-center gap-2 text-sm cursor-pointer md:min-h-0">
                   <input type="checkbox" checked={isActive} onChange={(e) => setIsActive(e.target.checked)} className="size-4 rounded border-slate-300" disabled={creating} />
                   Activo
                 </label>
@@ -399,23 +399,23 @@ export default function NegociosPage() {
                 <h3 className="text-sm font-semibold tracking-wide uppercase text-slate-700 dark:text-slate-300">Admin inicial</h3>
                 <div className="flex flex-col gap-1.5">
                   <Label>Nombre completo *</Label>
-                  <Input value={adminFullName} onChange={(e) => setAdminFullName(e.target.value)} placeholder="Ej: Juan Pérez" disabled={creating} />
+                  <Input value={adminFullName} onChange={(e) => setAdminFullName(e.target.value)} placeholder="Ej: Juan Pérez" className="h-11 md:h-8" disabled={creating} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Usuario *</Label>
-                  <Input value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} placeholder="Ej: juan.admin" disabled={creating} />
+                  <Input value={adminUsername} onChange={(e) => setAdminUsername(e.target.value)} placeholder="Ej: juan.admin" className="h-11 md:h-8" disabled={creating} />
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <Label>Contraseña *</Label>
-                  <Input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Mín 6 caracteres" disabled={creating} />
+                  <Input type="password" value={adminPassword} onChange={(e) => setAdminPassword(e.target.value)} placeholder="Mín 6 caracteres" className="h-11 md:h-8" disabled={creating} />
                 </div>
               </div>
 
               {formError && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{formError}</div>}
             </div>
             <div className="p-4 border-t flex justify-end gap-2 shrink-0 bg-slate-50 dark:bg-muted/20">
-              <Button variant="outline" onClick={() => { if (!creating) { setShowNewModal(false); resetForm(); } }} disabled={creating}>Cancelar</Button>
-              <Button onClick={() => void handleCreate()} disabled={creating} className="bg-slate-900 hover:bg-slate-800 text-white gap-2">
+              <Button variant="outline" onClick={() => { if (!creating) { setShowNewModal(false); resetForm(); } }} disabled={creating} className="h-11 md:h-9">Cancelar</Button>
+              <Button onClick={() => void handleCreate()} disabled={creating} className="h-11 md:h-9 bg-slate-900 hover:bg-slate-800 text-white gap-2">
                 {creating && <Loader2 className="h-4 w-4 animate-spin" />}
                 {creating ? "Creando…" : "Crear comercio"}
               </Button>

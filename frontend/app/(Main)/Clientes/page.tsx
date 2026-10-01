@@ -148,105 +148,128 @@ export default function ClientesPage() {
 
   if (!allowed) {
     return (
-      <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+      <main className="w-full min-w-0 max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
         <p className="text-sm text-muted-foreground">Redirigiendo…</p>
       </main>
     );
   }
 
   return (
-    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-0 max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold tracking-tight text-foreground flex items-center gap-2"><Users className="h-6 w-6"/>Clientes</h1>
-        <Button onClick={() => { setShowDialog(true); setFormError(null); }} className="gap-1.5"><Plus className="h-4 w-4"/> Nuevo cliente</Button>
+        <Button onClick={() => { setShowDialog(true); setFormError(null); }} className="h-11 w-full gap-1.5 sm:w-auto lg:h-9"><Plus className="h-4 w-4"/> Nuevo cliente</Button>
       </div>
 
-      <div className="flex items-center gap-2 bg-card border rounded-xl p-4">
-        <div className="relative flex-1 max-w-md">
+      <div className="flex flex-col gap-3 bg-card border rounded-xl p-3 sm:flex-row sm:items-center lg:p-4">
+        <div className="relative w-full max-w-md sm:flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Buscar por nombre o teléfono..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+          <Input placeholder="Buscar por nombre o teléfono..." value={search} onChange={(e) => setSearch(e.target.value)} className="h-11 pl-9 lg:h-8" />
         </div>
-        <span className="text-xs text-muted-foreground hidden sm:inline">{filtered.length} de {customers.length}</span>
+        <span className="self-end text-xs text-muted-foreground sm:self-auto">{filtered.length} de {customers.length}</span>
       </div>
 
-      {error && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 flex justify-between items-center"><span>{error}</span><Button variant="outline" size="sm" onClick={fetchCustomers}>Reintentar</Button></div>}
+      {error && <div className="flex flex-col gap-3 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between"><span className="min-w-0 break-words">{error}</span><Button variant="outline" size="sm" onClick={fetchCustomers} className="h-11 self-start sm:self-auto lg:h-8">Reintentar</Button></div>}
 
       {loading ? (
-        <div className="bg-card border rounded-xl p-8 text-center text-sm text-muted-foreground">Cargando Clientes…</div>
+        <div className="bg-card border rounded-xl p-6 text-center text-sm text-muted-foreground lg:p-8">Cargando Clientes…</div>
       ) : filtered.length === 0 ? (
-        <div className="bg-card border rounded-xl p-8 text-center flex flex-col items-center gap-2">
+        <div className="bg-card border rounded-xl p-6 text-center flex flex-col items-center gap-2 lg:p-8">
           <Users className="h-10 w-10 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">{customers.length === 0 ? "Sin Clientes" : "Sin resultados"}</p>
           {customers.length === 0 && <p className="text-xs text-muted-foreground">Creá el primero con + Nuevo cliente</p>}
         </div>
       ) : (
-        <div className="bg-card border rounded-xl overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
-                <tr>
-                  <th className="text-left px-4 py-3 font-semibold">Cliente</th>
-                  <th className="text-right px-4 py-3 font-semibold">Saldo</th>
-                  <th className="text-center px-4 py-3 font-semibold">Pendientes</th>
-                  <th className="text-left px-4 py-3 font-semibold">Última compra</th>
-                  <th className="text-left px-4 py-3 font-semibold">Debe hace</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((c) => (
-                  <tr key={c.id} className="hover:bg-muted/40 cursor-pointer" onClick={() => setSelectedId(c.id)}>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{c.name}</div>
-                      <div className="text-xs text-muted-foreground">{c.phone ?? "—"}</div>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span className={`font-semibold ${c.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(c.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge variant={c.pendingSalesCount > 0 ? "destructive" : "secondary"}>{c.pendingSalesCount}</Badge>
-                    </td>
-                    <td className="px-4 py-3 text-xs">{c.lastPurchaseAt ? new Date(c.lastPurchaseAt).toLocaleDateString("es-AR") : "—"}</td>
-                    <td className="px-4 py-3">
-                      {c.balance > 0 && c.daysSinceDebt != null ? (
-                        <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold border ${c.daysSinceDebt > 15 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{c.daysSinceDebt} días</span>
-                      ) : (
-                        <span className="text-xs text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        <>
+          <div className="grid gap-3 lg:hidden">
+            {filtered.map((c) => (
+              <button key={c.id} type="button" className="w-full min-w-0 rounded-xl border bg-card p-4 text-left transition-colors hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2" onClick={() => setSelectedId(c.id)}>
+                <div className="flex min-w-0 items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="break-words font-medium">{c.name}</p>
+                    <p className="mt-1 break-all text-xs text-muted-foreground">{c.phone ?? "—"}</p>
+                  </div>
+                  <span className={`shrink-0 text-right font-semibold ${c.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(c.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-x-3 gap-y-2 text-xs">
+                  <span className="flex items-center justify-between gap-2"><span className="text-muted-foreground">Pendientes</span><Badge variant={c.pendingSalesCount > 0 ? "destructive" : "secondary"}>{c.pendingSalesCount}</Badge></span>
+                  <span className="flex items-center justify-between gap-2"><span className="text-muted-foreground">Última compra</span><span className="text-right">{c.lastPurchaseAt ? new Date(c.lastPurchaseAt).toLocaleDateString("es-AR") : "—"}</span></span>
+                  <span className="col-span-2 flex items-center justify-between gap-2"><span className="text-muted-foreground">Debe hace</span>{c.balance > 0 && c.daysSinceDebt != null ? (
+                    <span className={`inline-flex rounded-md border px-2 py-0.5 font-semibold ${c.daysSinceDebt > 15 ? "border-red-200 bg-red-50 text-red-700" : "border-amber-200 bg-amber-50 text-amber-700"}`}>{c.daysSinceDebt} días</span>
+                  ) : <span className="text-muted-foreground">—</span>}</span>
+                </div>
+              </button>
+            ))}
           </div>
-        </div>
+
+          <div className="hidden overflow-hidden rounded-xl border bg-card lg:block">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead className="bg-muted/50 text-xs text-muted-foreground uppercase">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold">Cliente</th>
+                    <th className="text-right px-4 py-3 font-semibold">Saldo</th>
+                    <th className="text-center px-4 py-3 font-semibold">Pendientes</th>
+                    <th className="text-left px-4 py-3 font-semibold">Última compra</th>
+                    <th className="text-left px-4 py-3 font-semibold">Debe hace</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filtered.map((c) => (
+                    <tr key={c.id} className="hover:bg-muted/40 cursor-pointer" onClick={() => setSelectedId(c.id)}>
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{c.name}</div>
+                        <div className="text-xs text-muted-foreground">{c.phone ?? "—"}</div>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span className={`font-semibold ${c.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(c.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <Badge variant={c.pendingSalesCount > 0 ? "destructive" : "secondary"}>{c.pendingSalesCount}</Badge>
+                      </td>
+                      <td className="px-4 py-3 text-xs">{c.lastPurchaseAt ? new Date(c.lastPurchaseAt).toLocaleDateString("es-AR") : "—"}</td>
+                      <td className="px-4 py-3">
+                        {c.balance > 0 && c.daysSinceDebt != null ? (
+                          <span className={`inline-flex px-2 py-0.5 rounded-md text-xs font-semibold border ${c.daysSinceDebt > 15 ? "bg-red-50 text-red-700 border-red-200" : "bg-amber-50 text-amber-700 border-amber-200"}`}>{c.daysSinceDebt} días</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Dialog nuevo cliente */}
       {showDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" onClick={() => setShowDialog(false)}>
-          <div className="bg-card rounded-xl border shadow-xl p-6 w-full max-w-md flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/50 p-3 sm:items-center sm:p-4" onClick={() => setShowDialog(false)}>
+          <div role="dialog" aria-modal="true" aria-labelledby="new-customer-title" className="my-auto max-h-[calc(100dvh-1.5rem)] w-full max-w-md overflow-y-auto rounded-xl border bg-card p-4 shadow-xl sm:max-h-[calc(100dvh-2rem)] lg:p-6 flex flex-col gap-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center">
-              <h3 className="text-lg font-semibold">Nuevo cliente</h3>
-              <Button variant="ghost" size="icon" onClick={() => setShowDialog(false)}><X className="h-4 w-4"/></Button>
+              <h3 id="new-customer-title" className="text-lg font-semibold">Nuevo cliente</h3>
+              <Button variant="ghost" size="icon" aria-label="Cerrar diálogo de nuevo cliente" className="size-11 lg:size-9" onClick={() => setShowDialog(false)}><X className="h-4 w-4"/></Button>
             </div>
             <div className="flex flex-col gap-3">
               <div>
                 <Label>Nombre *</Label>
-                <Input value={formName} onChange={(e) => setFormName(e.target.value)} maxLength={100} placeholder="Nombre (2..100)" className="mt-1"/>
+                <Input value={formName} onChange={(e) => setFormName(e.target.value)} maxLength={100} placeholder="Nombre (2..100)" className="mt-1 h-11 lg:h-8"/>
               </div>
               <div>
                 <Label>Teléfono</Label>
-                <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} maxLength={30} placeholder="Opcional (max 30)" className="mt-1"/>
+                <Input value={formPhone} onChange={(e) => setFormPhone(e.target.value)} maxLength={30} placeholder="Opcional (max 30)" className="mt-1 h-11 lg:h-8"/>
               </div>
               <div>
                 <Label>Nota</Label>
-                <Input value={formNote} onChange={(e) => setFormNote(e.target.value)} maxLength={500} placeholder="Opcional (max 500)" className="mt-1"/>
+                <Input value={formNote} onChange={(e) => setFormNote(e.target.value)} maxLength={500} placeholder="Opcional (max 500)" className="mt-1 h-11 lg:h-8"/>
               </div>
               {formError && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{formError}</p>}
             </div>
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setShowDialog(false)} disabled={formLoading}>Cancelar</Button>
-              <Button onClick={handleCreate} disabled={formLoading}>{formLoading ? "Guardando…" : "Crear"}</Button>
+            <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" className="h-11 w-full sm:w-auto lg:h-9" onClick={() => setShowDialog(false)} disabled={formLoading}>Cancelar</Button>
+              <Button className="h-11 w-full sm:w-auto lg:h-9" onClick={handleCreate} disabled={formLoading}>{formLoading ? "Guardando…" : "Crear"}</Button>
             </div>
           </div>
         </div>
@@ -256,13 +279,13 @@ export default function ClientesPage() {
       {selectedId && (
         <div className="fixed inset-0 z-40 flex">
           <div className="flex-1 bg-black/40" onClick={() => setSelectedId(null)} aria-hidden />
-          <div className="w-full max-w-[520px] bg-card border-l shadow-xl flex flex-col h-full overflow-hidden">
-            <div className="p-6 border-b flex justify-between items-start gap-2">
+          <div role="dialog" aria-modal="true" aria-label="Detalle del cliente" className="h-full w-full min-w-0 max-w-[520px] overflow-hidden border-l bg-card shadow-xl flex flex-col">
+            <div className="flex items-start justify-between gap-2 border-b p-4 lg:p-6">
               <div className="flex-1 min-w-0">
                 {detailLoading ? <p className="text-sm text-muted-foreground">Cargando…</p> : detail ? (
                   <>
-                    <h2 className="text-lg font-semibold truncate">{detail.customer.name}</h2>
-                    <p className="text-sm text-muted-foreground">{detail.customer.phone ?? "Sin teléfono"} {detail.customer.note ? `· ${detail.customer.note}` : ""}</p>
+                    <h2 className="break-words text-lg font-semibold">{detail.customer.name}</h2>
+                    <p className="break-words text-sm text-muted-foreground">{detail.customer.phone ?? "Sin teléfono"} {detail.customer.note ? `· ${detail.customer.note}` : ""}</p>
                     <div className="mt-3 flex items-center gap-2">
                       <span className="text-xs text-muted-foreground">Saldo</span>
                       <span className={`text-2xl font-semibold tracking-tight text-foreground ${detail.customer.balance > 0 ? "text-red-600" : "text-green-600"}`}>${Number(detail.customer.balance).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
@@ -271,28 +294,28 @@ export default function ClientesPage() {
                   </>
                 ) : <p className="text-sm text-red-600">{detailError}</p>}
               </div>
-              <Button variant="ghost" size="icon" onClick={() => setSelectedId(null)}><X className="h-5 w-5"/></Button>
+              <Button variant="ghost" size="icon" aria-label="Cerrar detalle del cliente" className="size-11 shrink-0 lg:size-9" onClick={() => setSelectedId(null)}><X className="h-5 w-5"/></Button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-6">
+            <div className="flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto p-4 lg:p-6">
               {detailError && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{detailError}</p>}
               {detail && (
                 <>
-                  <section className="border rounded-xl p-4 bg-muted/20 flex flex-col gap-3">
+                  <section className="flex flex-col gap-3 rounded-xl border bg-muted/20 p-3 lg:p-4">
                     <h3 className="text-sm font-semibold flex items-center gap-2"><DollarSign className="h-4 w-4"/> Registrar pago</h3>
                     <div>
                       <Label>Monto $ *</Label>
-                      <Input type="number" min={0} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="Ej: 5000" className="mt-1" />
+                      <Input type="number" min={0} value={paymentAmount} onChange={(e) => setPaymentAmount(e.target.value)} placeholder="Ej: 5000" className="mt-1 h-11 lg:h-8" />
                       {detail.customer.balance > 0 && <p className="text-xs text-muted-foreground mt-1">Saldo: ${Number(detail.customer.balance).toLocaleString("es-AR")}</p>}
                     </div>
                     <div>
                       <Label>Nota</Label>
-                      <Input value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} placeholder="Opcional" className="mt-1"/>
+                      <Input value={paymentNote} onChange={(e) => setPaymentNote(e.target.value)} placeholder="Opcional" className="mt-1 h-11 lg:h-8"/>
                     </div>
                     {detail.pendingSales.length > 0 && (
                       <div>
                         <Label>Venta (opcional)</Label>
-                        <select value={paymentSaleId} onChange={(e) => setPaymentSaleId(e.target.value)} className="mt-1 w-full h-9 rounded-md border border-input bg-background px-2.5 text-sm">
+                        <select value={paymentSaleId} onChange={(e) => setPaymentSaleId(e.target.value)} className="mt-1 h-11 w-full rounded-md border border-input bg-background px-2.5 text-sm lg:h-9">
                           <option value="">— FIFO automático —</option>
                           {detail.pendingSales.map((s) => (
                             <option key={s.id} value={s.id}>{new Date(s.date).toLocaleDateString("es-AR")} — ${Number(s.total).toLocaleString("es-AR")} {s.isCredit ? "(pendiente)" : ""}</option>
@@ -303,7 +326,7 @@ export default function ClientesPage() {
                     )}
                     {paymentError && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{paymentError}</p>}
                     {paymentSuccess && <p className="text-sm text-green-700 border border-green-200 bg-green-50 rounded p-2">{paymentSuccess}</p>}
-                    <Button onClick={handlePayment} disabled={paymentLoading || !paymentAmount || Number(paymentAmount) <= 0}>
+                    <Button className="h-11 lg:h-9" onClick={handlePayment} disabled={paymentLoading || !paymentAmount || Number(paymentAmount) <= 0}>
                       {paymentLoading ? "Registrando…" : "Confirmar pago"}
                     </Button>
                   </section>
@@ -332,8 +355,36 @@ export default function ClientesPage() {
                           {history.length === 0 ? (
                             <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin compras fiadas</p>
                           ) : (
-                            <div className="border rounded-md overflow-hidden">
-                              <div className="overflow-x-auto max-h-[320px] overflow-auto">
+                            <>
+                              <div className="grid gap-2 lg:hidden">
+                                {history.map((s) => {
+                                  const status = getStatus(s);
+                                  const due = s.dueDate ? new Date(s.dueDate).toLocaleDateString("es-AR") : "—";
+                                  const isVencida = status === "Vencida" && s.dueDate;
+                                  const daysOver = isVencida ? Math.floor((Date.now() - new Date(s.dueDate as string).getTime()) / 86400000) : 0;
+                                  return (
+                                    <div key={s.id} className="rounded-md border p-3">
+                                      <div className="flex items-start justify-between gap-2">
+                                        <span className="text-xs text-muted-foreground">{new Date(s.date).toLocaleDateString("es-AR")}</span>
+                                        {badgeFor(status)}
+                                      </div>
+                                      <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+                                        <div>
+                                          <span className="text-muted-foreground">Total</span>
+                                          <p className="font-medium">${Number(s.total).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</p>
+                                        </div>
+                                        <div>
+                                          <span className="text-muted-foreground">Vencimiento</span>
+                                          <p>{due}</p>
+                                        </div>
+                                      </div>
+                                      {isVencida && daysOver > 0 && <p className="mt-2 text-xs font-semibold text-red-600">Debe hace {daysOver} días</p>}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                              <div className="hidden overflow-hidden rounded-md border lg:block">
+                                <div className="max-h-[320px] overflow-auto">
                                 <table className="w-full text-xs">
                                   <thead className="bg-muted/50 text-muted-foreground sticky top-0">
                                     <tr>
@@ -363,8 +414,9 @@ export default function ClientesPage() {
                                     })}
                                   </tbody>
                                 </table>
+                                </div>
                               </div>
-                            </div>
+                            </>
                           )}
                         </>
                       );
@@ -376,12 +428,12 @@ export default function ClientesPage() {
                     {detail.payments.length === 0 ? <p className="text-sm text-muted-foreground border border-dashed rounded-md p-4 text-center">Sin pagos</p> : (
                       <div className="border rounded-md divide-y max-h-[220px] overflow-auto">
                         {detail.payments.map((p) => (
-                          <div key={p.id} className="p-3 flex justify-between items-center text-sm">
-                            <div className="flex flex-col">
+                          <div key={p.id} className="flex min-w-0 flex-col gap-1.5 p-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex min-w-0 flex-col">
                               <span className="text-xs text-muted-foreground">{new Date(p.paidAt).toLocaleString("es-AR", { dateStyle: "short", timeStyle: "short" })}</span>
-                              <span className="truncate max-w-[180px]">{p.note ?? "—"}</span>
+                              <span className="max-w-full truncate sm:max-w-[180px]">{p.note ?? "—"}</span>
                             </div>
-                            <span className="font-semibold text-green-700">${Number(p.amount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
+                            <span className="shrink-0 font-semibold text-green-700">${Number(p.amount).toLocaleString("es-AR", { minimumFractionDigits: 2 })}</span>
                           </div>
                         ))}
                       </div>

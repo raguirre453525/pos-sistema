@@ -188,8 +188,8 @@ export default function LicenciasPage() {
           <CardDescription>Seleccioná un comercio y activá los módulos correspondientes.</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <div className="flex flex-wrap items-center justify-between gap-4 p-4 bg-slate-50 border border-slate-200/80 rounded-xl mb-4">
-            <div className="flex items-center gap-2">
+          <div className="flex w-full flex-col items-stretch justify-between gap-3 p-4 bg-slate-50 dark:bg-muted/50 border border-slate-200/80 dark:border-border rounded-xl mb-4 md:flex-row md:flex-wrap md:items-center md:gap-4">
+            <div className="flex w-full flex-col items-start gap-2 md:w-auto md:flex-row md:items-center">
               <span className="text-sm font-medium text-slate-600 shrink-0">Negocio:</span>
               {fetchLoading ? (
                 <span className="text-sm text-muted-foreground">Cargando negocios…</span>
@@ -199,12 +199,12 @@ export default function LicenciasPage() {
                 </span>
               ) : businesses && businesses.length > 0 ? (
                 <Select value={selectedId} onValueChange={(v) => { setSelectedId(v); router.replace(`/Admin/Licencias?businessId=${v}`); }}>
-                  <SelectTrigger className="w-full max-w-xs min-w-[220px] border border-slate-300 dark:border-border rounded-lg bg-white dark:bg-card">
+                  <SelectTrigger className="h-11 data-[size=default]:h-11 w-full min-w-0 max-w-none border border-slate-300 dark:border-border rounded-lg bg-white dark:bg-card md:h-8 md:data-[size=default]:h-8 md:max-w-xs md:min-w-[220px]">
                     <SelectValue placeholder="Seleccionar negocio" />
                   </SelectTrigger>
                   <SelectContent>
                     {businesses.map((b) => (
-                      <SelectItem key={b.id} value={b.id}>{b.name} {b.id === currentBusinessId ? "· (tu negocio)" : ""}</SelectItem>
+                      <SelectItem key={b.id} value={b.id} className="min-h-11 py-2.5 md:min-h-0 md:py-1">{b.name} {b.id === currentBusinessId ? "· (tu negocio)" : ""}</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -212,9 +212,9 @@ export default function LicenciasPage() {
                 <span className="text-sm text-muted-foreground">Sin negocios — {fetchError ?? "lista vacía"}.</span>
               )}
             </div>
-            <div className="flex items-center gap-2 ml-auto shrink-0">
-              <Button onClick={() => void fetchBusinessesCb()} variant="outline" disabled={fetchLoading || saving} className={WHITE_BUTTON}>Recargar</Button>
-              <Button onClick={() => void handleSave()} variant="outline" disabled={saving || !selectedId} className={`${WHITE_BUTTON} font-medium shadow-sm rounded-lg px-5 h-9`}>
+            <div className="flex w-full flex-col items-stretch gap-2 md:ml-auto md:w-auto md:flex-row md:items-center md:shrink-0">
+              <Button onClick={() => void fetchBusinessesCb()} variant="outline" disabled={fetchLoading || saving} className={`${WHITE_BUTTON} h-11 md:h-9`}>Recargar</Button>
+              <Button onClick={() => void handleSave()} variant="outline" disabled={saving || !selectedId} className={`${WHITE_BUTTON} h-11 md:h-9 font-medium shadow-sm rounded-lg px-5`}>
                 {saving ? "Guardando…" : "Guardar configuración"}
               </Button>
             </div>
@@ -245,7 +245,7 @@ export default function LicenciasPage() {
                   variant="outline"
                   aria-pressed={active}
                   onClick={() => handlePreset(preset.flags)}
-                  className={`h-7 px-3 rounded-full text-xs font-medium ${WHITE_BUTTON} ${active ? "border-slate-950 ring-2 ring-slate-950" : ""}`}
+                  className={`h-11 md:h-7 px-3 rounded-full text-xs font-medium ${WHITE_BUTTON} ${active ? "border-slate-950 ring-2 ring-slate-950" : ""}`}
                 >
                   {preset.label}
                 </Button>
@@ -260,7 +260,7 @@ export default function LicenciasPage() {
                   <span className="text-sm font-semibold text-slate-900 dark:text-foreground">{m.title}</span>
                   <span className="text-xs text-muted-foreground">{m.desc}</span>
                 </div>
-                <Switch checked={localFlags[m.key]} onCheckedChange={(v) => handleToggle(m.key, v)} aria-label={m.title} />
+                <Switch checked={localFlags[m.key]} onCheckedChange={(v) => handleToggle(m.key, v)} aria-label={m.title} className="after:absolute after:-inset-3.5 after:content-[''] md:after:hidden" />
               </div>
             ))}
           </div>

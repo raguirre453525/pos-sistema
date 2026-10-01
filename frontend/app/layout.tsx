@@ -27,10 +27,10 @@ export default function RootLayout({
     <html
       lang="en"
       suppressHydrationWarning
-      className={`${inter.variable} h-full w-full min-w-full max-w-none overflow-hidden antialiased`}
+      className={`${inter.variable} min-h-full w-full overflow-x-hidden antialiased`}
     >
 
-      <body className="h-full w-full min-w-full max-w-none font-sans antialiased">
+      <body className="min-h-svh w-full font-sans antialiased">
 
        
         

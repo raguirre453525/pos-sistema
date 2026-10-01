@@ -14,7 +14,7 @@ export function ModeToggle() {
   }, [])
 
   if (!mounted) {
-    return <Button variant="ghost" size="icon" className="h-9 w-9" aria-hidden />
+    return <Button variant="ghost" size="icon" className="size-11 lg:size-9" aria-hidden />
   }
 
   const isDark = resolvedTheme === "dark"
@@ -24,7 +24,7 @@ export function ModeToggle() {
       variant="ghost"
       size="icon"
       aria-label="Cambiar tema"
-      className="h-9 w-9 rounded-md transition-all border border-border hover:bg-muted"
+      className="size-11 lg:size-9 rounded-md transition-all border border-border hover:bg-muted"
       onClick={() => setTheme(isDark ? "light" : "dark")}
     >
       {isDark ? (

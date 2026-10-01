@@ -273,7 +273,7 @@ export default function ConfiguracionPage() {
               resetForm();
               setShowNewCashier(true);
             }}
-            className="bg-slate-900 hover:bg-slate-800 text-white rounded-lg px-4 h-8 gap-1.5"
+            className="bg-slate-900 hover:bg-slate-800 text-white rounded-lg px-4 h-8 max-lg:min-h-11 gap-1.5"
           >
             <Plus className="w-4 h-4" />
             Nuevo Cajero
@@ -364,7 +364,7 @@ export default function ConfiguracionPage() {
           >
             <div className="p-5 border-b flex items-center justify-between shrink-0">
               <h2 className="font-semibold text-lg">Nuevo Cajero</h2>
-              <Button variant="ghost" size="icon" onClick={() => { if (!isSubmitting) setShowNewCashier(false); }} disabled={isSubmitting}>
+              <Button variant="ghost" size="icon" onClick={() => { if (!isSubmitting) setShowNewCashier(false); }} disabled={isSubmitting} className="max-lg:min-h-11 max-lg:min-w-11">
                 <X className="h-4 w-4" />
               </Button>
             </div>
@@ -405,13 +405,13 @@ export default function ConfiguracionPage() {
               {formError && <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">{formError}</div>}
             </div>
             <div className="p-4 border-t flex justify-end gap-2 shrink-0 bg-slate-50 dark:bg-muted/20">
-              <Button variant="outline" onClick={() => { if (!isSubmitting) { setShowNewCashier(false); resetForm(); } }} disabled={isSubmitting}>
+              <Button variant="outline" onClick={() => { if (!isSubmitting) { setShowNewCashier(false); resetForm(); } }} disabled={isSubmitting} className="max-lg:min-h-11">
                 Cancelar
               </Button>
               <Button
                 onClick={() => void handleCreateCashier()}
                 disabled={isSubmitting}
-                className="bg-slate-900 hover:bg-slate-800 text-white gap-2"
+                className="bg-slate-900 hover:bg-slate-800 text-white gap-2 max-lg:min-h-11"
               >
                 {isSubmitting && <Loader2 className="h-4 w-4 animate-spin" />}
                 {isSubmitting ? "Creando…" : "Crear cajero"}

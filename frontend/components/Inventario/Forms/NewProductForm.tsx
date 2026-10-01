@@ -198,23 +198,23 @@ export function NewProductForm() {
   return (
     <>
       <form onSubmit={handleSubmit}>
-        <FieldGroup>
+        <FieldGroup className="grid grid-cols-1 gap-5 md:grid-cols-2">
           <Field>
             <FieldLabel htmlFor="sku">SKU *</FieldLabel>
-            <Input id="sku" placeholder="PROD-001" value={sku} onChange={(e) => setSku(e.target.value)} required />
+            <Input id="sku" placeholder="PROD-001" value={sku} onChange={(e) => setSku(e.target.value)} required className="h-11 sm:h-9" />
           </Field>
           <Field>
             <FieldLabel htmlFor="name">Nombre *</FieldLabel>
-            <Input id="name" placeholder="Aceite" value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} />
+            <Input id="name" placeholder="Aceite" value={name} onChange={(e) => setName(e.target.value)} required maxLength={50} className="h-11 sm:h-9" />
           </Field>
           <Field>
             <FieldLabel htmlFor="barcode">Barcode (opcional)</FieldLabel>
-            <Input id="barcode" placeholder="779..." value={barcode} onChange={(e) => setBarcode(e.target.value)} />
+            <Input id="barcode" placeholder="779..." value={barcode} onChange={(e) => setBarcode(e.target.value)} className="h-11 sm:h-9" />
           </Field>
           <Field>
             <FieldLabel>Modo de venta</FieldLabel>
             <Select value={unit} onValueChange={(v) => setUnit(v as "un" | "kg")}>
-              <SelectTrigger className="flex-1">
+              <SelectTrigger className="h-11 flex-1 sm:h-8">
                 <SelectValue placeholder="Modo de venta" />
               </SelectTrigger>
               <SelectContent>
@@ -237,12 +237,13 @@ export function NewProductForm() {
               placeholder={isKg ? "Ej: 2.5 kg" : "Ej: 2"}
               value={minStock}
               onChange={(e) => setMinStock(e.target.value)}
+              className="h-11 sm:h-8"
             />
           </Field>
           <Field>
             <FieldLabel htmlFor="imageUrl">URL de imagen</FieldLabel>
             <div className="flex gap-2 items-center">
-              <Input id="imageUrl" type="url" placeholder="https://..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="flex-1" />
+              <Input id="imageUrl" type="url" placeholder="https://..." value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} className="h-11 flex-1 sm:h-8" />
               {imageUrl.trim() && !selectedFile && (
                 <img src={imageUrl.trim()} alt="preview url" className="h-10 w-10 object-cover rounded border" onError={(e) => ((e.target as HTMLImageElement).style.display = "none")} />
               )}
@@ -250,11 +251,11 @@ export function NewProductForm() {
           </Field>
           <Field>
             <FieldLabel htmlFor="picture">o Subir archivo</FieldLabel>
-            <Input id="picture" type="file" accept="image/*" onChange={handleFileChange} />
+            <Input id="picture" type="file" accept="image/*" onChange={handleFileChange} className="h-11 sm:h-8" />
             {selectedFile && previewUrl && (
               <div className="flex items-center gap-2 mt-2">
                 <img src={previewUrl} alt="preview file" className="h-16 w-16 object-cover rounded border" />
-                <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedFile(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); (document.getElementById("picture") as HTMLInputElement | null)?.value && ((document.getElementById("picture") as HTMLInputElement).value = ""); }}>
+                <Button type="button" variant="ghost" size="sm" onClick={() => { setSelectedFile(null); if (previewUrl) URL.revokeObjectURL(previewUrl); setPreviewUrl(null); (document.getElementById("picture") as HTMLInputElement | null)?.value && ((document.getElementById("picture") as HTMLInputElement).value = ""); }} className="h-11 sm:h-8">
                   Quitar
                 </Button>
                 <span className="text-xs text-muted-foreground truncate">{selectedFile.name}</span>
@@ -264,15 +265,15 @@ export function NewProductForm() {
           </Field>
           <Field>
             <FieldLabel htmlFor="description">Descripción (opcional)</FieldLabel>
-            <Input id="description" placeholder="Detalle" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={200} />
+            <Input id="description" placeholder="Detalle" value={description} onChange={(e) => setDescription(e.target.value)} maxLength={200} className="h-11 sm:h-8" />
           </Field>
           <Field>
             <FieldLabel htmlFor="precio">Precio *</FieldLabel>
-            <Input id="precio" type="number" step="0.01" min="0" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} required />
+            <Input id="precio" type="number" step="0.01" min="0" placeholder="0" value={price} onChange={(e) => setPrice(e.target.value)} required className="h-11 sm:h-8" />
           </Field>
           <Field>
             <FieldLabel htmlFor="stock">Stock inicial</FieldLabel>
-            <Input id="stock" type="number" min="0" step={isKg ? "0.001" : "1"} placeholder={isKg ? "Ej: 15.5" : "Ej: 10"} value={stock} onChange={(e) => setStock(e.target.value)} />
+            <Input id="stock" type="number" min="0" step={isKg ? "0.001" : "1"} placeholder={isKg ? "Ej: 15.5" : "Ej: 10"} value={stock} onChange={(e) => setStock(e.target.value)} className="h-11 sm:h-8" />
             <p className="text-xs text-muted-foreground">Se creará con 0 y luego se ajusta si es &gt;0.</p>
           </Field>
 
@@ -286,7 +287,7 @@ export function NewProductForm() {
                   value={selectedCategoryId || "__none"}
                   onValueChange={(v) => setSelectedCategoryId(v === "__none" ? "" : v)}
                 >
-                  <SelectTrigger className="flex-1">
+                <SelectTrigger className="h-11 flex-1 sm:h-8">
                     <SelectValue placeholder="Sin categoría" />
                   </SelectTrigger>
                   <SelectContent>
@@ -298,7 +299,7 @@ export function NewProductForm() {
                     ))}
                   </SelectContent>
                 </Select>
-                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCatModal(true)} className="gap-1 shrink-0">
+                <Button type="button" variant="ghost" size="sm" onClick={() => setShowCatModal(true)} className="h-11 gap-1 shrink-0 sm:h-8">
                   <Plus className="h-3.5 w-3.5" />
                   Nueva categoría
                 </Button>
@@ -306,11 +307,12 @@ export function NewProductForm() {
             )}
           </Field>
 
-          {error && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2">{error}</p>}
-          <Field orientation="horizontal">
+          {error && <p className="text-sm text-red-600 border border-red-200 bg-red-50 rounded p-2 md:col-span-2">{error}</p>}
+          <Field orientation="horizontal" className="flex-col-reverse md:col-span-2 sm:flex-row sm:justify-end">
             <Button
               type="reset"
               variant="outline"
+              className="h-11 w-full sm:h-9 sm:w-auto"
               onClick={() => {
                 setSku("");
                 setName("");
@@ -330,7 +332,7 @@ export function NewProductForm() {
             >
               Resetear
             </Button>
-            <Button type="submit" disabled={loading}>
+            <Button type="submit" disabled={loading} className="h-11 w-full sm:h-9 sm:w-auto">
               {loading ? "Creando…" : "Crear"}
             </Button>
           </Field>

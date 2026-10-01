@@ -20,7 +20,7 @@ const Page = () => {
     );
   }
   return (
-    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground">
+    <main className="w-full min-w-full max-w-none p-4 flex flex-col gap-6 bg-background text-foreground max-lg:[&_button]:min-h-11 max-lg:[&_button]:min-w-11">
         <Link href={"/Configuracion"}><Button variant="outline" size="icon" className="rounded-md">
         <ArrowLeft />
       </Button></Link>
@@ -28,9 +28,11 @@ const Page = () => {
       
 
       <div className="grid grid-cols-1 gap-6">
-        <div className="bg-card h-full rounded-xl border border-border shadow-sm p-6">
+        <div className="bg-card h-full rounded-xl border border-border shadow-sm p-4 sm:p-6">
           <h3 className="text-lg font-semibold mb-4 text-foreground">DETALLES DE Usuarios</h3>
-          <DataTable columns={columns} data={USERS} placeholder="Buscar por cliente, ID de venta o fecha..." label="Usuario"/>
+          <div className="min-w-0 max-w-full max-lg:[&_table]:min-w-[46rem] max-lg:[&_input]:min-h-11 max-lg:[&_.overflow-hidden~div]:flex-col max-lg:[&_.overflow-hidden~div]:items-stretch max-lg:[&_.overflow-hidden~div]:gap-3 max-lg:[&_.overflow-hidden~div>div:last-child]:flex-wrap max-lg:[&_.overflow-hidden~div>div:last-child]:justify-between max-lg:[&_.overflow-hidden~div>div:last-child]:gap-2 max-lg:[&_.overflow-hidden~div>div:last-child]:space-x-0">
+            <DataTable columns={columns} data={USERS} placeholder="Buscar por cliente, ID de venta o fecha..." label="Usuario"/>
+          </div>
         </div>
       </div>
     </main>

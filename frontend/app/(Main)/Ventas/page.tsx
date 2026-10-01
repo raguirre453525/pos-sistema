@@ -543,7 +543,7 @@ export default function VentasPage() {
   }
 
   return (
-    <div className="flex flex-col flex-1 min-h-0 lg:overflow-hidden">
+    <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
       {(saleMsg || saleError || error) && (
         <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 py-2 border-b border-slate-200 dark:border-border bg-white dark:bg-card">
           <span className="text-xs font-bold tracking-widest text-slate-700 dark:text-foreground">VENTAS</span>
@@ -556,7 +556,7 @@ export default function VentasPage() {
           {error && (
             <span className="text-sm text-red-700 bg-red-50 border border-red-200 rounded px-2 py-1 flex items-center gap-2">
               <span>{error}</span>
-              <Button variant="outline" size="sm" onClick={fetchProducts} className="h-6 text-xs">
+              <Button variant="outline" size="sm" onClick={fetchProducts} className="h-11 text-xs lg:h-6">
                 Reintentar
               </Button>
             </span>
@@ -566,7 +566,7 @@ export default function VentasPage() {
 
       <div className="flex flex-col lg:flex-row flex-1 min-h-0 w-full min-w-full max-w-none lg:overflow-hidden">
         {/* Left: catálogo - full bleed, borde derecho sutil, sin márgenes flotantes */}
-        <div className="flex-1 flex flex-col min-w-0 w-full max-w-none lg:overflow-hidden bg-white dark:bg-card lg:border-r border-slate-200 dark:border-border">
+        <div className="flex-[2] min-h-0 flex flex-col min-w-0 w-full max-w-none lg:flex-1 lg:overflow-hidden bg-white dark:bg-card lg:border-r border-slate-200 dark:border-border">
           <div className="shrink-0 px-4 py-3 border-b border-slate-200 dark:border-border bg-white dark:bg-card flex flex-col gap-3">
             <div className="relative">
               <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
@@ -587,7 +587,7 @@ export default function VentasPage() {
             <Button
               size="sm"
               variant="outline"
-              className={`whitespace-nowrap shrink-0 rounded-full border text-xs font-medium transition-colors ${
+              className={`h-11 min-w-11 whitespace-nowrap shrink-0 rounded-full border text-xs font-medium transition-colors lg:h-8 lg:min-w-0 ${
                 selectedCatId === "all"
                   ? "bg-slate-900 text-white border-slate-900 shadow-sm hover:bg-slate-800 hover:text-white hover:border-slate-800 dark:bg-white dark:text-slate-900 dark:border-white dark:hover:bg-zinc-100"
                   : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-200 dark:bg-card dark:text-muted-foreground dark:border-border dark:hover:bg-muted"
@@ -601,7 +601,7 @@ export default function VentasPage() {
                 key={c.id}
                 size="sm"
                 variant="outline"
-                className={`whitespace-nowrap shrink-0 rounded-full border text-xs font-medium transition-colors ${
+                className={`h-11 min-w-11 whitespace-nowrap shrink-0 rounded-full border text-xs font-medium transition-colors lg:h-8 lg:min-w-0 ${
                   selectedCatId === c.id
                     ? "bg-slate-900 text-white border-slate-900 shadow-sm hover:bg-slate-800 hover:text-white hover:border-slate-800 dark:bg-white dark:text-slate-900 dark:border-white dark:hover:bg-zinc-100"
                     : "bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-900 hover:border-slate-200 dark:bg-card dark:text-muted-foreground dark:border-border dark:hover:bg-muted"
@@ -698,7 +698,7 @@ export default function VentasPage() {
         </div>
 
         {/* Right: FACTURA / Ticket - acabado POS comercial, sin márgenes flotantes */}
-        <div className="w-full lg:w-[380px] xl:w-[400px] shrink-0 bg-white dark:bg-card flex flex-col overflow-hidden lg:overflow-hidden border-t lg:border-t-0 border-slate-200 dark:border-border lg:border-l">
+        <div className="flex-[3] min-h-0 w-full lg:w-[380px] xl:w-[400px] lg:flex-none bg-white dark:bg-card flex flex-col overflow-hidden border-t lg:border-t-0 border-slate-200 dark:border-border lg:border-l">
           {/* Cabecera ticket: fondo sutil + FACTURA + Cliente con icono */}
           <div className="shrink-0 bg-slate-50 dark:bg-zinc-900/50 border-b border-slate-200 dark:border-border px-4 py-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
@@ -710,12 +710,12 @@ export default function VentasPage() {
             </div>
             {(cart.length > 0 || cartCombos.length > 0) && (
               vaciarConfirm ? (
-                <Button size="sm" onClick={handleVaciar} className="h-7 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-in fade-in">
+                <Button size="sm" onClick={handleVaciar} className="h-11 text-xs bg-destructive text-destructive-foreground hover:bg-destructive/90 animate-in fade-in lg:h-7">
                   <Trash2 className="h-3.5 w-3.5" />
                   ¿Seguro?
                 </Button>
               ) : (
-                <Button variant="ghost" size="sm" onClick={handleVaciar} className="h-7 text-xs text-muted-foreground hover:text-foreground">
+                <Button variant="ghost" size="sm" onClick={handleVaciar} className="h-11 text-xs text-muted-foreground hover:text-foreground lg:h-7">
                   <Trash2 className="h-3.5 w-3.5" />
                   Vaciar
                 </Button>
@@ -727,7 +727,7 @@ export default function VentasPage() {
           </div>
 
           {/* Header tabular - Descripción con prioridad máxima, paddings reducidos */}
-          <div className="shrink-0 grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 px-3 py-2 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase bg-white dark:bg-card border-b border-slate-200 dark:border-border">
+          <div className="hidden shrink-0 grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 px-3 py-2 text-[10px] font-semibold tracking-widest text-muted-foreground uppercase bg-white dark:bg-card border-b border-slate-200 dark:border-border lg:grid">
             <span className="text-center">Cant.</span>
             <span>Descripción</span>
             <span className="text-right">P. Unit</span>
@@ -755,25 +755,26 @@ export default function VentasPage() {
                   const isExpanded = expandedCombos.has(promo.id);
                   return (
                     <div key={promo.id} className="bg-amber-50/40 dark:bg-amber-950/10">
-                      <div className="grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 items-center px-2 py-2">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => decCombo(promo.id)}><Minus className="h-3 w-3" /></Button>
+                      <div className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center px-3 py-2 lg:grid-cols-[70px_1fr_58px_70px_24px] lg:gap-1.5 lg:px-2">
+                        <div className="order-3 flex items-center justify-start gap-0.5 lg:order-none lg:justify-center lg:gap-1">
+                          <Button variant="outline" size="icon" className="size-11 rounded lg:size-6" onClick={() => decCombo(promo.id)}><Minus className="h-3 w-3" /></Button>
                           <span className="text-xs font-semibold w-6 text-center">{cc.quantity}</span>
-                          <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => incCombo(promo.id)}><Plus className="h-3 w-3" /></Button>
+                          <Button variant="outline" size="icon" className="size-11 rounded lg:size-6" onClick={() => incCombo(promo.id)}><Plus className="h-3 w-3" /></Button>
                         </div>
-                        <div className="min-w-0">
+                        <div className="order-1 min-w-0 lg:order-none">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <span className="text-[13px] font-medium leading-tight break-words line-clamp-2" title={promo.name}>{promo.name}</span>
                             <span className="shrink-0 bg-secondary text-secondary-foreground border text-[9px] px-1 py-0.5 rounded font-bold tracking-wide">COMBO</span>
-                            <button onClick={() => toggleExpand(promo.id)} className="shrink-0 text-muted-foreground hover:text-foreground">
+                            <button onClick={() => toggleExpand(promo.id)} className="inline-flex h-11 w-11 shrink-0 items-center justify-center text-muted-foreground hover:text-foreground lg:h-3 lg:w-3">
                               <ChevronDown className={`h-3 w-3 transition ${isExpanded?'rotate-180':''}`} />
                             </button>
                           </div>
                           <div className="text-[11px] text-muted-foreground line-clamp-1 break-words" title={linesDesc}>{linesDesc}</div>
+                          <div className="text-[11px] text-muted-foreground lg:hidden">Unitario: ${unit.toLocaleString("es-AR")}</div>
                         </div>
-                        <span className="text-xs text-muted-foreground text-right">${unit.toLocaleString("es-AR")}</span>
-                        <span className="text-sm font-bold text-right">${sub.toLocaleString("es-AR")}</span>
-                        <Button variant="ghost" size="icon-sm" className="h-6 w-6" onClick={() => removeCombo(promo.id)}><X className="h-3.5 w-3.5" /></Button>
+                        <span className="hidden text-xs text-muted-foreground text-right lg:block">${unit.toLocaleString("es-AR")}</span>
+                        <span className="order-2 text-sm font-bold text-right lg:order-none">${sub.toLocaleString("es-AR")}</span>
+                        <Button variant="ghost" size="icon" className="order-4 size-11 lg:order-none lg:size-6" onClick={() => removeCombo(promo.id)} aria-label="Quitar combo"><X className="h-3.5 w-3.5" /></Button>
                       </div>
                       {isExpanded && (
                         <div className="mx-3 mb-2 text-[11px] bg-card border rounded px-2 py-1.5 space-y-0.5">
@@ -790,9 +791,9 @@ export default function VentasPage() {
                   const isWeight = isWeightProduct(c.product);
                   const qtyDisplay = Number(c.quantity).toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 3 });
                   return (
-                    <div key={c.product.id} className="grid grid-cols-[70px_1fr_58px_70px_24px] gap-1.5 items-center px-2 py-2 hover:bg-muted/30">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => dec(c.product.id)} aria-label="Restar"><Minus className="h-3 w-3" /></Button>
+                    <div key={c.product.id} className="grid grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-1 items-center px-3 py-2 hover:bg-muted/30 lg:grid-cols-[70px_1fr_58px_70px_24px] lg:gap-1.5 lg:px-2">
+                      <div className="order-3 flex items-center justify-start gap-0.5 lg:order-none lg:justify-center lg:gap-1">
+                        <Button variant="outline" size="icon" className="size-11 rounded lg:size-6" onClick={() => dec(c.product.id)} aria-label="Restar"><Minus className="h-3 w-3" /></Button>
                         {(c.product.isSoldByWeight || isWeight) ? (
                           <input
                             type="number"
@@ -800,20 +801,21 @@ export default function VentasPage() {
                             min="0.1"
                             value={c.quantity}
                             onChange={(e) => setQty(c.product.id, e.target.value)}
-                            className="w-10 text-center text-xs font-semibold bg-card border border-input rounded h-6 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                            className="w-12 text-center text-sm font-semibold bg-card border border-input rounded h-11 px-1 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none lg:w-10 lg:h-6 lg:text-xs"
                           />
                         ) : (
-                          <span className="text-xs font-semibold w-6 text-center">{qtyDisplay}</span>
+                          <span className="text-sm font-semibold w-6 text-center lg:text-xs">{qtyDisplay}</span>
                         )}
-                        <Button variant="outline" size="icon-sm" className="h-6 w-6 rounded" onClick={() => inc(c.product.id)} aria-label="Sumar"><Plus className="h-3 w-3" /></Button>
+                        <Button variant="outline" size="icon" className="size-11 rounded lg:size-6" onClick={() => inc(c.product.id)} aria-label="Sumar"><Plus className="h-3 w-3" /></Button>
                       </div>
-                      <div className="min-w-0">
+                      <div className="order-1 min-w-0 lg:order-none">
                         <div className="text-[13px] font-medium leading-tight break-words line-clamp-2" title={c.product.name}>{c.product.name}</div>
+                        <div className="mt-0.5 text-[11px] text-muted-foreground lg:hidden">Unitario: ${Number(c.unitPrice).toLocaleString("es-AR")}</div>
                         {discountMap.get(c.product.id) ? <span className="inline-block mt-0.5 text-[9px] px-1 py-0.5 rounded border bg-secondary font-bold tracking-wide">PROMO</span> : null}
                       </div>
-                      <span className="text-xs text-muted-foreground text-right">${Number(c.unitPrice).toLocaleString("es-AR")}</span>
-                      <span className="text-sm font-bold text-right">${Number(lineSub).toLocaleString("es-AR")}</span>
-                      <Button variant="ghost" size="icon-sm" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => remove(c.product.id)} aria-label="Quitar"><X className="h-3.5 w-3.5" /></Button>
+                      <span className="hidden text-xs text-muted-foreground text-right lg:block">${Number(c.unitPrice).toLocaleString("es-AR")}</span>
+                      <span className="order-2 text-sm font-bold text-right lg:order-none">${Number(lineSub).toLocaleString("es-AR")}</span>
+                      <Button variant="ghost" size="icon" className="order-4 size-11 text-muted-foreground hover:text-destructive lg:order-none lg:size-6" onClick={() => remove(c.product.id)} aria-label="Quitar"><X className="h-3.5 w-3.5" /></Button>
                     </div>
                   );
                 })}
@@ -841,7 +843,7 @@ export default function VentasPage() {
                     <button
                       type="button"
                       onClick={() => setDiscountValue("0")}
-                      className="inline-flex items-center justify-center h-6 w-6 rounded-full hover:bg-slate-100 dark:hover:bg-muted text-slate-500 hover:text-slate-700 dark:text-muted-foreground transition-colors"
+                      className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-muted text-slate-500 hover:text-slate-700 dark:text-muted-foreground transition-colors lg:h-6 lg:w-6"
                       aria-label="Quitar descuento"
                       title="Quitar descuento"
                     >
@@ -876,9 +878,9 @@ export default function VentasPage() {
       </div>
 
       {showCheckout && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={() => setShowCheckout(false)}>
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 overflow-y-auto overscroll-contain p-2 sm:p-4" onClick={() => setShowCheckout(false)}>
           <div
-            className="bg-card rounded-xl border border-border shadow-xl p-6 w-full max-w-md flex flex-col gap-4"
+            className="bg-card rounded-xl border border-border shadow-xl p-4 sm:p-6 w-full max-w-md max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain flex flex-col gap-4"
             onClick={(e) => e.stopPropagation()}
           >
             <h3 className="text-lg font-semibold">Confirmar venta</h3>
@@ -898,7 +900,7 @@ export default function VentasPage() {
                 <button
                   type="button"
                   onClick={() => setDiscountType("%")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${discountType === "%" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground"}`}
+                  className={`inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-xs font-semibold rounded-lg transition-all lg:min-h-0 lg:min-w-0 ${discountType === "%" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground"}`}
                   aria-label="Porcentaje"
                 >
                   %
@@ -906,7 +908,7 @@ export default function VentasPage() {
                 <button
                   type="button"
                   onClick={() => setDiscountType("$")}
-                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${discountType === "$" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground"}`}
+                  className={`inline-flex min-h-11 min-w-11 items-center justify-center px-3 py-1.5 text-xs font-semibold rounded-lg transition-all lg:min-h-0 lg:min-w-0 ${discountType === "$" ? "bg-white dark:bg-card shadow-sm border border-slate-200 dark:border-border text-slate-900 dark:text-foreground" : "text-slate-600 dark:text-muted-foreground"}`}
                   aria-label="Monto fijo"
                 >
                   $
@@ -920,7 +922,7 @@ export default function VentasPage() {
                   value={discountValue === "0" ? "" : discountValue}
                   onChange={(e) => setDiscountValue(e.target.value)}
                   placeholder={discountType === "%" ? "Ej: 10" : "Ej: 500"}
-                  className={`h-9 text-sm bg-background ${discountType === "$" ? "pl-7" : "pr-8"}`}
+                  className={`h-11 text-sm bg-background lg:h-9 ${discountType === "$" ? "pl-7" : "pr-8"}`}
                 />
                 {discountType === "%" && <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>}
               </div>
@@ -928,7 +930,7 @@ export default function VentasPage() {
                 <button
                   type="button"
                   onClick={() => setDiscountValue("0")}
-                  className="inline-flex items-center justify-center h-9 w-9 rounded-full hover:bg-slate-100 dark:hover:bg-muted text-slate-500 hover:text-slate-700 transition-colors shrink-0"
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full hover:bg-slate-100 dark:hover:bg-muted text-slate-500 hover:text-slate-700 transition-colors shrink-0 lg:h-9 lg:w-9"
                   aria-label="Limpiar descuento"
                   title="Limpiar descuento"
                 >
@@ -942,24 +944,24 @@ export default function VentasPage() {
               </p>
             )}
 
-            <div className={`grid gap-2 ${flags.moduloClientes ? "grid-cols-2" : "grid-cols-3"}`}>
+            <div className={`grid grid-cols-2 gap-2 ${flags.moduloClientes ? "" : "sm:grid-cols-3"}`}>
               <Button
                 variant={!isCredit && paymentMethod === 0 ? "default" : "outline"}
-                className="rounded-full font-semibold"
+                className="h-auto min-h-11 rounded-full px-2 py-2 text-center text-xs leading-tight whitespace-normal font-semibold lg:h-9 lg:min-h-0 sm:whitespace-nowrap sm:px-4 sm:text-sm"
                 onClick={() => { setIsCredit(false); setPaymentMethod(0); setSaleError(null); }}
               >
                 Efectivo
               </Button>
               <Button
                 variant={!isCredit && paymentMethod === 1 ? "default" : "outline"}
-                className="rounded-full font-semibold"
+                className="h-auto min-h-11 rounded-full px-2 py-2 text-center text-xs leading-tight whitespace-normal font-semibold lg:h-9 lg:min-h-0 sm:whitespace-nowrap sm:px-4 sm:text-sm"
                 onClick={() => { setIsCredit(false); setPaymentMethod(1); setSaleError(null); }}
               >
                 MercadoPago / QR
               </Button>
               <Button
                 variant={!isCredit && paymentMethod === 2 ? "default" : "outline"}
-                className="rounded-full font-semibold"
+                className="h-auto min-h-11 rounded-full px-2 py-2 text-center text-xs leading-tight whitespace-normal font-semibold lg:h-9 lg:min-h-0 sm:whitespace-nowrap sm:px-4 sm:text-sm"
                 onClick={() => { setIsCredit(false); setPaymentMethod(2); setSaleError(null); }}
               >
                 Débito/Crédito
@@ -967,7 +969,7 @@ export default function VentasPage() {
               {flags.moduloClientes && (
                 <Button
                   variant={isCredit ? "default" : "outline"}
-                  className={`rounded-full font-semibold ${isCredit ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600" : ""}`}
+                  className={`h-auto min-h-11 rounded-full px-2 py-2 text-center text-xs leading-tight whitespace-normal font-semibold lg:h-9 lg:min-h-0 sm:whitespace-nowrap sm:px-4 sm:text-sm ${isCredit ? "bg-amber-600 hover:bg-amber-700 text-white border-amber-600" : ""}`}
                   onClick={() => { setIsCredit(true); setSaleError(null); }}
                 >
                   Fiado / Cta. Cte.
@@ -991,16 +993,16 @@ export default function VentasPage() {
                   value={cashPaid}
                   onChange={(e) => setCashPaid(e.target.value)}
                   placeholder="$0"
-                  className="bg-background text-lg font-semibold"
+                  className="h-11 bg-background text-lg font-semibold lg:h-8"
                 />
                 <div className="flex flex-wrap gap-1.5">
-                  <Button variant="outline" size="sm" className="text-xs rounded-full" onClick={() => { setCashPaid(String(total)); setTimeout(()=>cashInputRef.current?.select(),0); }}>Monto exacto</Button>
+                  <Button variant="outline" size="sm" className="h-11 text-xs rounded-full lg:h-8" onClick={() => { setCashPaid(String(total)); setTimeout(()=>cashInputRef.current?.select(),0); }}>Monto exacto</Button>
                   {[1000,2000,5000,10000].map((delta) => (
                     <Button
                       key={delta}
                       variant="outline"
                       size="sm"
-                      className="text-xs rounded-full"
+                      className="h-11 text-xs rounded-full lg:h-8"
                       onClick={() => {
                         setCashPaid(String(cashNum + delta));
                         setTimeout(() => { cashInputRef.current?.focus(); cashInputRef.current?.select(); }, 0);
@@ -1050,12 +1052,12 @@ export default function VentasPage() {
                   showInlineCreate ? (
                     <div className="flex flex-col gap-2 p-2 rounded-md border bg-card">
                       <Label className="text-sm font-medium">Nuevo cliente</Label>
-                      <Input placeholder="Nombre" value={inlineName} onChange={(e) => setInlineName(e.target.value)} autoFocus />
-                      <Input placeholder="Teléfono (opcional)" value={inlinePhone} onChange={(e) => setInlinePhone(e.target.value)} />
+                      <Input placeholder="Nombre" value={inlineName} onChange={(e) => setInlineName(e.target.value)} className="h-11 lg:h-8" autoFocus />
+                      <Input placeholder="Teléfono (opcional)" value={inlinePhone} onChange={(e) => setInlinePhone(e.target.value)} className="h-11 lg:h-8" />
                       {inlineError && <p className="text-xs text-red-600 border border-red-200 bg-red-50 rounded p-1">{inlineError}</p>}
                       <div className="flex gap-2">
-                        <Button variant="outline" size="sm" className="flex-1" onClick={() => { setShowInlineCreate(false); setInlineError(null); }}>Cancelar</Button>
-                        <Button size="sm" className="flex-1" onClick={handleInlineCreate} disabled={inlineLoading}>
+                        <Button variant="outline" size="sm" className="h-11 flex-1 lg:h-8" onClick={() => { setShowInlineCreate(false); setInlineError(null); }}>Cancelar</Button>
+                        <Button size="sm" className="h-11 flex-1 lg:h-8" onClick={handleInlineCreate} disabled={inlineLoading}>
                           {inlineLoading ? "Creando…" : "Guardar y seleccionar"}
                         </Button>
                       </div>
@@ -1063,7 +1065,7 @@ export default function VentasPage() {
                   ) : (
                     <>
                       <Label className="text-sm">Buscar cliente *</Label>
-                      <Input ref={fiadoSearchRef} placeholder="Buscar por nombre, DNI o teléfono..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="bg-card" />
+                      <Input ref={fiadoSearchRef} placeholder="Buscar por nombre, DNI o teléfono..." value={customerSearch} onChange={(e) => setCustomerSearch(e.target.value)} className="h-11 bg-card lg:h-8" />
                       <div className="max-h-40 overflow-auto border rounded-md bg-card divide-y">
                         {customerSearchResults.length > 0 ? (
                           <>
@@ -1075,7 +1077,7 @@ export default function VentasPage() {
                                   setCustomerSearch("");
                                   setShowInlineCreate(false);
                                 }}
-                                className="w-full text-left px-3 py-2 hover:bg-muted text-sm"
+                                className="w-full min-h-11 text-left px-3 py-2 hover:bg-muted text-sm lg:min-h-0"
                               >
                                 <span className="font-medium">{c.name}</span>
                                 <span className="text-xs text-muted-foreground ml-2">{c.phone ?? ""}</span>
@@ -1089,7 +1091,7 @@ export default function VentasPage() {
                                 setInlineError(null);
                                 setShowInlineCreate(true);
                               }}
-                              className="w-full text-left px-3 py-2.5 hover:bg-primary/10 text-sm font-medium text-primary border-t bg-muted/20"
+                              className="w-full min-h-11 text-left px-3 py-2.5 hover:bg-primary/10 text-sm font-medium text-primary border-t bg-muted/20 lg:min-h-0"
                             >
                               + Crear cliente nuevo
                             </button>
@@ -1104,7 +1106,7 @@ export default function VentasPage() {
                                 setInlineError(null);
                                 setShowInlineCreate(true);
                               }}
-                              className="w-full text-left px-3 py-2.5 hover:bg-primary/10 text-sm font-medium text-primary border-t bg-muted/20"
+                              className="w-full min-h-11 text-left px-3 py-2.5 hover:bg-primary/10 text-sm font-medium text-primary border-t bg-muted/20 lg:min-h-0"
                             >
                               + Crear cliente nuevo
                             </button>
@@ -1126,13 +1128,13 @@ export default function VentasPage() {
                           <span className="text-xs text-muted-foreground">Sin deuda</span>
                         )}
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => { setCreditCustomerId(""); setCustomerSearch(""); }} title="Cambiar cliente">
+                      <Button variant="ghost" size="sm" className="h-11 lg:h-8" onClick={() => { setCreditCustomerId(""); setCustomerSearch(""); }} title="Cambiar cliente">
                         <X className="h-4 w-4 mr-1" /> Cambiar
                       </Button>
                     </div>
                     <div className="flex flex-col gap-1 pt-2">
                       <Label className="text-sm">Plazo (días)</Label>
-                      <Input type="number" min={1} max={365} value={creditDueDays} onChange={(e) => setCreditDueDays(e.target.value)} className="bg-background" />
+                      <Input type="number" min={1} max={365} value={creditDueDays} onChange={(e) => setCreditDueDays(e.target.value)} className="h-11 bg-background lg:h-8" />
                       {dueDateHint && <span className="text-xs text-muted-foreground">Vence: {dueDateHint}</span>}
                     </div>
                   </>
@@ -1146,14 +1148,14 @@ export default function VentasPage() {
               <div className="rounded-md border border-red-200 bg-red-50 p-2 text-sm text-red-700">{saleError}</div>
             )}
 
-            <div className="flex gap-2 justify-end pt-2">
-              <Button variant="outline" onClick={() => setShowCheckout(false)} disabled={saleLoading}>
+            <div className="flex flex-col gap-2 pt-2 sm:flex-row sm:justify-end">
+              <Button variant="outline" className="h-11 w-full sm:w-auto lg:h-9" onClick={() => setShowCheckout(false)} disabled={saleLoading}>
                 Cancelar
               </Button>
               <Button
                 onClick={handleConfirmSale}
                 disabled={saleLoading || (isCredit ? !creditCustomerId : paymentMethod === 0 && cashNum < total)}
-                className="bg-red-600 hover:bg-red-700 text-white min-w-[140px]"
+                className="h-11 w-full bg-red-600 hover:bg-red-700 text-white min-w-[140px] sm:w-auto lg:h-9"
               >
                 {saleLoading ? "Procesando…" : "Confirmar venta"}
               </Button>
