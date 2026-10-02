@@ -6,6 +6,7 @@ import { Camera, ImagePlus, SendHorizonal, Sparkles, Trash2, X } from "lucide-re
 import ChatMessage from "@/components/Asistente/ChatMessage";
 import { useAuth } from "@/contexts/AuthContext";
 import { ApiError, askAssistant, confirmAssistantProposal, getAssistantProviders, getStoredToken, TOKEN_STORAGE_KEY, TOKEN_STORAGE_KEY_LEGACY, type ChatMessageDto, type ProposalResponse } from "@/lib/api";
+import { loadAssistantImages, saveAssistantImages } from "@/lib/assistantChatStorage";
 
 type UiMessage = { id: string; role: "user" | "assistant"; content: string; proposal?: ProposalResponse | null; images?: string[] };
 type ImageAttachment = { name: string; dataUrl: string; size: number };
@@ -47,6 +48,10 @@ function readImageDataUrl(file: File): Promise<string> {
   });
 }
 
+function createMessageId(offset = 0): string {
+  return (Date.now() + offset).toString();
+}
+
 function loadStoredMessages(storageKey: string | null): UiMessage[] {
   if (!storageKey) return [];
   try {
@@ -83,10 +88,13 @@ export default function AsistentePage() {
 function AssistantChat({ storageKey, authToken }: { storageKey: string; authToken: string }) {
   const [messages, setMessages] = useState<UiMessage[]>([]);
   const [hydrated, setHydrated] = useState(false);
+  const [imageStorageReady, setImageStorageReady] = useState(false);
+  const [pendingImageUploads, setPendingImageUploads] = useState(0);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<ImageAttachment[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [imageStorageWarning, setImageStorageWarning] = useState(false);
   const [provider, setProvider] = useState<string>("mock");
   const [available, setAvailable] = useState<string[]>(["mock", "openai", "deepseek"]);
   const [correctHint, setCorrectHint] = useState(false);
@@ -97,6 +105,10 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
   const inputRef = useRef<HTMLInputElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const cameraInputRef = useRef<HTMLInputElement>(null);
+  const attachmentsRef = useRef<ImageAttachment[]>([]);
+  const pendingImageUploadsRef = useRef(0);
+  const imageUploadQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const imageUploadGenerationRef = useRef(0);
 
   // Load persisted chat only after the context and shared bearer token agree on its owner.
   useEffect(() => {
@@ -105,8 +117,30 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
       return;
     }
 
-    setMessages(loadStoredMessages(storageKey));
-    setHydrated(true);
+    let cancelled = false;
+    const storedMessages = loadStoredMessages(storageKey);
+    void loadAssistantImages(storageKey)
+      .then((storedImages) => {
+        if (cancelled) return;
+        setMessages(storedMessages.map((message) => {
+          const images = storedImages[message.id];
+          return images?.length ? { ...message, images } : message;
+        }));
+        setImageStorageReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setMessages(storedMessages);
+          setImageStorageWarning(true);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setHydrated(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [storageKey]);
 
   useEffect(() => {
@@ -135,61 +169,110 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
   // Persist on change (cap 10, no basura acumulada)
   useEffect(() => {
     if (!hydrated) return;
+    const persisted = messages.slice(-MAX_MESSAGES);
     try {
-      const persisted = messages.slice(-MAX_MESSAGES).map(({ id, role, content, proposal }) => ({ id, role, content, proposal }));
-      localStorage.setItem(storageKey, JSON.stringify(persisted));
+      if (persisted.length === 0) {
+        localStorage.removeItem(storageKey);
+      } else {
+        localStorage.setItem(storageKey, JSON.stringify(persisted.map(({ id, role, content, proposal }) => ({ id, role, content, proposal }))));
+      }
     } catch {}
-  }, [messages, hydrated, storageKey]);
+    if (imageStorageReady) {
+      void saveAssistantImages(storageKey, persisted)
+        .then(() => setImageStorageWarning(false))
+        .catch(() => setImageStorageWarning(true));
+    }
+  }, [messages, hydrated, imageStorageReady, storageKey]);
 
   useEffect(() => {
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [messages, loading]);
 
+  function replaceAttachments(next: ImageAttachment[]) {
+    attachmentsRef.current = next;
+    setAttachments(next);
+  }
+
   function clearChat() {
+    imageUploadGenerationRef.current++;
     setMessages([]);
-    setAttachments([]);
+    replaceAttachments([]);
     setInput("");
     try {
       localStorage.removeItem(storageKey);
     } catch {}
+    void saveAssistantImages(storageKey, [])
+      .then(() => setImageStorageWarning(false))
+      .catch(() => setImageStorageWarning(true));
     setError(null);
     setCorrectHint(false);
     setShowClearConfirm(false);
   }
 
-  async function addImages(files: FileList | File[]) {
-    const next = [...attachments];
-    let totalBytes = next.reduce((total, image) => total + image.size, 0);
-    const rejected: string[] = [];
+  function addImages(files: FileList | File[]) {
+    const selectedFiles = Array.from(files);
+    if (selectedFiles.length === 0) return;
+    if (pendingImageUploadsRef.current === 0) setError(null);
 
-    for (const file of Array.from(files)) {
-      if (!SUPPORTED_IMAGE_TYPES.includes(file.type.toLowerCase())) {
-        rejected.push(`${file.name}: formato no compatible. Selecciona imágenes JPEG, PNG, GIF o WebP.`);
-        continue;
-      }
-      if (file.size === 0 || file.size > MAX_IMAGE_BYTES) {
-        rejected.push(`${file.name}: cada imagen debe pesar como máximo 5 MB.`);
-        continue;
-      }
-      if (next.length >= MAX_IMAGES) {
-        rejected.push(`Puedes adjuntar hasta ${MAX_IMAGES} imágenes.`);
-        continue;
-      }
-      if (totalBytes + file.size > MAX_TOTAL_IMAGE_BYTES) {
-        rejected.push("El total de imágenes no puede superar 10 MB.");
-        continue;
+    const generation = imageUploadGenerationRef.current;
+    pendingImageUploadsRef.current++;
+    setPendingImageUploads(pendingImageUploadsRef.current);
+
+    const task = imageUploadQueueRef.current.then(async () => {
+      if (generation !== imageUploadGenerationRef.current) return;
+
+      const current = attachmentsRef.current;
+      let totalBytes = current.reduce((total, image) => total + image.size, 0);
+      let addedCount = 0;
+      const accepted: ImageAttachment[] = [];
+      const rejected: string[] = [];
+
+      for (const file of selectedFiles) {
+        if (generation !== imageUploadGenerationRef.current) return;
+        if (!SUPPORTED_IMAGE_TYPES.includes(file.type.toLowerCase())) {
+          rejected.push(`${file.name}: formato no compatible. Selecciona imágenes JPEG, PNG, GIF o WebP.`);
+          continue;
+        }
+        if (file.size === 0 || file.size > MAX_IMAGE_BYTES) {
+          rejected.push(`${file.name}: cada imagen debe pesar como máximo 5 MB.`);
+          continue;
+        }
+        if (current.length + addedCount >= MAX_IMAGES) {
+          rejected.push(`Puedes adjuntar hasta ${MAX_IMAGES} imágenes.`);
+          continue;
+        }
+        if (totalBytes + file.size > MAX_TOTAL_IMAGE_BYTES) {
+          rejected.push("El total de imágenes no puede superar 10 MB.");
+          continue;
+        }
+
+        try {
+          const dataUrl = await readImageDataUrl(file);
+          if (generation !== imageUploadGenerationRef.current) return;
+          accepted.push({ name: file.name, dataUrl, size: file.size });
+          addedCount++;
+          totalBytes += file.size;
+        } catch {
+          rejected.push(`${file.name}: no fue posible leer la imagen.`);
+        }
       }
 
-      try {
-        next.push({ name: file.name, dataUrl: await readImageDataUrl(file), size: file.size });
-        totalBytes += file.size;
-      } catch {
-        rejected.push(`${file.name}: no fue posible leer la imagen.`);
-      }
-    }
+      if (generation !== imageUploadGenerationRef.current) return;
+      if (accepted.length > 0) replaceAttachments([...attachmentsRef.current, ...accepted]);
+      if (rejected.length > 0) setError((currentError) => currentError ? `${currentError} ${rejected.join(" ")}` : rejected.join(" "));
+    });
 
-    setAttachments(next);
-    setError(rejected.length ? rejected.join(" ") : null);
+    imageUploadQueueRef.current = task.catch(() => {});
+    void task
+      .catch(() => {
+        if (generation === imageUploadGenerationRef.current) {
+          setError((currentError) => currentError ? `${currentError} No fue posible procesar una imagen.` : "No fue posible procesar una imagen.");
+        }
+      })
+      .finally(() => {
+        pendingImageUploadsRef.current--;
+        setPendingImageUploads(pendingImageUploadsRef.current);
+      });
   }
 
   function handleFileSelection(event: React.ChangeEvent<HTMLInputElement>) {
@@ -206,27 +289,27 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
   }
 
   async function send() {
-    const text = input.trim();
-    if ((!text && attachments.length === 0) || loading) return;
+    const message = input;
+    const currentAttachments = attachmentsRef.current;
+    if (!hydrated || pendingImageUploadsRef.current > 0 || (!message.trim() && currentAttachments.length === 0) || loading) return;
     if (!hasCurrentSession()) return;
-    if (text.length > 2000) {
+    if (message.length > 2000) {
       setError("El mensaje no puede exceder 2000 caracteres.");
       return;
     }
-    const message = text || "Describe las imágenes adjuntas.";
-    const images = attachments.map((attachment) => attachment.dataUrl);
+    const images = currentAttachments.map((attachment) => attachment.dataUrl);
     setError(null);
     setCorrectHint(false);
-    const userMsg: UiMessage = { id: Date.now().toString(), role: "user", content: message, ...(images.length ? { images } : {}) };
+    const userMsg: UiMessage = { id: createMessageId(), role: "user", content: message, ...(images.length ? { images } : {}) };
     // cap to MAX_MESSAGES when adding
     setMessages((prev) => [...prev, userMsg].slice(-MAX_MESSAGES));
     setInput("");
-    setAttachments([]);
+    replaceAttachments([]);
     setLoading(true);
     try {
       // history = last MAX_MESSAGES without the current userMsg (backend also caps to 20, we send 10)
       const prevSlice = messages.slice(-MAX_MESSAGES);
-      const history: ChatMessageDto[] = prevSlice.map((m) => ({
+      const history: ChatMessageDto[] = prevSlice.filter((m) => m.content.trim().length > 0).map((m) => ({
         role: m.role,
         content: m.content,
       }));
@@ -234,7 +317,7 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
       const historyCapped = history.slice(-(MAX_MESSAGES - 1));
       const res = await askAssistant(message, historyCapped, images, authToken);
       setProvider(res.provider);
-      const assistantMsg: UiMessage = { id: (Date.now() + 1).toString(), role: "assistant", content: res.reply, proposal: res.proposal ?? null };
+      const assistantMsg: UiMessage = { id: createMessageId(1), role: "assistant", content: res.reply, proposal: res.proposal ?? null };
       setMessages((prev) => [...prev, assistantMsg].slice(-MAX_MESSAGES));
     } catch (e) {
       const err = e as ApiError;
@@ -253,19 +336,19 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
     if (last?.proposal?.hasMissingData) return;
     setError(null);
     setCorrectHint(false);
-    const userMsg: UiMessage = { id: Date.now().toString(), role: "user", content: "confirmar" };
+    const userMsg: UiMessage = { id: createMessageId(), role: "user", content: "confirmar" };
     setMessages((prev) => [...prev, userMsg].slice(-MAX_MESSAGES));
     setLoading(true);
     try {
       const prevSlice = messages.slice(-MAX_MESSAGES);
-      const history: ChatMessageDto[] = prevSlice.map((m) => ({
+      const history: ChatMessageDto[] = prevSlice.filter((m) => m.content.trim().length > 0).map((m) => ({
         role: m.role,
         content: m.content,
       }));
       const historyCapped = history.slice(-(MAX_MESSAGES - 1));
       const res = await confirmAssistantProposal(historyCapped, authToken);
       setProvider(res.provider);
-      const assistantMsg: UiMessage = { id: (Date.now() + 1).toString(), role: "assistant", content: res.reply, proposal: res.proposal ?? null };
+      const assistantMsg: UiMessage = { id: createMessageId(1), role: "assistant", content: res.reply, proposal: res.proposal ?? null };
       setMessages((prev) => [...prev, assistantMsg].slice(-MAX_MESSAGES));
     } catch (e) {
       const err = e as ApiError;
@@ -446,7 +529,7 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
               <button
                 type="button"
                 aria-label={`Quitar ${attachment.name}`}
-                onClick={() => setAttachments((current) => current.filter((_, imageIndex) => imageIndex !== index))}
+                onClick={() => replaceAttachments(attachmentsRef.current.filter((_, imageIndex) => imageIndex !== index))}
                 className="absolute -right-2 -top-2 flex min-h-11 min-w-11 items-center justify-center rounded-full bg-background text-foreground shadow"
               >
                 <X size={16} />
@@ -454,6 +537,16 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
               <span className="max-w-20 truncate text-[10px] text-muted-foreground" title={attachment.name}>{attachment.name}</span>
             </div>
           ))}
+        </div>
+      )}
+      {pendingImageUploads > 0 && (
+        <div id="assistant-image-upload-status" className="text-sm text-muted-foreground" role="status" aria-live="polite" aria-atomic="true">
+          Procesando imágenes adjuntas. Esperá antes de enviar.
+        </div>
+      )}
+      {imageStorageWarning && (
+        <div className="min-w-0 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 [overflow-wrap:anywhere]" role="status">
+          No se pudieron guardar o cargar las imágenes adjuntas.
         </div>
       )}
 
@@ -504,8 +597,9 @@ function AssistantChat({ storageKey, authToken }: { storageKey: string; authToke
           <button
             type="button"
             aria-label="Enviar"
+            aria-describedby={pendingImageUploads > 0 ? "assistant-image-upload-status" : undefined}
             onClick={send}
-            disabled={loading || (!input.trim() && attachments.length === 0)}
+            disabled={!hydrated || loading || pendingImageUploads > 0 || (!input.trim() && attachments.length === 0)}
             className="flex h-11 w-11 shrink-0 items-center justify-center rounded-md bg-red-500 transition-colors duration-300 hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-50 lg:h-10 lg:w-10"
           >
             <SendHorizonal size={18} className="text-background" />
