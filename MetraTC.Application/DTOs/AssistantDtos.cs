@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace MetraTC.Application.DTOs;
 
 public static class AssistantDtos
@@ -30,6 +32,7 @@ public static class AssistantDtos
         List<ProductProposal> Proposals,
         string NaturalReply,
         bool NeedsConfirmation,
-        bool HasMissingData
+        bool HasMissingData,
+        [property: JsonIgnore] bool RequireExactSkuMatch = false
     );
 }

@@ -82,12 +82,14 @@ public class ProductService : IProductService
         if (oldPrice != updateProductDto.Price)
         {
             // Transacción atómica: update producto + historial
-            await using var transaction = await _context.Database.BeginTransactionAsync();
+            await using var transaction = _context.Database.CurrentTransaction is null
+                ? await _context.Database.BeginTransactionAsync()
+                : null;
             _context.Products.Update(product);
             var history = new ProductPriceHistory(product.Id, oldPrice, updateProductDto.Price, null);
             _context.ProductPriceHistories.Add(history);
             await _context.SaveChangesAsync();
-            await transaction.CommitAsync();
+            if (transaction is not null) await transaction.CommitAsync();
             return;
         }
 

@@ -19,7 +19,9 @@ public class InventoryRepository : IInventoryRepository
         decimal delta,
         string reason)
     {
-        await using var transaction = await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable);
+        await using var transaction = _context.Database.CurrentTransaction is null
+            ? await _context.Database.BeginTransactionAsync(System.Data.IsolationLevel.Serializable)
+            : null;
 
         var product = await _context.Products.FirstOrDefaultAsync(p => p.Id == productId);
         if (product is null)
@@ -30,7 +32,7 @@ public class InventoryRepository : IInventoryRepository
 
         _context.StockAdjustmentAudits.Add(audit);
         await _context.SaveChangesAsync();
-        await transaction.CommitAsync();
+        if (transaction is not null) await transaction.CommitAsync();
 
         return (product, audit);
     }

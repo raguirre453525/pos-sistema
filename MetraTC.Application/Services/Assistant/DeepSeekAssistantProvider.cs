@@ -34,6 +34,41 @@ public class DeepSeekAssistantProvider : IAssistantProvider
         return string.IsNullOrWhiteSpace(environmentKey) ? configuration["Assistant:DeepSeek:ApiKey"] : environmentKey;
     }
 
+    internal static readonly TimeSpan RequestBudget = TimeSpan.FromSeconds(25);
+
+    internal static async Task<HttpResponseMessage> SendAsync(HttpClient client, HttpRequestMessage request, CancellationToken ct, TimeSpan? requestBudget = null, string providerName = "DeepSeek")
+    {
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budget.CancelAfter(requestBudget ?? RequestBudget);
+        try
+        {
+            // Buffer the complete body inside the budget; HTTP 200 headers/keep-alive whitespace are not a completed response.
+            return await client.SendAsync(request, HttpCompletionOption.ResponseContentRead, budget.Token);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new TimeoutException($"{providerName} no completó la respuesta dentro del tiempo permitido.", ex);
+        }
+    }
+
+    internal static string ReadCompletedContent(string body, string providerName = "DeepSeek")
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var choice = doc.RootElement.GetProperty("choices")[0];
+            if (choice.GetProperty("finish_reason").GetString() == "stop" &&
+                choice.GetProperty("message").GetProperty("content").GetString() is { } content &&
+                !string.IsNullOrWhiteSpace(content))
+                return content;
+        }
+        catch (Exception ex) when (ex is JsonException or KeyNotFoundException or InvalidOperationException or IndexOutOfRangeException)
+        {
+            // Do not include provider content or parser details in logged exceptions.
+        }
+        throw new HttpRequestException($"{providerName} devolvió una respuesta incompleta o no válida.");
+    }
+
     public Task<string> GetResponseAsync(string message, IReadOnlyList<ChatMessage> history, string inventoryContext, CancellationToken ct)
         => GetResponseAsync(message, history, inventoryContext, Array.Empty<AssistantImage>(), ct);
 
@@ -100,7 +135,7 @@ public class DeepSeekAssistantProvider : IAssistantProvider
         HttpResponseMessage response;
         try
         {
-            response = await _httpClient.SendAsync(request, ct);
+            response = await SendAsync(_httpClient, request, ct);
         }
         catch (HttpRequestException ex)
         {
@@ -120,23 +155,7 @@ public class DeepSeekAssistantProvider : IAssistantProvider
             }
 
             var body = await response.Content.ReadAsStringAsync(ct);
-            try
-            {
-                using var doc = JsonDocument.Parse(body);
-                var content = doc.RootElement
-                    .GetProperty("choices")[0]
-                    .GetProperty("message")
-                    .GetProperty("content")
-                    .GetString();
-
-                return string.IsNullOrWhiteSpace(content)
-                    ? "No recibí respuesta del modelo. Probá de nuevo."
-                    : content.Trim();
-            }
-            catch (Exception ex)
-            {
-                throw new InvalidOperationException($"Respuesta inesperada de DeepSeek: {ex.Message}");
-            }
+            return ReadCompletedContent(body).Trim();
         }
     }
 

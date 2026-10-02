@@ -97,13 +97,14 @@ builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IReportsService, ReportsService>();
 builder.Services.AddScoped<IPromotionService, PromotionService>();
 
-// Assistant - hybrid provider (mock | openai | deepseek)
+// Assistant - hybrid provider (mock | openai | deepseek | openrouter)
 builder.Services.AddMemoryCache();
 builder.Services.AddScoped<AssistantInventoryContext>();
 builder.Services.AddScoped<MockAssistantProvider>();
 builder.Services.AddHttpClient<OpenAiAssistantProvider>();
 builder.Services.AddScoped<DeepSeekAssistantProvider>();
 builder.Services.AddHttpClient<DeepSeekAssistantProvider>();
+builder.Services.AddHttpClient<OpenRouterAssistantProvider>();
 builder.Services.AddHttpClient<AssistantProductExtractor>();
 builder.Services.AddScoped<AssistantProposalService>();
 builder.Services.AddScoped<IAssistantService, AssistantService>();

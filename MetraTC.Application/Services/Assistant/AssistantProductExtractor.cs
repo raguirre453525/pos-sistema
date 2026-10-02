@@ -14,8 +14,13 @@ public record RawProductExtract(
     decimal? StockDelta,
     string? Barcode,
     string? Description,
-    List<string>? CategoryNames
+    List<string>? CategoryNames,
+    bool StockDirectionRequired = false,
+    decimal? ExplicitStockDelta = null,
+    bool BlockInactiveProduct = false
 );
+
+public sealed record ImageProductListExtraction(bool IsProductList, List<RawProductExtract> Products);
 
 public class AssistantProductExtractor
 {
@@ -32,6 +37,15 @@ public class AssistantProductExtractor
         "IMPORTANTE: Si el mensaje actual solo aporta datos faltantes (precio, sku, stock) y el historial menciona el producto (ej \"Yerba Union\"), asocia esos datos al producto del historial y devuelve name/stockDelta del historial completando con los nuevos. Nunca devuelvas name null si el historial tiene el nombre. Si el historial tiene \"Yerba Union con 20 unidades\" y el usuario dice \"sku XXX precio 1700\", devuelve {name:\"Yerba Union\", sku:\"XXX\", price:1700, stockDelta:20}. Si el mensaje dice \"del azucar ledesma, el sku es 9aldj1029 y el precio es 1350\" devuelve name \"Azucar Ledesma\" con esos sku/price y stockDelta del historial.\n" +
         "Responde SOLO JSON: { \"products\": [ { \"name\":..., \"sku\":..., \"price\":..., \"stockDelta\":..., \"barcode\":..., \"description\":..., \"categoryNames\":[...] } ] }";
 
+    private const string ImageExtractionPrompt =
+        "Extract product rows from the current image(s) and current user text only. Return JSON only with this shape: " +
+        "{\"isProductList\":true|false,\"products\":[{\"name\":string|null,\"sku\":string|null,\"price\":number|null,\"stock\":number|null}]}\n" +
+        "Set isProductList true only for a visible product list or table with one or more rows; a product photo or ordinary scene is not a list. " +
+        "Return one object per visible product row. Keep SKU as a string, preserving every digit including leading zeroes. " +
+        "Use null for missing, illegible, or uncertain fields; never guess or supply defaults. Prices and stock amounts must be JSON numbers using a decimal point. " +
+        "Stock is an unsigned amount. Never infer an adjustment direction from the image or return a signed stock delta; only an explicit direction in the user's text may be used by the application. " +
+        "Do not infer any value from chat history or from another field. If no product list is present, return isProductList false and an empty products array.";
+
     private static readonly Regex ExplicitlyReadOnlyPattern = new(
         @"\b(?:solo|solamente|unicamente|únicamente)\s+(?:consulta|consultar|pregunta|preguntar)\b|\b(?:sin|no)\s+(?:modificar|modifiques|cambiar|cambies|actualizar|actualices|ajustar|ajustes|reponer|repongas|agregar|agregues|sumar|sumes)\s+(?:(?:el|la|su)\s+)?(?:stock|inventario|existencias)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -41,7 +55,15 @@ public class AssistantProductExtractor
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex DirectWritePattern = new(
-        @"^\s*(?:por\s+favor\s+)?(?:crear|crea|creá|agregar|agrega|agregá|agregame|reponer|repone|reponé|reponeme|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|ajustar|ajusta|ajustá|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|actualizar|actualiza|actualizá|cambiar|cambia|cambiá|modificar|modifica|modificá)\b|\b(?:creá|agregá|reponé|sumá|aumentá|incrementá|ajustá|descontá|quitá|restá|bajá|actualizá|cambiá|modificá)\b|\b(?:me\s+llegaron|llegaron)\s+(?:\d+|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b|\b(?:quiero|necesito|pod[eé]s|podr[ií]as|quisiera)\b.{0,40}\b(?:crear|crea|creá|agregar|agrega|agregá|agregues|agregue|reponer|repone|reponé|repongas|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|ajustar|ajusta|ajustá|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|actualizar|actualiza|actualizá|cambiar|cambia|cambiá|modificar|modifica|modificá)\b",
+        @"^\s*(?:por\s+favor\s+|please\s+)?(?:crear|crea|creá|create|agregar|agrega|agregá|agregame|add|reponer|repone|reponé|reponeme|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|ajustar|ajusta|ajustá|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|actualizar|actualiza|actualizá|cambiar|cambia|cambiá|modificar|modifica|modificá|cargar|carga|cargá|importar|importa|importá|load|import)\b|\b(?:creá|agregá|reponé|sumá|aumentá|incrementá|ajustá|descontá|quitá|restá|bajá|actualizá|cambiá|modificá|cargá|importá)\b|\b(?:me\s+llegaron|llegaron)\s+(?:\d+|uno|una|un|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)\b|\b(?:quiero|necesito|pod[eé]s|podr[ií]as|quisiera|please|could\s+you|can\s+you)\b.{0,40}\b(?:crear|crea|creá|create|agregar|agrega|agregá|agregues|agregue|add|reponer|repone|reponé|repongas|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|ajustar|ajusta|ajustá|descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|actualizar|actualiza|actualizá|cambiar|cambia|cambiá|modificar|modifica|modificá|cargar|carga|cargá|importar|importa|importá|load|import)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex ProductLoadPattern = new(
+        @"\b(?:load|import|cargar|carga|cargá|importar|importa|importá)\b",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    private static readonly Regex NegatedProductLoadPattern = new(
+        @"\b(?:no|not|don't|do\s+not|never|sin)\s+(?:(?:quiero|want\s+to|voy\s+a|going\s+to)\s+)?(?:load|import|cargar|carga|cargá|importar|importa|importá)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex QuantityWithUnitsPattern = new(
@@ -53,7 +75,7 @@ public class AssistantProductExtractor
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex StockIncreasePattern = new(
-        @"\b(?:agregar|agrega|agregá|agregame|reponer|repone|reponé|reponeme|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|me\s+llegaron|llegaron)\b",
+        @"\b(?:agregar|agrega|agregá|agregame|add|reponer|repone|reponé|reponeme|sumar|suma|sumá|aumentar|aumenta|aumentá|incrementar|incrementa|incrementá|replenish|restock|increase|me\s+llegaron|llegaron)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex StockCreationPattern = new(
@@ -61,7 +83,7 @@ public class AssistantProductExtractor
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     private static readonly Regex StockDecreasePattern = new(
-        @"\b(?:descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá)\b",
+        @"\b(?:descontar|descuenta|descontá|quitar|quita|quitá|restar|resta|restá|bajar|baja|bajá|decrease|deduct|subtract|remove)\b",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     public static bool IsReadOnlyRequest(string message)
@@ -73,14 +95,19 @@ public class AssistantProductExtractor
 
     public static bool HasInventoryWriteIntent(string message)
     {
-        if (string.IsNullOrWhiteSpace(message) || ExplicitlyReadOnlyPattern.IsMatch(message)) return false;
-        if (DirectWritePattern.IsMatch(message)) return true;
-        return !QuestionPattern.IsMatch(message) && QuantityWithUnitsPattern.IsMatch(message);
+        if (string.IsNullOrWhiteSpace(message) || ExplicitlyReadOnlyPattern.IsMatch(message) || NegatedProductLoadPattern.IsMatch(message)) return false;
+        if (DirectWritePattern.IsMatch(message) || (ProductLoadPattern.IsMatch(message) && !QuestionPattern.IsMatch(message))) return true;
+        return !QuestionPattern.IsMatch(message) &&
+            (QuantityWithUnitsPattern.IsMatch(message) || HasExplicitStockDirection(message));
     }
 
     public static bool HasStockMovementIntent(string message) =>
         !string.IsNullOrWhiteSpace(message) &&
         (StockDecreasePattern.IsMatch(message) || StockIncreasePattern.IsMatch(message) || QuantityWithUnitsPattern.IsMatch(message));
+
+    public static bool HasExplicitStockDirection(string message) =>
+        !string.IsNullOrWhiteSpace(message) &&
+        (StockDecreasePattern.IsMatch(message) || StockIncreasePattern.IsMatch(message));
 
     public static bool TryNormalizeStockDirections(
         string message,
@@ -111,6 +138,10 @@ public class AssistantProductExtractor
         return true;
     }
 
+    public static bool HasConsistentStockDirection(string message) =>
+        string.IsNullOrWhiteSpace(message) ||
+        !(StockDecreasePattern.IsMatch(message) && StockIncreasePattern.IsMatch(message));
+
     public AssistantProductExtractor(IConfiguration configuration, HttpClient httpClient, ILogger<AssistantProductExtractor> logger)
     {
         _configuration = configuration;
@@ -124,16 +155,131 @@ public class AssistantProductExtractor
         if (provider == "mock")
             return MockExtract(message, history);
 
-        // For openai / deepseek -> call LLM with extraction prompt
+        if (provider == "openrouter") OpenRouterAssistantProvider.ValidateConfiguration(_configuration);
+        else if (provider is not ("openai" or "deepseek"))
+            throw new NotSupportedException($"Product extraction is not supported for provider '{provider}'.");
+
+        // Use the explicitly selected provider for structured text extraction.
         try
         {
             return await LlmExtractAsync(message, history, provider, ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException and not TimeoutException and not HttpRequestException)
         {
+            if (provider == "openrouter") throw new HttpRequestException("OpenRouter devolvió una extracción no válida.");
             _logger.LogWarning(ex, "Extraction LLM failed, returning empty");
             return new List<RawProductExtract>();
         }
+    }
+
+    public async Task<ImageProductListExtraction> ExtractImageListAsync(string message, IReadOnlyList<AssistantImage> images, CancellationToken ct)
+    {
+        if (images.Count == 0) return new ImageProductListExtraction(false, []);
+
+        var provider = (_configuration["Assistant:Provider"] ?? "deepseek").Trim().ToLowerInvariant();
+        if (provider is not ("deepseek" or "openrouter"))
+            throw new NotSupportedException("Las imágenes requieren DeepSeek u OpenRouter.");
+        var apiKey = provider == "deepseek" ? DeepSeekAssistantProvider.GetApiKey(_configuration) : null;
+        if (provider == "deepseek" && string.IsNullOrWhiteSpace(apiKey))
+            throw new InvalidOperationException("Configura Assistant:DeepSeek:ApiKey");
+        if (provider == "openrouter") OpenRouterAssistantProvider.ValidateConfiguration(_configuration);
+
+        var model = _configuration["Assistant:DeepSeek:Model"];
+        if (string.IsNullOrWhiteSpace(model)) model = "deepseek-flash";
+
+        var content = new List<object>();
+        if (!string.IsNullOrWhiteSpace(message)) content.Add(new { type = "text", text = message });
+        content.AddRange(images.Select(image => (object)new
+        {
+            type = "image_url",
+            image_url = new { url = image.DataUrl }
+        }));
+
+        var payload = new
+        {
+            model,
+            messages = new object[]
+            {
+                new { role = "system", content = ImageExtractionPrompt },
+                new { role = "user", content }
+            },
+            response_format = new { type = "json_object" },
+            max_tokens = 1200,
+            temperature = 0,
+            thinking = new { type = "disabled" }
+        };
+
+        using var request = provider == "openrouter"
+            ? OpenRouterAssistantProvider.CreateRequest(_configuration, payload.messages, 1200, 0, jsonOutput: true)
+            : new HttpRequestMessage(HttpMethod.Post, "https://api.deepseek.com/chat/completions")
+        {
+            Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+        };
+        if (provider == "deepseek") request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+
+        string responseContent;
+        if (provider == "openrouter") responseContent = await OpenRouterAssistantProvider.CompleteAsync(_httpClient, request, ct);
+        else
+        {
+            using var response = await DeepSeekAssistantProvider.SendAsync(_httpClient, request, ct);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"DeepSeek image extraction error {(int)response.StatusCode}.");
+            responseContent = DeepSeekAssistantProvider.ReadCompletedContent(await response.Content.ReadAsStringAsync(ct));
+        }
+        JsonDocument extracted;
+        try { extracted = JsonDocument.Parse(responseContent); }
+        catch (JsonException) { throw new HttpRequestException($"{provider} devolvió una extracción de imagen no válida."); }
+        using var extractedDocument = extracted;
+        var root = extracted.RootElement;
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty("isProductList", out var listValue) || listValue.ValueKind is not (JsonValueKind.True or JsonValueKind.False) ||
+            !root.TryGetProperty("products", out var rows) || rows.ValueKind != JsonValueKind.Array)
+            throw new HttpRequestException($"{provider} devolvió una extracción de imagen no válida.");
+        if (!listValue.GetBoolean())
+        {
+            if (rows.GetArrayLength() != 0)
+                throw new HttpRequestException($"{provider} devolvió una extracción de imagen no válida.");
+            return new ImageProductListExtraction(false, []);
+        }
+
+        var products = new List<RawProductExtract>();
+        foreach (var row in rows.EnumerateArray())
+        {
+            if (row.ValueKind != JsonValueKind.Object) continue;
+            var name = ReadString(row, "name")?.Trim();
+            var sku = ReadString(row, "sku")?.Trim().ToUpperInvariant();
+            var price = ReadDecimal(row, "price");
+            var amount = ReadDecimal(row, "stock");
+            var directionRequired = amount.HasValue;
+            decimal? stockDelta = amount;
+            if (amount < 0)
+            {
+                stockDelta = null;
+                directionRequired = true;
+            }
+
+            if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(sku) && price == null && stockDelta == null)
+                continue;
+
+            products.Add(new RawProductExtract(name, sku, price, stockDelta, null, null, null, directionRequired));
+        }
+
+        return new ImageProductListExtraction(true, products);
+    }
+
+    private static string? ReadString(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String
+            ? value.GetString()
+            : null;
+
+    private static decimal? ReadDecimal(JsonElement element, string property)
+    {
+        if (!element.TryGetProperty(property, out var value) || value.ValueKind == JsonValueKind.Null) return null;
+        if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number)) return number;
+        if (value.ValueKind == JsonValueKind.String && decimal.TryParse(value.GetString(),
+            System.Globalization.NumberStyles.AllowLeadingSign | System.Globalization.NumberStyles.AllowDecimalPoint,
+            System.Globalization.CultureInfo.InvariantCulture, out number)) return number;
+        return null;
     }
 
     private static string NormalizeNumberWords(string input)
@@ -427,16 +573,6 @@ public class AssistantProductExtractor
 
     private async Task<List<RawProductExtract>> LlmExtractAsync(string message, IReadOnlyList<ChatMessage> history, string provider, CancellationToken ct)
     {
-        var apiKey = provider == "openai"
-            ? _configuration["Assistant:OpenAI:ApiKey"]
-            : DeepSeekAssistantProvider.GetApiKey(_configuration);
-        var model = provider == "openai"
-            ? (_configuration["Assistant:OpenAI:Model"] ?? "gpt-4o-mini")
-            : (_configuration["Assistant:DeepSeek:Model"] ?? "deepseek-flash");
-        var url = provider == "openai"
-            ? "https://api.openai.com/v1/chat/completions"
-            : "https://api.deepseek.com/chat/completions";
-
         var messages = new List<object> { new { role = "system", content = ExtractionPrompt } };
         if (history != null)
         {
@@ -448,31 +584,47 @@ public class AssistantProductExtractor
         }
         messages.Add(new { role = "user", content = message });
 
-        object payload;
-        if (provider == "deepseek")
-        {
-            payload = new { model, messages, max_tokens = 600, temperature = 0.1, thinking = new { type = "disabled" } };
-        }
+        HttpRequestMessage request;
+        if (provider == "openrouter")
+            request = OpenRouterAssistantProvider.CreateRequest(_configuration, messages, 600, 0.1, jsonOutput: true);
         else
         {
-            payload = new { model, messages, max_tokens = 600, temperature = 0.1 };
+            var apiKey = provider == "openai"
+                ? _configuration["Assistant:OpenAI:ApiKey"]
+                : DeepSeekAssistantProvider.GetApiKey(_configuration);
+            var model = provider == "openai"
+                ? (_configuration["Assistant:OpenAI:Model"] ?? "gpt-4o-mini")
+                : (_configuration["Assistant:DeepSeek:Model"] ?? "deepseek-flash");
+            var url = provider == "openai"
+                ? "https://api.openai.com/v1/chat/completions"
+                : "https://api.deepseek.com/chat/completions";
+            object payload = provider == "deepseek"
+                ? new { model, messages, max_tokens = 600, temperature = 0.1, thinking = new { type = "disabled" } }
+                : new { model, messages, max_tokens = 600, temperature = 0.1 };
+            request = new HttpRequestMessage(HttpMethod.Post, url)
+            {
+                Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json")
+            };
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
         }
+        using var ownedRequest = request;
 
-        var json = JsonSerializer.Serialize(payload);
-        using var request = new HttpRequestMessage(HttpMethod.Post, url)
+        string? content;
+        if (provider == "openrouter") content = await OpenRouterAssistantProvider.CompleteAsync(_httpClient, request, ct);
+        else
         {
-            Content = new StringContent(json, Encoding.UTF8, "application/json")
-        };
-        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", apiKey);
+            using var response = provider == "deepseek"
+                ? await DeepSeekAssistantProvider.SendAsync(_httpClient, request, ct)
+                : await _httpClient.SendAsync(request, ct);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException($"{provider} extraction error {(int)response.StatusCode}.");
+            var body = await response.Content.ReadAsStringAsync(ct);
 
-        using var response = await _httpClient.SendAsync(request, ct);
-        if (!response.IsSuccessStatusCode)
-            throw new HttpRequestException($"{provider} extraction error {(int)response.StatusCode}.");
-        var body = await response.Content.ReadAsStringAsync(ct);
-
-        // Extract content
-        using var doc = JsonDocument.Parse(body);
-        var content = doc.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+            using var doc = provider == "deepseek" ? null : JsonDocument.Parse(body);
+            content = provider == "deepseek"
+                ? DeepSeekAssistantProvider.ReadCompletedContent(body)
+                : doc!.RootElement.GetProperty("choices")[0].GetProperty("message").GetProperty("content").GetString();
+        }
         if (string.IsNullOrWhiteSpace(content)) return new List<RawProductExtract>();
 
         // Try to parse JSON from content (may be wrapped in markdown)
@@ -497,8 +649,8 @@ public class AssistantProductExtractor
                             if (p.ValueKind == JsonValueKind.Number && p.TryGetDecimal(out var dec)) price = dec;
                             else if (p.ValueKind == JsonValueKind.String && decimal.TryParse(p.GetString()?.Replace(",", "."), System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var dec2)) price = dec2;
                         }
-                        int? stockDelta = null;
-                        if (el.TryGetProperty("stockDelta", out var sd) && sd.ValueKind != JsonValueKind.Null)
+                        decimal? stockDelta = provider == "openrouter" ? ReadDecimal(el, "stockDelta") : null;
+                        if (provider != "openrouter" && el.TryGetProperty("stockDelta", out var sd) && sd.ValueKind != JsonValueKind.Null)
                         {
                             if (sd.ValueKind == JsonValueKind.Number && sd.TryGetInt32(out var iv)) stockDelta = iv;
                             else if (sd.ValueKind == JsonValueKind.String && int.TryParse(sd.GetString(), out var iv2)) stockDelta = iv2;
@@ -519,10 +671,12 @@ public class AssistantProductExtractor
             }
             catch (Exception ex)
             {
+                if (provider == "openrouter") throw new HttpRequestException("OpenRouter devolvió una extracción no válida.");
                 _logger.LogWarning(ex, "Failed to parse extraction JSON");
                 return new List<RawProductExtract>();
             }
         }
+        if (provider == "openrouter") throw new HttpRequestException("OpenRouter devolvió una extracción no válida.");
         return new List<RawProductExtract>();
     }
 }

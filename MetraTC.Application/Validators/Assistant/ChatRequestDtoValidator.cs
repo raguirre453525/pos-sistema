@@ -8,8 +8,8 @@ public class ChatRequestDtoValidator : AbstractValidator<ChatRequestDto>
     public ChatRequestDtoValidator()
     {
         RuleFor(x => x.Message)
-            .NotEmpty().WithMessage("El mensaje es obligatorio")
-            .MinimumLength(1).WithMessage("El mensaje no puede estar vacío")
+            .Must((request, message) => !string.IsNullOrWhiteSpace(message) || request.Images?.Count > 0)
+            .WithMessage("Escribe un mensaje o adjunta una imagen.")
             .MaximumLength(2000).WithMessage("El mensaje no puede exceder 2000 caracteres");
 
         RuleForEach(x => x.History)

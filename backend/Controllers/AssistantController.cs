@@ -42,7 +42,7 @@ public class AssistantController : ControllerBase
         if (request == null)
             return BadRequest(new { message = "El mensaje es obligatorio" });
 
-        var message = request.Message?.Trim() ?? string.Empty;
+        var message = request.Message ?? string.Empty;
         if (message.Length > 2000)
             return BadRequest(new { message = "El mensaje no puede exceder 2000 caracteres" });
         if (!AssistantImageValidator.TryParse(request.Images, out var images, out var imageError))
@@ -53,9 +53,6 @@ public class AssistantController : ControllerBase
             return BadRequest(new { message = "El historial no puede exceder 20 mensajes" });
         if (request.History?.Any(h => h == null || h.Content == null || h.Content.Length > 2000 || (h.Role != "user" && h.Role != "assistant")) == true)
             return BadRequest(new { message = "El historial contiene un mensaje no válido" });
-
-        if (images.Count > 0 && string.IsNullOrWhiteSpace(message))
-            message = "Describe las imágenes adjuntas.";
 
         var history = request.History != null
             ? request.History.Select(h => new ChatMessage(
@@ -89,9 +86,25 @@ public class AssistantController : ControllerBase
         {
             return StatusCode(502, new { message = ex.Message });
         }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("Configura OpenRouter:ApiKey"))
+        {
+            return BadRequest(new { message = "Configura OpenRouter:ApiKey en los secretos de usuario del backend o en OpenRouter__ApiKey." });
+        }
+        catch (TimeoutException ex)
+        {
+            _logger.LogWarning(ex, "Assistant provider response timed out");
+            return StatusCode(504, new { message = "El proveedor del asistente no respondió a tiempo. No se realizó ningún cambio. Intenta de nuevo más tarde." });
+        }
         catch (HttpRequestException ex)
         {
             _logger.LogError(ex, "Assistant provider request failed");
+            if (_assistantService.CurrentProvider == "openrouter")
+                return StatusCode(ex.Message.Contains("429") ? 429 : 502, new
+                {
+                    message = ex.Message.Contains("429")
+                        ? "El modelo gratuito de OpenRouter alcanzó su límite o está ocupado. No se realizó ningún cambio. Intenta de nuevo más tarde."
+                        : "OpenRouter no completó una respuesta válida. No se realizó ningún cambio. Intenta de nuevo más tarde."
+                });
             // 429 already wrapped as InvalidOperationException with 429 prefix
             if (ex.Message.Contains("429"))
             {

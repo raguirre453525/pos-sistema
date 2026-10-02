@@ -9,6 +9,8 @@
 
   <ItemGroup>
     <Compile Remove="MetraTC.Application.Checks/**/*.cs" />
+    <Content Remove="MetraTC.Application.Checks/**" />
+    <None Remove="MetraTC.Application.Checks/**" />
   </ItemGroup>
 
   <ItemGroup>

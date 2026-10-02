@@ -1,6 +1,8 @@
+using System.Data;
 using System.Text;
 using System.Text.RegularExpressions;
 using MetraTC.Application.Services;
+using MetraTC.Application.Validators.Product;
 using MetraTC.Domain.Entities;
 using MetraTC.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -9,6 +11,11 @@ using static MetraTC.Application.DTOs.AssistantDtos;
 using static MetraTC.Application.DTOs.ProductDtos;
 
 namespace MetraTC.Application.Services.Assistant;
+
+public sealed class AssistantProposalOutcomeUnknownException(string message, Exception innerException)
+    : Exception(message, innerException)
+{
+}
 
 public class AssistantProposalService
 {
@@ -40,6 +47,68 @@ public class AssistantProposalService
         if (!AssistantProductExtractor.TryNormalizeStockDirections(message, rawList, out var normalizedRaws))
             return null;
         return await BuildFromRawsAsync(normalizedRaws, businessId, ct);
+    }
+
+    public async Task<(bool IsProductList, ProposalResponse? Proposal, string? Reply)> BuildImageProposalAsync(
+        string message,
+        IReadOnlyList<AssistantImage> images,
+        Guid businessId,
+        CancellationToken ct)
+    {
+        var extraction = await _extractor.ExtractImageListAsync(message, images, ct);
+        if (!extraction.IsProductList) return (false, null, null);
+        if (extraction.Products.Count == 0)
+            return (true, null, "Reconocí una lista de productos, pero no pude leer filas con datos suficientes. No se realizó ningún cambio.");
+        if (!AssistantProductExtractor.HasConsistentStockDirection(message))
+            return (true, null, "La solicitud mezcla aumentos y descuentos de stock. Aclará la dirección en texto para cada producto; no se realizó ningún cambio.");
+        var rows = extraction.Products;
+
+        if (AssistantProductExtractor.HasExplicitStockDirection(message))
+        {
+            var textRows = await _extractor.ExtractAsync(message, Array.Empty<ChatMessage>(), string.Empty, ct);
+            if (!AssistantProductExtractor.TryNormalizeStockDirections(message, textRows, out var normalizedTextRows))
+                return (true, null, "La solicitud mezcla aumentos y descuentos de stock. Aclará la dirección en texto para cada producto; no se realizó ningún cambio.");
+            rows = AttachExplicitTextStockDeltas(rows, normalizedTextRows);
+        }
+
+        var proposal = await BuildFromRawsAsync(rows, businessId, ct, exactSkuOnly: true, blockInactiveProducts: true);
+        return proposal is null
+            ? (true, null, "Reconocí la lista, pero no encontré cambios de producto que pueda proponer. No se realizó ningún cambio.")
+            : (true, proposal, null);
+    }
+
+    public static List<RawProductExtract> AttachExplicitTextStockDeltas(
+        IReadOnlyList<RawProductExtract> imageRows,
+        IReadOnlyList<RawProductExtract> textRows)
+    {
+        return imageRows.Select(imageRow =>
+        {
+            var matches = textRows.Where(textRow => textRow.StockDelta.HasValue && MatchesProduct(imageRow, textRow))
+                .ToList();
+
+            if (matches.Count == 0 && imageRows.Count == 1 && textRows.Count == 1 && textRows[0].StockDelta.HasValue &&
+                string.IsNullOrWhiteSpace(textRows[0].Name) && string.IsNullOrWhiteSpace(textRows[0].Sku))
+                matches.Add(textRows[0]);
+
+            return matches.Count == 1
+                ? imageRow with { ExplicitStockDelta = matches[0].StockDelta, StockDirectionRequired = false }
+                : imageRow;
+        }).ToList();
+
+        static bool SameSku(string? left, string? right) =>
+            !string.IsNullOrWhiteSpace(left) && !string.IsNullOrWhiteSpace(right) &&
+            string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        static bool SameName(string? left, string? right) =>
+            !string.IsNullOrWhiteSpace(left) && !string.IsNullOrWhiteSpace(right) &&
+            string.Equals(left.Trim(), right.Trim(), StringComparison.OrdinalIgnoreCase);
+
+        static bool MatchesProduct(RawProductExtract image, RawProductExtract text)
+        {
+            if (SameSku(image.Sku, text.Sku)) return true;
+            if (!string.IsNullOrWhiteSpace(image.Sku) && !string.IsNullOrWhiteSpace(text.Sku)) return false;
+            return SameName(image.Name, text.Name);
+        }
     }
 
     public async Task<ProposalResponse?> TryPatchPendingAsync(ProposalResponse pending, string message, IReadOnlyList<ChatMessage> history, string inventoryContext, Guid businessId, CancellationToken ct)
@@ -135,13 +204,23 @@ public class AssistantProposalService
                 {
                     var names = string.Join(" y ", missingProducts.Select(p => p.Name));
                     var clarification = $"⚠️ Me faltan SKU y precio para: {names}. Me pasaste un SKU/Precio sin decir a qué producto pertenece. Por favor decime natural a qué producto corresponde cada dato, ej: 'para seven up sku 987... precio 3000 y para manteca sku 123... precio 2500'.";
-                    return new ProposalResponse(pending.Proposals, clarification, NeedsConfirmation: false, HasMissingData: true);
+                    return new ProposalResponse(pending.Proposals, clarification, NeedsConfirmation: false,
+                        HasMissingData: true, RequireExactSkuMatch: pending.RequireExactSkuMatch);
                 }
             }
         }
 
         // Build patched raws from pending
-        var patchedRaws = pending.Proposals.Select(p => new RawProductExtract(p.Name, p.Sku, p.Price, p.StockDelta, p.Barcode, p.Description, p.CategoryNames)).ToList();
+        var patchedRaws = pending.Proposals.Select(p => new RawProductExtract(
+            p.Name,
+            p.Sku,
+            p.Price,
+            p.StockDelta,
+            p.Barcode,
+            p.Description,
+            p.CategoryNames,
+            p.MissingFields.Contains("Dirección de stock"),
+            BlockInactiveProduct: p.MissingFields.Contains("Producto inactivo; su reactivación debe realizarla un administrador"))).ToList();
         bool anyPatched = false;
         var usedIndices = new HashSet<int>();
 
@@ -170,11 +249,15 @@ public class AssistantProposalService
                 }
                 else
                 {
-                    if (!NamesMatch(nr.Name, pp.Name)) continue;
+                    var repairsMissingName = pp.MissingFields.Contains("Name") &&
+                        (pending.Proposals.Count == 1 ||
+                         !string.IsNullOrWhiteSpace(nr.Sku) && string.Equals(nr.Sku, pp.Sku, StringComparison.OrdinalIgnoreCase));
+                    if (!NamesMatch(nr.Name, pp.Name) && !repairsMissingName) continue;
                 }
 
                 int score = 0;
-                if (!string.IsNullOrWhiteSpace(nr.Name) && NamesMatch(nr.Name, pp.Name)) score += 10;
+                if (!string.IsNullOrWhiteSpace(nr.Name) &&
+                    (NamesMatch(nr.Name, pp.Name) || pp.MissingFields.Contains("Name"))) score += 10;
                 else if (string.IsNullOrWhiteSpace(nr.Name) && MessageMentionsProduct(message, pp.Name)) score += 8;
                 else if (string.IsNullOrWhiteSpace(nr.Name)) score += 3; // nameless fallback when single missing
 
@@ -209,7 +292,9 @@ public class AssistantProposalService
                     StockDelta: applyStockDelta ? nr.StockDelta ?? pr.StockDelta : pr.StockDelta,
                     Barcode: !string.IsNullOrWhiteSpace(nr.Barcode) ? nr.Barcode : pr.Barcode,
                     Description: !string.IsNullOrWhiteSpace(nr.Description) ? nr.Description : pr.Description,
-                    CategoryNames: nr.CategoryNames ?? pr.CategoryNames
+                    CategoryNames: nr.CategoryNames ?? pr.CategoryNames,
+                    StockDirectionRequired: pr.StockDirectionRequired &&
+                        !(applyStockDelta && nr.StockDelta.HasValue && AssistantProductExtractor.HasExplicitStockDirection(message))
                 );
                 if (merged.Sku != pr.Sku || merged.Price != pr.Price || merged.Name != pr.Name || merged.StockDelta != pr.StockDelta || merged.Barcode != pr.Barcode)
                     anyPatched = true;
@@ -234,7 +319,8 @@ public class AssistantProposalService
                     {
                         var applyStockDelta = hasStockMovementIntent &&
                             (pending.Proposals.Count == 1 || MessageMentionsProduct(message, pending.Proposals[idx].Name));
-                        bool ok = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, pending.Proposals[idx].Name) || MessageMentionsProduct(message, pending.Proposals[idx].Name);
+                        bool ok = string.IsNullOrWhiteSpace(nr.Name) || NamesMatch(nr.Name, pending.Proposals[idx].Name) ||
+                            pending.Proposals[idx].MissingFields.Contains("Name") || MessageMentionsProduct(message, pending.Proposals[idx].Name);
                         // For single missing, allow even without explicit mention (inferencia válida)
                         if (string.IsNullOrWhiteSpace(nr.Name)) ok = true;
                         if (ok)
@@ -245,7 +331,9 @@ public class AssistantProposalService
                                 !string.IsNullOrWhiteSpace(nr.Sku) ? nr.Sku!.Trim().ToUpperInvariant() : pr.Sku,
                                 nr.Price ?? pr.Price,
                                 applyStockDelta ? nr.StockDelta ?? pr.StockDelta : pr.StockDelta,
-                                pr.Barcode, pr.Description, nr.CategoryNames ?? pr.CategoryNames);
+                                pr.Barcode, pr.Description, nr.CategoryNames ?? pr.CategoryNames,
+                                pr.StockDirectionRequired &&
+                                    !(applyStockDelta && nr.StockDelta.HasValue && AssistantProductExtractor.HasExplicitStockDirection(message)));
                             anyPatched = true;
                         }
                     }
@@ -254,27 +342,41 @@ public class AssistantProposalService
         }
 
         if (!anyPatched) return null;
-        return await BuildFromRawsAsync(patchedRaws, businessId, ct);
+        return await BuildFromRawsAsync(patchedRaws, businessId, ct,
+            exactSkuOnly: pending.RequireExactSkuMatch,
+            blockInactiveProducts: pending.RequireExactSkuMatch);
     }
 
-    private async Task<ProposalResponse?> BuildFromRawsAsync(List<RawProductExtract> rawList, Guid businessId, CancellationToken ct)
+    private async Task<ProposalResponse?> BuildFromRawsAsync(
+        List<RawProductExtract> rawList,
+        Guid businessId,
+        CancellationToken ct,
+        bool exactSkuOnly = false,
+        bool blockInactiveProducts = false)
     {
         if (rawList == null || rawList.Count == 0) return null;
         var proposals = new List<ProductProposal>();
+        var duplicateSkus = FindDuplicateSkus(rawList);
 
         foreach (var raw in rawList)
         {
             // Tolerant existence search: exact Sku, then tolerant Name LIKE %name% / viceversa, singular/plural, tokens
             Product? existing = null;
+            var ambiguousSkuMatch = false;
             if (!string.IsNullOrWhiteSpace(raw.Sku))
             {
                 var skuNorm = raw.Sku.Trim().ToLowerInvariant();
-                existing = await _db.Products
+                var skuMatches = await _db.Products
                     .IgnoreQueryFilters()
                     .Include(p => p.Categories)
-                    .FirstOrDefaultAsync(p => p.BusinessId == businessId && p.Sku.ToLower() == skuNorm, ct);
+                    .Where(p => p.BusinessId == businessId && p.Sku.ToLower() == skuNorm)
+                    .Take(2)
+                    .ToListAsync(ct);
+                existing = skuMatches.Count == 1 ? skuMatches[0] : null;
+                ambiguousSkuMatch = skuMatches.Count > 1;
             }
-            if (existing == null && !string.IsNullOrWhiteSpace(raw.Name))
+            if (ShouldUseTolerantNameMatch(exactSkuOnly, ambiguousSkuMatch, existing, raw.Sku, raw.Name) &&
+                !string.IsNullOrWhiteSpace(raw.Name))
             {
                 var nameNorm = raw.Name.Trim().ToLowerInvariant();
                 var nameNormSingular = nameNorm.EndsWith("s") && nameNorm.Length > 1 ? nameNorm[..^1] : nameNorm;
@@ -361,59 +463,11 @@ public class AssistantProposalService
                 }
             }
 
-            bool exists = existing != null;
-            Guid? existingId = existing?.Id;
-            decimal? currentPrice = existing?.Price;
-            decimal? currentStock = existing?.Stock;
-            var proposedStockDelta = exists && raw.StockDelta == 0 ? null : raw.StockDelta;
-
-            if (exists && !HasActionableExistingChanges(currentPrice, raw.Price, proposedStockDelta, raw.CategoryNames?.Count > 0))
-                continue;
-
-            var missing = new List<string>();
-            string action;
-
-            if (!exists)
-            {
-                // For create: require Sku, Name, Price, StockDelta
-                if (string.IsNullOrWhiteSpace(raw.Sku)) missing.Add("Sku");
-                if (string.IsNullOrWhiteSpace(raw.Name)) missing.Add("Name");
-                if (raw.Price == null) missing.Add("Price");
-                if (raw.StockDelta == null) missing.Add("Stock");
-                else if (raw.StockDelta <= 0) missing.Add("Stock (debe ser >0)");
-                // Barcode/description/categories are optional
-                action = "create";
-            }
-            else
-            {
-                // Exists: optional price change detection — never ask Sku/Price
-                if (raw.Price != null && raw.Price != currentPrice)
-                    action = "restock+price_update";
-                else
-                    action = "restock";
-                // MissingFields must stay empty for existing products (no pedir SKU/Price)
-                // StockDelta is optional; execution will simply not adjust if null/0
-            }
-
-            var nameVal = raw.Name?.Trim() ?? (exists ? existing!.Name : "");
-            // Ensure Name not empty for create; for exists we keep existing name if raw name missing? But spec says Name is product identifier
-            if (exists && string.IsNullOrWhiteSpace(nameVal)) nameVal = existing!.Name;
-
-            proposals.Add(new ProductProposal(
-                Name: nameVal,
-                Sku: raw.Sku?.Trim()?.ToUpperInvariant(),
-                Price: raw.Price,
-                StockDelta: proposedStockDelta,
-                Barcode: raw.Barcode,
-                Description: raw.Description,
-                CategoryNames: raw.CategoryNames,
-                Exists: exists,
-                ExistingId: existingId,
-                CurrentPrice: currentPrice,
-                CurrentStock: currentStock,
-                MissingFields: missing,
-                Action: action
-            ));
+            var proposal = BuildProposalRow(raw, existing,
+                !string.IsNullOrWhiteSpace(raw.Sku) && duplicateSkus.Contains(raw.Sku.Trim()),
+                ambiguousSkuMatch,
+                blockInactiveProducts);
+            if (proposal != null) proposals.Add(proposal);
         }
 
         if (proposals.Count == 0) return null;
@@ -423,13 +477,145 @@ public class AssistantProposalService
 
         var natural = BuildNaturalReply(proposals);
 
-        return new ProposalResponse(proposals, natural, needsConfirmation, hasMissing);
+        return new ProposalResponse(proposals, natural, needsConfirmation, hasMissing, exactSkuOnly);
     }
 
     public static bool HasActionableExistingChanges(decimal? currentPrice, decimal? requestedPrice, decimal? stockDelta, bool hasCategoryChanges) =>
         stockDelta.GetValueOrDefault() != 0 ||
         requestedPrice.HasValue && requestedPrice != currentPrice ||
         hasCategoryChanges;
+
+    public static HashSet<string> FindDuplicateSkus(IReadOnlyList<RawProductExtract> rawList) => rawList
+        .Where(raw => !string.IsNullOrWhiteSpace(raw.Sku))
+        .GroupBy(raw => raw.Sku!.Trim(), StringComparer.OrdinalIgnoreCase)
+        .Where(group => group.Count() > 1)
+        .Select(group => group.Key)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    public static bool ShouldUseTolerantNameMatch(
+        bool exactSkuOnly,
+        bool ambiguousSkuMatch,
+        Product? exactSkuMatch,
+        string? proposedSku,
+        string? name) =>
+        !exactSkuOnly && !ambiguousSkuMatch && exactSkuMatch is null &&
+        string.IsNullOrWhiteSpace(proposedSku) && !string.IsNullOrWhiteSpace(name);
+
+    public static bool DoesExistingSkuMatch(string? proposedSku, string? currentSku) =>
+        !string.IsNullOrWhiteSpace(proposedSku) && !string.IsNullOrWhiteSpace(currentSku) &&
+        string.Equals(proposedSku.Trim(), currentSku.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    private static readonly CreateProductDtoValidator ProductValidator = new();
+    private const decimal MaxProductPrice = 9_999_999_999_999_999.99m;
+    private const decimal MaxProductStock = 999_999_999m;
+
+    public static ProductProposal? BuildProposalRow(
+        RawProductExtract raw,
+        Product? existing,
+        bool duplicateSku = false,
+        bool ambiguousSkuMatch = false,
+        bool blockInactiveProduct = false)
+    {
+        var exists = existing != null;
+        var missing = new List<string>();
+        if (duplicateSku) missing.Add("SKU duplicado en la lista");
+        if (ambiguousSkuMatch) missing.Add("SKU duplicado en el inventario");
+
+        var requestedPrice = raw.Price;
+        if (requestedPrice is { } price && price < 0)
+        {
+            missing.Add("El precio no puede ser negativo");
+            requestedPrice = null;
+        }
+        else if (requestedPrice is { } value && (value > MaxProductPrice || decimal.Round(value, 2) != value))
+        {
+            missing.Add("Precio (debe caber en decimal(18,2))");
+            requestedPrice = null;
+        }
+
+        decimal? stockDelta = exists && raw.ExplicitStockDelta.HasValue ? raw.ExplicitStockDelta : raw.StockDelta;
+        if (exists)
+        {
+            if (raw.StockDirectionRequired && !raw.ExplicitStockDelta.HasValue)
+            {
+                missing.Add("Dirección de stock");
+                stockDelta = null;
+            }
+            else if (stockDelta == 0)
+            {
+                stockDelta = null;
+            }
+
+            if (stockDelta is { } delta &&
+                (decimal.Round(delta, 3) != delta || existing!.Stock + delta < 0 || existing.Stock + delta > MaxProductStock))
+            {
+                missing.Add("Stock (ajuste fuera del rango permitido)");
+                stockDelta = null;
+            }
+
+            if (!string.IsNullOrWhiteSpace(raw.Name) && raw.Name.Trim().Length > 50)
+                missing.Add("El nombre del producto no puede exceder los 50 caracteres");
+            if (requestedPrice.HasValue && requestedPrice != existing!.Price && raw.Description?.Length > 200)
+                missing.Add("La descripción no puede exceder los 200 caracteres");
+            if (!string.IsNullOrWhiteSpace(raw.Sku) && !DoesExistingSkuMatch(raw.Sku, existing!.Sku))
+                missing.Add("El SKU no coincide con el producto encontrado");
+            if ((blockInactiveProduct || raw.BlockInactiveProduct) && !existing!.IsActive)
+                missing.Add("Producto inactivo; su reactivación debe realizarla un administrador");
+
+            if (!HasActionableExistingChanges(existing!.Price, requestedPrice, stockDelta, raw.CategoryNames?.Count > 0) &&
+                missing.Count == 0)
+                return null;
+
+            var action = requestedPrice.HasValue && requestedPrice != existing.Price
+                ? "restock+price_update"
+                : "restock";
+            return new ProductProposal(
+                Name: string.IsNullOrWhiteSpace(raw.Name) ? existing.Name : raw.Name.Trim(),
+                Sku: string.IsNullOrWhiteSpace(raw.Sku) ? existing.Sku : raw.Sku.Trim().ToUpperInvariant(),
+                Price: requestedPrice,
+                StockDelta: stockDelta,
+                Barcode: raw.Barcode,
+                Description: raw.Description,
+                CategoryNames: raw.CategoryNames,
+                Exists: true,
+                ExistingId: existing.Id,
+                CurrentPrice: existing.Price,
+                CurrentStock: existing.Stock,
+                MissingFields: missing.Distinct(StringComparer.Ordinal).ToList(),
+                Action: action);
+        }
+
+        var name = raw.Name?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(raw.Sku)) missing.Add("Sku");
+        if (string.IsNullOrWhiteSpace(name)) missing.Add("Name");
+        if (raw.Price == null) missing.Add("Price");
+        if (raw.StockDelta is not { } initialStock) missing.Add("Stock");
+        else if (initialStock <= 0 || initialStock > MaxProductStock || decimal.Round(initialStock, 3) != initialStock)
+            missing.Add("Stock (debe ser >0, <=999999999 y tener hasta 3 decimales)");
+        if (raw.Barcode?.Length > 100) missing.Add("El código de barras no puede exceder los 100 caracteres");
+        if (raw.Description?.Length > 200) missing.Add("La descripción no puede exceder los 200 caracteres");
+
+        var createDto = new CreateProductDto(raw.Sku?.Trim() ?? string.Empty, name, raw.Price ?? 0m,
+            raw.Barcode, raw.Description, null, null, null);
+        missing.AddRange(ProductValidator.Validate(createDto).Errors.Select(error => error.ErrorMessage));
+        if (raw.Price is { } createPrice && (createPrice > MaxProductPrice || decimal.Round(createPrice, 2) != createPrice))
+            missing.Add("Precio (debe caber en decimal(18,2))");
+
+        return new ProductProposal(
+            Name: string.IsNullOrWhiteSpace(name) ? "Producto sin identificar" : name,
+            Sku: raw.Sku?.Trim().ToUpperInvariant(),
+            Price: raw.Price,
+            StockDelta: raw.StockDelta,
+            Barcode: raw.Barcode,
+            Description: raw.Description,
+            CategoryNames: raw.CategoryNames,
+            Exists: false,
+            ExistingId: null,
+            CurrentPrice: null,
+            CurrentStock: null,
+            MissingFields: missing.Distinct(StringComparer.Ordinal).ToList(),
+            Action: "create");
+    }
 
     private string BuildNaturalReply(List<ProductProposal> proposals)
     {
@@ -498,16 +684,42 @@ public class AssistantProposalService
 
     public async Task<string> ExecuteAsync(ProposalResponse proposal, Guid businessId, CancellationToken ct)
     {
-        var sb = new StringBuilder();
-        foreach (var p in proposal.Proposals)
+        if (!proposal.NeedsConfirmation || proposal.HasMissingData || proposal.Proposals.Count == 0 ||
+            proposal.Proposals.Any(p => p.MissingFields.Count > 0))
+            throw new InvalidOperationException("La propuesta no está completa y lista para confirmar.");
+
+        var duplicateSkus = proposal.Proposals
+            .Where(p => !string.IsNullOrWhiteSpace(p.Sku))
+            .GroupBy(p => p.Sku!.Trim(), StringComparer.OrdinalIgnoreCase)
+            .Any(group => group.Count() > 1);
+        if (duplicateSkus)
+            throw new InvalidOperationException("La propuesta contiene SKU duplicados y no se ejecutó.");
+
+        await using var transaction = await _db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        return await ExecuteAtomicallyAsync(transaction.CommitAsync, transaction.RollbackAsync, async () =>
         {
-            if (p.MissingFields.Count > 0)
+            var createSkus = proposal.Proposals.Where(p => !p.Exists).Select(p => p.Sku!).ToList();
+            if (createSkus.Count > 0 && await _db.Products.IgnoreQueryFilters()
+                    .AnyAsync(p => p.BusinessId == businessId && createSkus.Contains(p.Sku), ct))
+                throw new InvalidOperationException("Un SKU de la propuesta ya existe en el inventario. Volvé a generar la propuesta.");
+
+            var existingIds = proposal.Proposals.Where(p => p.Exists).Select(p => p.ExistingId!.Value).Distinct().ToList();
+            if (existingIds.Count > 0)
             {
-                sb.AppendLine($"- {p.Name}: no ejecutado, faltan {string.Join(", ", p.MissingFields)}");
-                continue;
+                var actualSkus = await _db.Products.IgnoreQueryFilters()
+                    .Where(p => p.BusinessId == businessId && existingIds.Contains(p.Id))
+                    .ToDictionaryAsync(p => p.Id, p => new { p.Sku, p.IsActive }, ct);
+                if (actualSkus.Count != existingIds.Count || proposal.Proposals
+                        .Where(p => p.Exists)
+                        .Any(p => !actualSkus.TryGetValue(p.ExistingId!.Value, out var actualSku) ||
+                            !DoesExistingSkuMatch(p.Sku, actualSku.Sku)))
+                    throw new InvalidOperationException("El SKU o la pertenencia del producto cambió desde la propuesta. Volvé a generarla.");
+                if (proposal.RequireExactSkuMatch && actualSkus.Values.Any(product => !product.IsActive))
+                    throw new InvalidOperationException("Un producto de la propuesta está inactivo. Un administrador debe reactivarlo antes de continuar.");
             }
 
-            try
+            var sb = new StringBuilder();
+            foreach (var p in proposal.Proposals)
             {
                 if (!p.Exists)
                 {
@@ -587,14 +799,55 @@ public class AssistantProposalService
                     }
                 }
             }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Error ejecutando propuesta {Product}", p.Name);
-                sb.AppendLine($"- ❌ Error en {p.Name}: {ex.Message}");
-            }
+            return sb.Length == 0 ? "No se ejecutó ninguna acción." : sb.ToString().Trim();
+        }, ct);
+    }
+
+    public static async Task<T> ExecuteAtomicallyAsync<T>(
+        Func<CancellationToken, Task> commit,
+        Func<CancellationToken, Task> rollback,
+        Func<Task<T>> action,
+        CancellationToken ct)
+    {
+        T result;
+        try
+        {
+            result = await action();
         }
-        if (sb.Length == 0) return "No se ejecutó ninguna acción.";
-        return sb.ToString().Trim();
+        catch (Exception actionFailure)
+        {
+            try
+            {
+                await rollback(CancellationToken.None);
+            }
+            catch (Exception rollbackFailure)
+            {
+                throw new AssistantProposalOutcomeUnknownException(
+                    "Proposal action failed and its transaction rollback could not be confirmed.",
+                    new AggregateException(actionFailure, rollbackFailure));
+            }
+            throw;
+        }
+
+        try
+        {
+            await commit(ct);
+            return result;
+        }
+        catch (Exception commitFailure)
+        {
+            Exception failure = commitFailure;
+            try
+            {
+                await rollback(CancellationToken.None);
+            }
+            catch (Exception rollbackFailure)
+            {
+                failure = new AggregateException(commitFailure, rollbackFailure);
+            }
+            throw new AssistantProposalOutcomeUnknownException(
+                "Proposal commit failed; the transaction outcome is unknown.", failure);
+        }
     }
 
     private async Task<Category> EnsureCategoryAsync(string name, CancellationToken ct)
@@ -605,7 +858,11 @@ public class AssistantProposalService
             .FirstOrDefaultAsync(c => c.Name.ToLower() == norm.ToLower(), ct);
         if (existing != null)
         {
-            if (!existing.IsActive) existing.Activate();
+            if (!existing.IsActive)
+            {
+                existing.Activate();
+                await _db.SaveChangesAsync(ct);
+            }
             return existing;
         }
         var cat = new Category(norm, null);

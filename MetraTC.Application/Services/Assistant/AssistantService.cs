@@ -8,10 +8,23 @@ namespace MetraTC.Application.Services.Assistant;
 
 public class AssistantService : IAssistantService
 {
+    private readonly record struct ProposalGateKey(Guid BusinessId, Guid UserId);
+
+    private sealed class ProposalGate
+    {
+        public SemaphoreSlim Semaphore { get; } = new(1, 1);
+        public int References { get; set; }
+    }
+
+    private static readonly object ProposalGatesSync = new();
+    // ponytail: this protects one API process only; multi-instance deployments need distributed idempotency/locking.
+    private static readonly Dictionary<ProposalGateKey, ProposalGate> ProposalGates = [];
+
     private readonly IConfiguration _configuration;
     private readonly MockAssistantProvider _mockProvider;
     private readonly OpenAiAssistantProvider _openAiProvider;
     private readonly DeepSeekAssistantProvider _deepSeekProvider;
+    private readonly OpenRouterAssistantProvider _openRouterProvider;
     private readonly AssistantInventoryContext _inventoryContext;
     private readonly AssistantProposalService _proposalService;
     private readonly IMemoryCache _cache;
@@ -25,6 +38,7 @@ public class AssistantService : IAssistantService
         MockAssistantProvider mockProvider,
         OpenAiAssistantProvider openAiProvider,
         DeepSeekAssistantProvider deepSeekProvider,
+        OpenRouterAssistantProvider openRouterProvider,
         AssistantInventoryContext inventoryContext,
         AssistantProposalService proposalService,
         IMemoryCache cache,
@@ -34,6 +48,7 @@ public class AssistantService : IAssistantService
         _mockProvider = mockProvider;
         _openAiProvider = openAiProvider;
         _deepSeekProvider = deepSeekProvider;
+        _openRouterProvider = openRouterProvider;
         _inventoryContext = inventoryContext;
         _proposalService = proposalService;
         _cache = cache;
@@ -43,7 +58,7 @@ public class AssistantService : IAssistantService
     public string CurrentProvider =>
         (_configuration["Assistant:Provider"] ?? "deepseek").Trim().ToLowerInvariant();
 
-    public string[] AvailableProviders => new[] { "mock", "openai", "deepseek", "gemini" };
+    public string[] AvailableProviders => new[] { "mock", "openai", "deepseek", "openrouter", "gemini" };
 
     private static bool IsConfirmation(string message)
     {
@@ -63,16 +78,43 @@ public class AssistantService : IAssistantService
         bool canConfirmStockAdjustments,
         CancellationToken ct)
     {
-        var providerName = CurrentProvider;
+        using var budget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        if (CurrentProvider == "openrouter") budget.CancelAfter(OpenRouterAssistantProvider.RequestBudget);
+        _cache.TryGetValue<ProposalResponse>(GetCacheKey(businessId, userId), out var proposalAtRequestStart);
+        try
+        {
+            return await WithProposalGateAsync(businessId, userId, () => GetResponseUnderProposalGateAsync(
+                message, history, images, businessId, userId, canConfirmStockAdjustments, proposalAtRequestStart, budget.Token), budget.Token);
+        }
+        catch (OperationCanceledException ex) when (!ct.IsCancellationRequested && budget.IsCancellationRequested)
+        {
+            throw new TimeoutException("OpenRouter no completó la respuesta dentro del tiempo permitido.", ex);
+        }
+    }
+
+    private async Task<(string Reply, string Provider, ProposalResponse? Proposal)> GetResponseUnderProposalGateAsync(
+        string message,
+        IReadOnlyList<ChatMessage> history,
+        IReadOnlyList<AssistantImage> images,
+        Guid businessId,
+        Guid userId,
+        bool canConfirmStockAdjustments,
+        ProposalResponse? proposalAtRequestStart,
+        CancellationToken ct)
+    {
         var cacheKey = GetCacheKey(businessId, userId);
+        if (images.Count > 0) InvalidatePendingProposalForImage(_cache, businessId, userId);
+
+        var providerName = CurrentProvider;
 
         IAssistantProvider provider = providerName switch
         {
             "mock" => _mockProvider,
             "openai" => _openAiProvider,
             "deepseek" => _deepSeekProvider,
+            "openrouter" => _openRouterProvider,
             "gemini" => throw new NotSupportedException("Provider 'gemini' aún no implementado. Usá 'mock', 'openai' o 'deepseek'."),
-            _ => throw new InvalidOperationException($"Provider '{providerName}' inválido. Valores válidos: mock, openai, deepseek.")
+            _ => throw new InvalidOperationException($"Provider '{providerName}' inválido. Valores válidos: mock, openai, deepseek, openrouter.")
         };
 
         // Early validation for providers without key -> throw 400 via controller mapping
@@ -85,25 +127,51 @@ public class AssistantService : IAssistantService
         {
             throw new InvalidOperationException("Configura Assistant:DeepSeek:ApiKey");
         }
+        if (providerName == "openrouter") OpenRouterAssistantProvider.ValidateConfiguration(_configuration);
 
         string inventoryContext;
         try
         {
             inventoryContext = await _inventoryContext.GetInventoryContextAsync(businessId, ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             _logger.LogWarning(ex, "No se pudo obtener contexto de inventario");
             inventoryContext = "Inventario no disponible momentáneamente.";
         }
-
         if (images.Count > 0)
         {
-            if (providerName != "deepseek")
-                throw new NotSupportedException("Las imágenes requieren que el proveedor configurado sea DeepSeek.");
+            if (providerName is not ("deepseek" or "openrouter"))
+                throw new NotSupportedException("Las imágenes requieren DeepSeek u OpenRouter.");
 
-            var imageReply = await _deepSeekProvider.GetResponseAsync(message, history, inventoryContext, images, ct);
-            return (imageReply, provider.Name, null);
+            using var imageBudget = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            imageBudget.CancelAfter(providerName == "openrouter" ? OpenRouterAssistantProvider.RequestBudget : DeepSeekAssistantProvider.RequestBudget);
+            try
+            {
+                if (string.IsNullOrWhiteSpace(message) || AssistantProductExtractor.HasInventoryWriteIntent(message))
+                {
+                    var imageProposal = await _proposalService.BuildImageProposalAsync(message, images, businessId, imageBudget.Token);
+                    if (imageProposal.IsProductList)
+                    {
+                        if (imageProposal.Proposal is { Proposals.Count: > 0 } imageResponseProposal)
+                        {
+                            _cache.Set(cacheKey, imageResponseProposal, TimeSpan.FromMinutes(10));
+                            return (imageResponseProposal.NaturalReply, provider.Name, imageResponseProposal);
+                        }
+
+                        return (imageProposal.Reply ?? "No pude preparar una propuesta con esta imagen. No se realizó ningún cambio.", provider.Name, null);
+                    }
+                }
+
+                var imageReply = providerName == "openrouter"
+                    ? await _openRouterProvider.GetResponseAsync(message, history, inventoryContext, images, imageBudget.Token)
+                    : await _deepSeekProvider.GetResponseAsync(message, history, inventoryContext, images, imageBudget.Token);
+                return (imageReply, provider.Name, null);
+            }
+            catch (OperationCanceledException ex) when (!ct.IsCancellationRequested)
+            {
+                throw new TimeoutException($"{providerName} no completó la respuesta dentro del tiempo permitido.", ex);
+            }
         }
 
         // Informational questions must not enter proposal, patch, or confirmation flows.
@@ -116,22 +184,38 @@ public class AssistantService : IAssistantService
         // Check pending proposal for confirmation flow
         if (_cache.TryGetValue<ProposalResponse>(cacheKey, out var pending) && pending != null)
         {
-            if (IsConfirmation(message) && !AssistantProductExtractor.HasStockMovementIntent(message))
-            {
-                if (pending.HasMissingData)
-                {
-                    var missingMsg = pending.NaturalReply + "\n\nFaltan datos obligatorios, no puedo ejecutar aún. Decime los datos que faltan.";
-                    return (missingMsg, provider.Name, pending);
-                }
-                if (!CanExecuteProposal(pending, canConfirmStockAdjustments))
-                    return ("Solo un administrador puede confirmar ajustes de stock. La propuesta sigue pendiente.", provider.Name, pending);
+            if (IsConfirmation(message) && !IsSamePendingProposal(pending, proposalAtRequestStart))
+                return ("La propuesta cambió mientras esperaba esta confirmación. Revisá la propuesta actual antes de confirmar.", provider.Name, pending);
 
-                // Execute
-                var result = await _proposalService.ExecuteAsync(pending, businessId, ct);
+            if (pending.HasMissingData && IsConfirmation(message) && !AssistantProductExtractor.HasStockMovementIntent(message))
+            {
+                var missingMsg = pending.NaturalReply + "\n\nFaltan datos obligatorios, no puedo ejecutar aún. Decime los datos que faltan.";
+                return (missingMsg, provider.Name, pending);
+            }
+
+            if (CanExecuteConfirmedProposal(message, pending, canConfirmStockAdjustments))
+            {
+                if (!_cache.TryGetValue<ProposalResponse>(cacheKey, out var proposalInCache) ||
+                    !IsSamePendingProposal(proposalInCache, pending))
+                    return ("La propuesta cambió mientras esperaba esta confirmación. Revisá la propuesta actual antes de confirmar.", provider.Name, proposalInCache);
+
+                string result;
+                try
+                {
+                    result = await _proposalService.ExecuteAsync(pending, businessId, ct);
+                }
+                catch (AssistantProposalOutcomeUnknownException)
+                {
+                    _cache.Remove(cacheKey);
+                    throw;
+                }
                 _cache.Remove(cacheKey);
                 var successReply = $"✅ Ejecutado:\n{result}";
                 return (successReply, provider.Name, null);
             }
+
+            if (IsConfirmation(message) && !AssistantProductExtractor.HasStockMovementIntent(message))
+                return ("Solo un administrador puede confirmar ajustes de stock. La propuesta sigue pendiente.", provider.Name, pending);
 
             // Pending has missing data -> try to patch with new message before any LLM fallback
             if (pending.HasMissingData)
@@ -141,7 +225,7 @@ public class AssistantService : IAssistantService
                 {
                     patched = await _proposalService.TryPatchPendingAsync(pending, message, history, inventoryContext, businessId, ct);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException and not TimeoutException and not HttpRequestException)
                 {
                     _logger.LogWarning(ex, "TryPatchPending failed");
                     patched = null;
@@ -170,7 +254,7 @@ public class AssistantService : IAssistantService
         {
             proposal = await _proposalService.BuildProposalAsync(message, history, inventoryContext, businessId, ct);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException and not TimeoutException and not HttpRequestException)
         {
             _logger.LogWarning(ex, "BuildProposal failed");
             proposal = null;
@@ -195,7 +279,71 @@ public class AssistantService : IAssistantService
         return (reply, provider.Name, null);
     }
 
+    public static async Task<T> WithProposalGateAsync<T>(Guid businessId, Guid userId, Func<Task<T>> action, CancellationToken ct)
+    {
+        var key = new ProposalGateKey(businessId, userId);
+        ProposalGate gate;
+        lock (ProposalGatesSync)
+        {
+            if (!ProposalGates.TryGetValue(key, out gate!))
+                ProposalGates[key] = gate = new ProposalGate();
+            gate.References++;
+        }
+
+        try
+        {
+            await gate.Semaphore.WaitAsync(ct);
+        }
+        catch
+        {
+            ReleaseProposalGate(key, gate, releaseSemaphore: false);
+            throw;
+        }
+
+        try
+        {
+            return await action();
+        }
+        finally
+        {
+            ReleaseProposalGate(key, gate, releaseSemaphore: true);
+        }
+    }
+
+    private static void ReleaseProposalGate(ProposalGateKey key, ProposalGate gate, bool releaseSemaphore)
+    {
+        lock (ProposalGatesSync)
+        {
+            if (releaseSemaphore) gate.Semaphore.Release();
+            if (--gate.References == 0)
+            {
+                ProposalGates.Remove(key);
+                gate.Semaphore.Dispose();
+            }
+        }
+    }
+
+    public static bool InvalidatePendingProposalForImage(IMemoryCache cache, Guid businessId, Guid userId)
+    {
+        var key = GetCacheKey(businessId, userId);
+        var hadProposal = cache.TryGetValue<ProposalResponse>(key, out _);
+        cache.Remove(key);
+        return hadProposal;
+    }
+
+    public static bool IsSamePendingProposal(ProposalResponse? current, ProposalResponse? observedAtRequestStart) =>
+        current is not null && ReferenceEquals(current, observedAtRequestStart);
+
     public static bool CanExecuteProposal(ProposalResponse proposal, bool canConfirmStockAdjustments) =>
         canConfirmStockAdjustments ||
         !proposal.Proposals.Any(p => p.StockDelta is { } delta && delta != 0m);
+
+    public static bool CanExecuteConfirmedProposal(string message, ProposalResponse proposal, bool canConfirmStockAdjustments) =>
+        IsConfirmation(message) &&
+        !AssistantProductExtractor.HasStockMovementIntent(message) &&
+        proposal.NeedsConfirmation &&
+        !proposal.HasMissingData &&
+        proposal.Proposals.All(p => p.MissingFields.Count == 0) &&
+        proposal.Proposals.Count > 0 &&
+        CanExecuteProposal(proposal, canConfirmStockAdjustments);
 }
