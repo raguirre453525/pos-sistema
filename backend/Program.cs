@@ -2,6 +2,7 @@ using FluentValidation;
 using MetraTC.Application.Services;
 using MetraTC.Application.Services.Assistant;
 using MetraTC.Application.Validators.Product;
+using MetraTC.Configuration;
 using MetraTC.Domain.Interfaces;
 using MetraTC.Infrastructure.Persistence;
 using MetraTC.Infrastructure.Repositories;
@@ -11,9 +12,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
 using SharpGrip.FluentValidation.AutoValidation.Mvc.Extensions;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
+var isDevelopment = builder.Environment.IsDevelopment();
+var corsOrigins = DeploymentConfiguration.GetCorsOrigins(builder.Configuration, isDevelopment);
+var jwtSigningKey = DeploymentConfiguration.GetJwtSigningKey(builder.Configuration, isDevelopment);
+builder.Services.AddSingleton(jwtSigningKey);
 
 builder.Services.AddControllers(options => options.AllowEmptyInputInBodyModelBinding = true);
 
@@ -21,7 +25,7 @@ builder.Services.AddCors(options =>
 {
     options.AddPolicy("Frontend", policy =>
     {
-        policy.WithOrigins("http://localhost:3000")
+        policy.WithOrigins(corsOrigins)
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
@@ -48,7 +52,6 @@ builder.Services.AddSwaggerGen(c =>
 
 // JWT Bearer configuration
 var jwtSection = builder.Configuration.GetSection("Jwt");
-var jwtKey = jwtSection["Key"] ?? "METRATC_SUPER_SECRET_KEY_REPLACE_IN_PROD_32_CHARS_MIN_64_XYZ!";
 var jwtIssuer = jwtSection["Issuer"] ?? "MetraTC";
 var jwtAudience = jwtSection["Audience"] ?? "MetraTC";
 
@@ -59,7 +62,7 @@ builder.Services.AddAuthentication(options =>
 })
 .AddJwtBearer(options =>
 {
-    options.RequireHttpsMetadata = false;
+    options.RequireHttpsMetadata = !isDevelopment;
     options.SaveToken = true;
     options.TokenValidationParameters = new TokenValidationParameters
     {
@@ -69,7 +72,7 @@ builder.Services.AddAuthentication(options =>
         ValidateIssuerSigningKey = true,
         ValidIssuer = jwtIssuer,
         ValidAudience = jwtAudience,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+        IssuerSigningKey = jwtSigningKey,
         ClockSkew = TimeSpan.Zero
     };
 });

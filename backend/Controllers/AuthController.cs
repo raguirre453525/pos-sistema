@@ -1,6 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
-using System.Text;
 using MetraTC.Domain.Entities;
 using MetraTC.Domain.Enums;
 using MetraTC.Infrastructure.Persistence;
@@ -19,12 +18,14 @@ public class AuthController : ControllerBase
     private readonly ApplicationDbContext _context;
     private readonly IConfiguration _config;
     private readonly ILogger<AuthController> _logger;
+    private readonly SymmetricSecurityKey _jwtSigningKey;
 
-    public AuthController(ApplicationDbContext context, IConfiguration config, ILogger<AuthController> logger)
+    public AuthController(ApplicationDbContext context, IConfiguration config, ILogger<AuthController> logger, SymmetricSecurityKey jwtSigningKey)
     {
         _context = context;
         _config = config;
         _logger = logger;
+        _jwtSigningKey = jwtSigningKey;
     }
 
     public record LoginRequest(string Username, string Password);
@@ -112,7 +113,6 @@ public class AuthController : ControllerBase
     private string GenerateJwt(User user)
     {
         var jwtSection = _config.GetSection("Jwt");
-        var key = jwtSection["Key"] ?? "METRATC_SUPER_SECRET_KEY_REPLACE_IN_PROD_32_CHARS_MIN_64_XYZ!";
         var issuer = jwtSection["Issuer"] ?? "MetraTC";
         var audience = jwtSection["Audience"] ?? "MetraTC";
         var expiryMinutesStr = jwtSection["ExpiryMinutes"];
@@ -132,8 +132,7 @@ public class AuthController : ControllerBase
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
-        var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(key));
-        var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
+        var credentials = new SigningCredentials(_jwtSigningKey, SecurityAlgorithms.HmacSha256);
 
         var token = new JwtSecurityToken(
             issuer: issuer,

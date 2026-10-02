@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.IdentityModel.Tokens.Jwt;
 using System.Net;
 using System.Reflection;
 using System.Linq.Expressions;
@@ -8,6 +9,7 @@ using System.Text.Json;
 using MetraTC.API.Controllers;
 using MetraTC.Application.Services.Assistant;
 using MetraTC.Application.Validators.Assistant;
+using MetraTC.Configuration;
 using MetraTC.Domain.Entities;
 using MetraTC.Infrastructure.Persistence;
 using MetraTC.Middlewares;
@@ -15,12 +17,16 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Query;
 using static MetraTC.Application.DTOs.AssistantDtos;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Cors.Infrastructure;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi;
 
 const string imageDataUrl = "data:image/jpeg;base64,/9j/";
 
@@ -50,6 +56,92 @@ if (args is ["--openrouter-live-image", var imagePath])
     }
     return;
 }
+
+var emptyDeploymentConfiguration = new ConfigurationBuilder().Build();
+Assert(DeploymentConfiguration.GetCorsOrigins(emptyDeploymentConfiguration, true).SequenceEqual(["http://localhost:3000"]), "Only Development should default to localhost CORS.");
+var developmentSigningKey = DeploymentConfiguration.GetJwtSigningKey(emptyDeploymentConfiguration, true);
+Assert(developmentSigningKey.KeySize >= 256, "Development startup should retain a valid fallback key.");
+foreach (var invalidKey in new[] { null, "", " ", new string('x', 31), Encoding.UTF8.GetString(developmentSigningKey.Key), " " + Encoding.UTF8.GetString(developmentSigningKey.Key) + " " })
+{
+    var invalidKeyConfiguration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Jwt:Key"] = invalidKey }).Build();
+    try
+    {
+        DeploymentConfiguration.GetJwtSigningKey(invalidKeyConfiguration, false);
+        throw new Exception("Non-Development startup must reject missing, short, or public JWT keys.");
+    }
+    catch (InvalidOperationException) { }
+}
+foreach (var invalidOrigin in new[] { null, "", "*", "https://*.example.com", "http://shop.example.com", "https://localhost:3000", "https://127.0.0.1", "https://[::1]", "https://shop.example.com/", "https://shop.example.com/path", "https://shop.example.com?query=1", "https://shop.example.com#fragment", "https://user@shop.example.com", " https://shop.example.com" })
+{
+    var invalidOriginConfiguration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?> { ["Cors:AllowedOrigins:0"] = invalidOrigin }).Build();
+    try
+    {
+        DeploymentConfiguration.GetCorsOrigins(invalidOriginConfiguration, false);
+        throw new Exception("Non-Development startup must reject missing or unsafe CORS origins.");
+    }
+    catch (InvalidOperationException) { }
+}
+var deploymentConfiguration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
+{
+    ["Cors:AllowedOrigins:0"] = "https://shop.example.com",
+    ["Cors:AllowedOrigins:1"] = "https://preview.example.com",
+    ["Jwt:Key"] = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32))
+}).Build();
+var corsPolicy = new CorsPolicyBuilder(DeploymentConfiguration.GetCorsOrigins(deploymentConfiguration, false)).AllowAnyHeader().AllowAnyMethod().AllowCredentials().Build();
+var corsService = new CorsService(Options.Create(new CorsOptions()), NullLoggerFactory.Instance);
+foreach (var origin in new[] { "https://shop.example.com", "https://preview.example.com", "http://localhost:3000", "https://attacker.example.com", "https://shop.example.com.attacker.example.com" })
+{
+    var requestContext = new DefaultHttpContext();
+    requestContext.Request.Method = "OPTIONS";
+    requestContext.Request.Headers.Origin = origin;
+    requestContext.Request.Headers.AccessControlRequestMethod = "POST";
+    requestContext.Request.Headers.AccessControlRequestHeaders = "authorization,content-type";
+    var result = corsService.EvaluatePolicy(requestContext, corsPolicy);
+    var trusted = origin is "https://shop.example.com" or "https://preview.example.com";
+    Assert(result.IsOriginAllowed == trusted, "CORS preflights must match only configured exact origins.");
+    corsService.ApplyResult(result, requestContext.Response);
+    Assert(requestContext.Response.Headers.AccessControlAllowOrigin.ToString() == (trusted ? origin : ""), "Untrusted origins must not receive CORS response headers.");
+}
+var signingKey = DeploymentConfiguration.GetJwtSigningKey(deploymentConfiguration, false);
+var authController = new AuthController(null!, deploymentConfiguration, NullLogger<AuthController>.Instance, signingKey);
+deploymentConfiguration["Jwt:Key"] = null;
+var tokenUser = new User { Id = Guid.NewGuid(), Username = "deployment-check", FullName = "Deployment Check", BusinessId = Guid.NewGuid() };
+var generateJwt = typeof(AuthController).GetMethod("GenerateJwt", BindingFlags.Instance | BindingFlags.NonPublic)!;
+var issuedToken = (string)generateJwt.Invoke(authController, [tokenUser])!;
+var validationParameters = new TokenValidationParameters
+{
+    ValidateIssuer = true,
+    ValidateAudience = true,
+    ValidateLifetime = true,
+    ValidateIssuerSigningKey = true,
+    ValidIssuer = "MetraTC",
+    ValidAudience = "MetraTC",
+    IssuerSigningKey = signingKey,
+    ClockSkew = TimeSpan.Zero
+};
+var tokenHandler = new JwtSecurityTokenHandler();
+var principal = tokenHandler.ValidateToken(issuedToken, validationParameters, out _);
+Assert(principal.FindFirst("businessId")?.Value == tokenUser.BusinessId.ToString(), "Actual AuthController tokens must validate with the startup key even if configuration changes.");
+validationParameters.IssuerSigningKey = developmentSigningKey;
+try
+{
+    tokenHandler.ValidateToken(issuedToken, validationParameters, out _);
+    throw new Exception("The public development key must not validate production tokens.");
+}
+catch (SecurityTokenException) { }
+var developmentAuth = new AuthController(null!, emptyDeploymentConfiguration, NullLogger<AuthController>.Instance, developmentSigningKey);
+validationParameters.IssuerSigningKey = developmentSigningKey;
+tokenHandler.ValidateToken((string)generateJwt.Invoke(developmentAuth, [tokenUser])!, validationParameters, out _);
+using (var migrationContext = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>().UseSqlServer("Server=unused;Database=unused").Options))
+    Assert(migrationContext.Database.GetMigrations().Count() == 14, "All 14 tracked migrations must remain compiled and discoverable without a database connection.");
+var openApiDocument = new OpenApiDocument { Info = new OpenApiInfo { Title = "Deployment check", Version = "v1" }, Paths = new OpenApiPaths() };
+using (var documentText = new StringWriter())
+{
+    openApiDocument.SerializeAsV3(new OpenApiJsonWriter(documentText));
+    using var document = JsonDocument.Parse(documentText.ToString());
+    Assert(document.RootElement.GetProperty("info").GetProperty("version").GetString() == "v1", "The patched OpenAPI 2.x package must serialize the API document format.");
+}
+Console.WriteLine("Deployment checks passed: fail-closed settings, exact CORS preflights, JWT round trips, 14 compiled migrations, OpenAPI serialization.");
 
 CultureInfo.CurrentCulture = CultureInfo.GetCultureInfo("es-AR");
 var chatRequestValidator = new ChatRequestDtoValidator();
